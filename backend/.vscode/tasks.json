@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Aplicar migración de categorías",
+			"type": "shell",
+			"command": "C:\\Users\\respinozav\\AppData\\Local\\Programs\\Python\\Python313\\python.exe -m alembic upgrade head",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
