@@ -2,7 +2,17 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.services.notifications import _order_pdf
+from app.services.notifications import _order_pdf, _product_detail_label
+
+
+def test_product_detail_label_compacts_code_on_same_line() -> None:
+    detail = SimpleNamespace(nombre_producto="Producto de prueba", codigo_producto="PR-001")
+
+    label = _product_detail_label(detail)
+
+    assert "Producto de prueba" in label
+    assert "PR-001" in label
+    assert "<br" not in label
 
 
 def test_order_pdf_contains_valid_header() -> None:

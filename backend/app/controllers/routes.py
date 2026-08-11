@@ -94,6 +94,11 @@ def update_user(user_id: UUID, payload: UserUpdate, database: DatabaseSession, c
     return entity
 
 
+@router.options("/clientes/login", tags=["Acceso cliente"])
+def customer_login_options() -> None:
+    return None
+
+
 @router.post("/clientes/login", response_model=TokenOutput, tags=["Acceso cliente"])
 def customer_login(payload: CustomerLogin, database: DatabaseSession) -> TokenOutput:
     customer = database.scalar(

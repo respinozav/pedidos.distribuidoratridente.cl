@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Boxes, CheckCircle2, ClipboardList, Eye, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Package, Pencil, Plus, Save, Search, Settings, ShoppingBag, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
+import Swal from "sweetalert2";
 import { api, setAdminToken, setCustomerToken } from "./services/api";
 
 const money = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP" });
@@ -1198,7 +1199,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [cart, setCart] = useState([]);
-  const [selectedAddress, setSelectedAddress] = useState(customer.direcciones?.find((address) => address.principal && address.activo)?.id ?? customer.direcciones?.find((address) => address.activo)?.id ?? "");
+  const [selectedAddress, setSelectedAddress] = useState(() => customer.direcciones?.find((address) => address.principal && address.activo)?.id ?? customer.direcciones?.find((address) => address.activo)?.id ?? "");
   const [section, setSection] = useState("create");
   const [orders, setOrders] = useState([]);
   const [historyFilters, setHistoryFilters] = useState({ estado: "Pedido", codigo: "", desde: "", hasta: "" });
@@ -1227,6 +1228,11 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
   useEffect(() => {
     api.get("/categorias").then(({ data }) => setCategories(data)).catch(() => setError("No fue posible cargar las categorías."));
   }, []);
+
+  useEffect(() => {
+    const activeAddressId = customer.direcciones?.find((address) => address.principal && address.activo)?.id ?? customer.direcciones?.find((address) => address.activo)?.id ?? "";
+    setSelectedAddress((current) => (current && customer.direcciones?.some((address) => address.id === current && address.activo)) ? current : activeAddressId);
+  }, [customer.direcciones]);
 
   useEffect(() => {
     if (section !== "create") return undefined;
@@ -1407,15 +1413,46 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
       return;
     }
     if (!cart.length) return;
+
+    const confirmation = await Swal.fire({
+      title: "¿Estás seguro de enviar el pedido?",
+      text: "Una vez enviado, se registrará y podrás verlo en tus pedidos.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Sí, enviar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#0d6efd",
+      cancelButtonColor: "#6c757d",
+    });
+
+    if (!confirmation.isConfirmed) {
+      setSection("create");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await api.post(`/clientes/${customer.id}/pedidos`, { direccion_id: selectedAddress, productos: cart.map((item) => ({ producto_id: item.id, cantidad: item.quantity })) });
+      const response = await api.post(`/clientes/${customer.id}/pedidos`, { direccion_id: selectedAddress, productos: cart.map((item) => ({ producto_id: item.id, cantidad: item.quantity })) });
+      const orderCode = response?.data?.id?.slice(0, 8).toUpperCase() ?? "N/D";
       setCart([]);
-      setNotice(" Pedido enviado correctamente.");
+      setNotice("");
+      setError("");
       setSection("history");
       await Promise.all([loadHistory(), loadProducts()]);
+      Swal.fire({
+        icon: "success",
+        title: "Pedido enviado",
+        text: `Tu pedido fue registrado correctamente. Código: ${orderCode}`,
+        confirmButtonText: "Aceptar",
+      });
     } catch (requestError) {
       setError(requestError.response?.data?.detail ?? "No fue posible enviar el pedido.");
+      Swal.fire({
+        icon: "error",
+        title: "No se pudo enviar",
+        text: requestError.response?.data?.detail ?? "No fue posible enviar el pedido.",
+        confirmButtonText: "Aceptar",
+      });
     } finally {
       setSubmitting(false);
     }

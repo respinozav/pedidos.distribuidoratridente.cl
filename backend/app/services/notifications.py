@@ -27,6 +27,14 @@ def _currency(value: Decimal) -> str:
     return f"${value:,.0f}".replace(",", ".")
 
 
+def _product_detail_label(detail: object) -> str:
+    name = html.escape(getattr(detail, "nombre_producto", ""))
+    code = html.escape(getattr(detail, "codigo_producto", ""))
+    if code:
+        return f"<b>{name}</b> <font color='#667085'>[{code}]</font>"
+    return f"<b>{name}</b>"
+
+
 def notify_customer_password_changed(customer: Cliente) -> None:
     settings = get_settings()
     recipient = (customer.correo or "").strip()
@@ -65,7 +73,8 @@ def _order_pdf(order: Pedido) -> bytes:
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name="Brand", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=20, textColor=colors.HexColor("#172B4D"), leading=24))
     styles.add(ParagraphStyle(name="OrderCode", parent=styles["Normal"], alignment=TA_RIGHT, fontName="Helvetica-Bold", fontSize=14, textColor=colors.HexColor("#172B4D")))
-    styles.add(ParagraphStyle(name="Details", parent=styles["Normal"], fontSize=9, leading=14, textColor=colors.HexColor("#334E68")))
+    styles.add(ParagraphStyle(name="Details", parent=styles["Normal"], fontSize=9, leading=12, textColor=colors.HexColor("#334E68")))
+    styles.add(ParagraphStyle(name="ProductCell", parent=styles["Normal"], fontSize=9, leading=11, textColor=colors.HexColor("#334E68")))
     story = []
     brand = Image(str(LOGO_PATH), width=45 * mm, height=30 * mm, kind="proportional") if LOGO_PATH.is_file() else Paragraph("Distribuidora Tridente", styles["Brand"])
     header = Table([[brand, Paragraph(f"PEDIDO #{order_code}", styles["OrderCode"])]], colWidths=[95 * mm, 79 * mm])
@@ -82,8 +91,8 @@ def _order_pdf(order: Pedido) -> bytes:
     story.extend([Paragraph(customer_details, styles["Details"]), Spacer(1, 7 * mm)])
     rows = [["Producto", "Cantidad", "Precio", "Subtotal"]]
     for detail in order.detalles:
-        product = f"<b>{html.escape(detail.nombre_producto)}</b><br/><font color='#667085'>{html.escape(detail.codigo_producto)}</font>"
-        rows.append([Paragraph(product, styles["Details"]), str(detail.cantidad), _currency(detail.precio_unitario), _currency(detail.subtotal)])
+        product = Paragraph(_product_detail_label(detail), styles["ProductCell"])
+        rows.append([product, str(detail.cantidad), _currency(detail.precio_unitario), _currency(detail.subtotal)])
     details = Table(rows, colWidths=[87 * mm, 24 * mm, 31 * mm, 32 * mm], repeatRows=1)
     details.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF4FF")),
@@ -93,8 +102,10 @@ def _order_pdf(order: Pedido) -> bytes:
         ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#D9E2EC")),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]))
     total = Table([["TOTAL", _currency(order.total)]], colWidths=[135 * mm, 39 * mm], hAlign="RIGHT")
     total.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 10), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 13), ("ALIGN", (1, 0), (1, 0), "RIGHT"), ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#172B4D"))]))
@@ -119,7 +130,7 @@ def _build_order_message(
     customer_phone = order.cliente.celular or "Sin teléfono"
     address = ", ".join(part for part in (order.direccion.direccion, order.direccion.comuna) if part) or "Sin dirección"
     detail_rows = "".join(
-        f"<tr><td style='padding:10px;border-top:1px solid #d9e2ec'><strong>{html.escape(detail.nombre_producto)}</strong><br><span style='color:#667085;font-size:12px'>{html.escape(detail.codigo_producto)}</span></td><td style='padding:10px;border-top:1px solid #d9e2ec;text-align:center'>{detail.cantidad}</td><td style='padding:10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.precio_unitario)}</td><td style='padding:10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.subtotal)}</td></tr>"
+        f"<tr><td style='padding:8px 10px;border-top:1px solid #d9e2ec'><strong>{html.escape(detail.nombre_producto)}</strong> <span style='color:#667085;font-size:12px'>[{html.escape(detail.codigo_producto)}]</span></td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{detail.cantidad}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.precio_unitario)}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.subtotal)}</td></tr>"
         for detail in order.detalles
     )
     message = EmailMessage()

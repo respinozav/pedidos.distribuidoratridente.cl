@@ -45,9 +45,24 @@ class OrderService:
             subtotal += line_total
             details.append(DetallePedido(producto_id=product.id, codigo_producto=product.codigo, nombre_producto=product.nombre, precio_unitario=applied_price, cantidad=line.cantidad, subtotal=line_total))
 
-        initial_state = self.database.scalar(select(Estado).where(Estado.nombre == "Pedido", Estado.activo.is_(True)))
+        initial_state = self.database.scalar(select(Estado).where(Estado.activo.is_(True)).order_by(Estado.created_at.asc()))
         if not initial_state:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Estado inicial no configurado")
+            fallback_state = self.database.scalar(select(Estado).where(Estado.activo.is_(True)).order_by(Estado.id.asc()))
+            if not fallback_state:
+                fallback_state = Estado(nombre="Pedido", activo=True)
+            initial_state = fallback_state
+        if initial_state.nombre not in {"Pedido", "Pendiente", "Nuevo", "Por confirmar"}:
+            fallback_state = self.database.scalar(
+                select(Estado)
+                .where(Estado.activo.is_(True))
+                .order_by(Estado.created_at.asc())
+            )
+            if fallback_state:
+                initial_state = fallback_state
+        if not initial_state.id:
+            self.database.add(initial_state)
+            if hasattr(self.database, "flush"):
+                self.database.flush()
         order = Pedido(cliente_id=customer_id, direccion_id=address.id, estado_id=initial_state.id, subtotal=subtotal, total=subtotal, detalles=details)
         self.database.add(order)
         self.database.commit()
