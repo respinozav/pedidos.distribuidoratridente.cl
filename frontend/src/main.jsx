@@ -1431,6 +1431,14 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     }
 
     setSubmitting(true);
+    Swal.fire({
+      title: "Estamos procesando su pedido",
+      text: "Por favor espere un momento mientras lo registramos.",
+      icon: "info",
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => Swal.showLoading(),
+    });
     try {
       const response = await api.post(`/clientes/${customer.id}/pedidos`, { direccion_id: selectedAddress, productos: cart.map((item) => ({ producto_id: item.id, cantidad: item.quantity })) });
       const orderCode = response?.data?.id?.slice(0, 8).toUpperCase() ?? "N/D";
@@ -1439,6 +1447,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
       setError("");
       setSection("history");
       await Promise.all([loadHistory(), loadProducts()]);
+      Swal.close();
       Swal.fire({
         icon: "success",
         title: "Pedido enviado",
@@ -1447,6 +1456,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
       });
     } catch (requestError) {
       setError(requestError.response?.data?.detail ?? "No fue posible enviar el pedido.");
+      Swal.close();
       Swal.fire({
         icon: "error",
         title: "No se pudo enviar",
