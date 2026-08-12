@@ -40,6 +40,7 @@ from app.schemas.dto import (
 from app.services.notifications import notify_customer_password_changed
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_price
+from app.services.catalog import build_public_catalog_pdf
 
 router = APIRouter(prefix="/api")
 
@@ -217,6 +218,16 @@ def delete_category(category_id: UUID, database: DatabaseSession, _: AdminUser) 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria no encontrada")
     Repository(Categoria, database).soft_delete(entity)
     database.commit()
+
+
+@router.get("/catalogo-publico", tags=["Catalogo publico"])
+def public_catalog(database: DatabaseSession) -> Response:
+    content = build_public_catalog_pdf(database)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="catalogo-distribuidora-tridente.pdf"'},
+    )
 
 
 @router.get("/productos", response_model=ProductPage, tags=["Productos"])

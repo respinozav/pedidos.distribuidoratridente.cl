@@ -57,6 +57,7 @@ class Categoria(AuditMixin, Base):
     usa_porcentaje_cliente: Mapped[bool] = mapped_column(Boolean, default=True)
     porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    en_catalogo_publico: Mapped[bool] = mapped_column(Boolean, default=True)
     eliminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     productos: Mapped[list["Producto"]] = relationship(back_populates="categoria")
 
