@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Boxes, CheckCircle2, ClipboardList, Eye, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Package, Pencil, Plus, Save, Search, Settings, ShoppingBag, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -1501,8 +1501,48 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
 }
 
 function PublicCatalog() {
-  const pdfUrl = `${api.defaults.baseURL}/catalogo-publico`;
-  return <iframe title="Catálogo Público Distribuidora Tridente" src={pdfUrl} style={{ position: "fixed", inset: 0, width: "100%", height: "100%", border: "none" }} />;
+  const [pdfObjectUrl, setPdfObjectUrl] = useState(null);
+  const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (startedRef.current) return undefined;
+    startedRef.current = true;
+    let objectUrl;
+    Swal.fire({
+      title: "Generando catálogo...",
+      html: '<div style="background:#e5e9f0;border-radius:999px;height:10px;overflow:hidden;margin-top:6px"><div id="catalog-progress-bar" style="background:#146cce;height:100%;width:0%;transition:width .15s"></div></div><p id="catalog-progress-text" style="margin:10px 0 0;font-weight:700;color:#146cce">0%</p>',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      animation: false,
+    });
+    api
+      .get("/catalogo-publico", {
+        responseType: "blob",
+        onDownloadProgress: (event) => {
+          const percent = event.total ? Math.round((event.loaded / event.total) * 100) : 0;
+          const bar = document.getElementById("catalog-progress-bar");
+          const text = document.getElementById("catalog-progress-text");
+          if (bar) bar.style.width = `${percent}%`;
+          if (text) text.textContent = `${percent}%`;
+        },
+      })
+      .then(({ data }) => {
+        objectUrl = URL.createObjectURL(data);
+        setPdfObjectUrl(objectUrl);
+        Swal.close();
+      })
+      .catch(() => {
+        Swal.fire({ icon: "error", title: "No fue posible generar el catálogo", text: "Intenta nuevamente en unos minutos." });
+      });
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, []);
+
+  if (!pdfObjectUrl) return null;
+
+  return <iframe title="Catálogo Público Distribuidora Tridente" src={pdfObjectUrl} style={{ position: "fixed", inset: 0, width: "100%", height: "100%", border: "none" }} />;
 }
 
 function App() {
