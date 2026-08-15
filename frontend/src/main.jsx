@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Boxes, CheckCircle2, ClipboardList, Eye, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Package, Pencil, Plus, Save, Search, Settings, ShoppingBag, Users, X } from "lucide-react";
+import { Boxes, CheckCircle2, ClipboardList, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Package, Pencil, Plus, Save, Search, Settings, ShoppingBag, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -223,6 +223,36 @@ function ProductManager({ categories }) {
     return () => clearTimeout(timer);
   }, [selectedCategory, productSearch, stockThreshold, page]);
 
+  const downloadFullCatalog = () => {
+    Swal.fire({
+      title: "Generando full catálogo...",
+      html: '<div style="background:#e5e9f0;border-radius:999px;height:10px;overflow:hidden;margin-top:6px"><div id="catalog-progress-bar" style="background:#146cce;height:100%;width:0%;transition:width .15s"></div></div><p id="catalog-progress-text" style="margin:10px 0 0;font-weight:700;color:#146cce">0%</p>',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      animation: false,
+    });
+    api
+      .get("/admin/catalogo/pdf", {
+        responseType: "blob",
+        onDownloadProgress: (event) => {
+          const percent = event.total ? Math.round((event.loaded / event.total) * 100) : 0;
+          const bar = document.getElementById("catalog-progress-bar");
+          const text = document.getElementById("catalog-progress-text");
+          if (bar) bar.style.width = `${percent}%`;
+          if (text) text.textContent = `${percent}%`;
+        },
+      })
+      .then(({ data }) => {
+        const objectUrl = URL.createObjectURL(data);
+        window.open(objectUrl, "_blank");
+        Swal.close();
+      })
+      .catch(() => {
+        Swal.fire({ icon: "error", title: "No fue posible generar el catálogo", text: "Intenta nuevamente en unos minutos." });
+      });
+  };
+
   useEffect(() => {
     const table = document.querySelector(".product-table");
     if (!table) return undefined;
@@ -252,7 +282,13 @@ function ProductManager({ categories }) {
     stockInput.placeholder = "Sin límite";
     stockInput.setAttribute("aria-label", "Filtrar productos con stock menor a");
     stockField.append(stockLabel, stockInput);
-    filters.append(categorySelect, searchField, stockField);
+    const catalogBtn = document.createElement("button");
+    catalogBtn.type = "button";
+    catalogBtn.className = "btn btn-outline-primary btn-full-catalog";
+    catalogBtn.setAttribute("aria-label", "Descargar Full Catálogo en PDF");
+    catalogBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg><span>Full Catálogo</span>';
+    catalogBtn.addEventListener("click", downloadFullCatalog);
+    filters.append(categorySelect, searchField, stockField, catalogBtn);
     table.before(filters);
     function filterProducts() {
       setSelectedCategory(categorySelect.value);
@@ -267,6 +303,7 @@ function ProductManager({ categories }) {
       categorySelect.removeEventListener("change", filterProducts);
       searchInput.removeEventListener("input", filterProducts);
       stockInput.removeEventListener("input", filterProducts);
+      catalogBtn.removeEventListener("click", downloadFullCatalog);
       filters.remove();
     };
   }, [categories, loading]);

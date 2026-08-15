@@ -218,11 +218,12 @@ def _product_card(product: Producto, styles, show_price: bool = False) -> Table:
         image_flowable = placeholder
     name = Paragraph(html.escape(product.nombre), styles["CardName"])
     code = Paragraph(f"COD {html.escape(product.codigo)}", styles["CardCode"])
-    card_elements = [[image_flowable], [Spacer(1, 2 * mm)], [name], [Spacer(1, 1 * mm)], [code]]
+    card_elements = [[image_flowable], [Spacer(1, 2 * mm)], [name]]
     if show_price and product.precio is not None:
         price_text = _format_price(product.precio)
         price_p = Paragraph(f"<b>{price_text}</b>", styles["CardPrice"])
         card_elements.extend([[Spacer(1, 1 * mm)], [price_p]])
+    card_elements.extend([[Spacer(1, 1 * mm)], [code]])
 
     card = _RoundedCard(
         card_elements,

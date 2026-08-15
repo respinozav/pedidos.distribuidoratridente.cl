@@ -40,7 +40,7 @@ from app.schemas.dto import (
 from app.services.notifications import notify_customer_password_changed
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_price
-from app.services.catalog import build_public_catalog_pdf, invalidate_catalog_cache
+from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
 
 router = APIRouter(prefix="/api")
 
@@ -198,6 +198,7 @@ def list_categories(database: DatabaseSession, active_only: bool = True) -> list
 def create_category(payload: CategoryInput, database: DatabaseSession, _: AdminUser) -> Categoria:
     entity = Repository(Categoria, database).add(Categoria(**payload.model_dump()))
     database.commit()
+    invalidate_catalog_cache()
     return entity
 
 
@@ -208,6 +209,7 @@ def update_category(category_id: UUID, payload: CategoryInput, database: Databas
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria no encontrada")
     Repository(Categoria, database).update(entity, payload.model_dump())
     database.commit()
+    invalidate_catalog_cache()
     return entity
 
 
@@ -218,6 +220,7 @@ def delete_category(category_id: UUID, database: DatabaseSession, _: AdminUser) 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria no encontrada")
     Repository(Categoria, database).soft_delete(entity)
     database.commit()
+    invalidate_catalog_cache()
 
 
 @router.get("/catalogo-publico", tags=["Catalogo publico"])
@@ -227,6 +230,17 @@ def public_catalog(database: DatabaseSession) -> Response:
         content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="catalogo-distribuidora-tridente.pdf"'},
+    )
+
+
+@router.get("/admin/catalogo/pdf", tags=["Catalogo admin"])
+def full_catalog(database: DatabaseSession, _: AdminUser) -> Response:
+    """Genera el Full Catalogo PDF (todas las categorias activas + precios) exclusivo para administradores."""
+    content = build_full_catalog_pdf(database)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="full-catalogo-tridente.pdf"'},
     )
 
 
@@ -284,6 +298,7 @@ def create_product(payload: ProductInput, database: DatabaseSession, _: AdminUse
         raise HTTPException(status.HTTP_409_CONFLICT, "El código de producto ya existe")
     entity = Repository(Producto, database).add(Producto(**payload.model_dump()))
     database.commit()
+    invalidate_catalog_cache()
     return entity
 
 
@@ -297,6 +312,7 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
         raise HTTPException(status.HTTP_409_CONFLICT, "El código de producto ya existe")
     Repository(Producto, database).update(entity, payload.model_dump())
     database.commit()
+    invalidate_catalog_cache()
     return entity
 
 

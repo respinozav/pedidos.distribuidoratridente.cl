@@ -161,11 +161,12 @@ button, input { font: inherit; }
 .switch input:checked + span::before { transform: translateX(21px); }
 .category-modal footer { border-top: 1px solid var(--line); gap: .75rem; justify-content: flex-end; }
 .product-table { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-.product-filters { display: grid; gap: .75rem; grid-template-columns: minmax(160px, .65fr) minmax(0, 1.25fr) minmax(130px, .5fr); }
+.product-filters { display: grid; gap: .75rem; grid-template-columns: minmax(160px, .65fr) minmax(0, 1.25fr) minmax(130px, .5fr) auto; }
 .product-search { position: relative; }
 .product-search::before { color: var(--muted); content: "Buscar"; font-size: .72rem; font-weight: 700; left: .8rem; position: absolute; top: -1.05rem; }
 .product-stock-filter { align-items: center; display: flex; gap: .45rem; }
 .product-stock-filter label { color: var(--muted); font-size: .8rem; font-weight: 750; white-space: nowrap; }
+.btn-full-catalog { align-items: center; display: inline-flex; gap: .45rem; height: 38px; white-space: nowrap; }
 .stock-critical { background: #fff0ef; border-radius: 4px; color: #b42318; font-weight: 800; padding: .25rem .4rem; text-align: center; }
 .product-table-head, .product-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(76px, .7fr) 48px 76px 38px; }
 .product-table-head { background: #f8fafc; color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .04rem; padding: .7rem 1rem; text-transform: uppercase; }
