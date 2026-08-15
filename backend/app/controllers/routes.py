@@ -40,7 +40,7 @@ from app.schemas.dto import (
 from app.services.notifications import notify_customer_password_changed
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_price
-from app.services.catalog import build_public_catalog_pdf
+from app.services.catalog import build_public_catalog_pdf, invalidate_catalog_cache
 
 router = APIRouter(prefix="/api")
 
