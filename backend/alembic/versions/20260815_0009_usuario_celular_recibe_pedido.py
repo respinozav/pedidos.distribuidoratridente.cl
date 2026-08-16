@@ -11,16 +11,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "usuarios",
-        sa.Column("celular", sa.String(length=30), nullable=True),
-        schema="bdtridente",
-    )
-    op.add_column(
-        "usuarios",
-        sa.Column("recibe_pedido", sa.Boolean(), nullable=False, server_default="false"),
-        schema="bdtridente",
-    )
+    op.execute("ALTER TABLE bdtridente.usuarios ADD COLUMN IF NOT EXISTS celular VARCHAR(30)")
+    op.execute("ALTER TABLE bdtridente.usuarios ADD COLUMN IF NOT EXISTS recibe_pedido BOOLEAN NOT NULL DEFAULT false")
 
 
 def downgrade() -> None:
