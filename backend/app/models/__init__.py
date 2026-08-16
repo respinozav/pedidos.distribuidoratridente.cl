@@ -9,6 +9,7 @@ from app.models.entities import (
     Rol,
     Usuario,
 )
+from app.models.system_settings import SystemSettings
 
 __all__ = [
     "Categoria",
@@ -19,5 +20,6 @@ __all__ = [
     "Pedido",
     "Producto",
     "Rol",
+    "SystemSettings",
     "Usuario",
 ]

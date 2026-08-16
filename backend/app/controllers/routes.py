@@ -37,12 +37,14 @@ from app.schemas.dto import (
     UserOutput,
     UserUpdate,
 )
+from app.api.endpoints.system_settings import router as system_settings_router
 from app.services.notifications import notify_customer_password_changed
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_price
 from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
 
 router = APIRouter(prefix="/api")
+router.include_router(system_settings_router)
 
 
 @router.post("/login", response_model=TokenOutput, tags=["Autenticacion"])
@@ -141,7 +143,7 @@ def update_customer_password(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contraseña actual es incorrecta")
     current_customer.password_hash = hash_password(payload.new_password)
     database.commit()
-    notify_customer_password_changed(current_customer)
+    notify_customer_password_changed(current_customer, database=database)
 
 
 @router.post("/cliente/perfil/direcciones", response_model=AddressOutput, status_code=status.HTTP_201_CREATED, tags=["Perfil cliente"])

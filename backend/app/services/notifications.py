@@ -35,14 +35,61 @@ def _product_detail_label(detail: object) -> str:
     return f"<b>{name}</b>"
 
 
-def notify_customer_password_changed(customer: Cliente) -> None:
-    settings = get_settings()
+def _get_smtp_settings(database: Session | None = None) -> dict[str, object]:
+    if database is not None and hasattr(database, "query"):
+        try:
+            from app.repositories.system_settings_repository import SystemSettingsRepository
+
+            repo = SystemSettingsRepository()
+            db_settings = repo.get_settings(database)
+            if (
+                db_settings.smtp_host
+                and db_settings.smtp_username
+                and db_settings.smtp_password
+                and db_settings.smtp_from_email
+            ):
+                return {
+                    "configured": True,
+                    "host": db_settings.smtp_host,
+                    "port": db_settings.smtp_port or 465,
+                    "username": db_settings.smtp_username,
+                    "password": db_settings.smtp_password,
+                    "from_name": db_settings.smtp_from_name or "Distribuidora Tridente",
+                    "from_email": db_settings.smtp_from_email,
+                }
+        except Exception:
+            logger.warning("No se pudo leer la configuración SMTP de la base de datos, usando fallback de entorno")
+
+    env_settings = get_settings()
+    return {
+        "configured": env_settings.smtp_configured,
+        "host": env_settings.smtp_host,
+        "port": env_settings.smtp_port,
+        "username": env_settings.smtp_username,
+        "password": env_settings.smtp_password,
+        "from_name": env_settings.smtp_from_name,
+        "from_email": env_settings.smtp_from_email,
+    }
+
+
+def notify_customer_password_changed(customer: Cliente, database: Session | None = None) -> None:
+    if database is None:
+        try:
+            from app.core.database import SessionLocal
+
+            with SessionLocal() as db_session:
+                smtp_config = _get_smtp_settings(db_session)
+        except Exception:
+            smtp_config = _get_smtp_settings(None)
+    else:
+        smtp_config = _get_smtp_settings(database)
+
     recipient = (customer.correo or "").strip()
-    if not settings.smtp_configured or not recipient:
+    if not smtp_config["configured"] or not recipient:
         return
     message = EmailMessage()
     message["Subject"] = "Cambio de contraseña | Distribuidora Tridente"
-    message["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+    message["From"] = f"{smtp_config['from_name']} <{smtp_config['from_email']}>"
     message["To"] = recipient
     message.set_content("Tu contraseña fue actualizada correctamente. Si no realizaste este cambio, comunícate con Distribuidora Tridente.")
     message.add_alternative(
@@ -53,8 +100,8 @@ def notify_customer_password_changed(customer: Cliente) -> None:
         subtype="html",
     )
     try:
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
-            smtp.login(settings.smtp_username, settings.smtp_password)
+        with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
+            smtp.login(smtp_config["username"], smtp_config["password"])
             smtp.send_message(message)
     except (OSError, smtplib.SMTPException):
         logger.exception("No fue posible enviar el acuse de cambio de contraseña al cliente %s", customer.id)
@@ -121,8 +168,12 @@ def _build_order_message(
     heading: str,
     introduction: str,
     include_customer_data: bool,
+    from_name: str | None = None,
+    from_email: str | None = None,
 ) -> EmailMessage:
     settings = get_settings()
+    sender_name = from_name or settings.smtp_from_name
+    sender_email = from_email or settings.smtp_from_email
     order_code = str(order.id).split("-")[0].upper()
     customer_name = order.cliente.nombre or order.cliente.rut or order.cliente.celular or "Cliente"
     customer_id = order.cliente.rut or order.cliente.celular or "Sin identificador"
@@ -135,7 +186,7 @@ def _build_order_message(
     )
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+    message["From"] = f"{sender_name} <{sender_email}>"
     message["To"] = recipient
     message.set_content(f"Pedido #{order_code}. Total: {_currency(order.total)}.")
     customer_block = (
@@ -159,8 +210,8 @@ def _build_order_message(
 
 
 def notify_administrators_of_order(database: Session, order: Pedido) -> None:
-    settings = get_settings()
-    if not settings.smtp_configured:
+    smtp_config = _get_smtp_settings(database)
+    if not smtp_config["configured"]:
         logger.warning("Pedido %s creado sin notificación: SMTP no está configurado", order.id)
         return
     recipients = [
@@ -182,6 +233,8 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
                 "NUEVO PEDIDO",
                 "Se registró un nuevo pedido y requiere revisión.",
                 True,
+                from_name=smtp_config["from_name"],
+                from_email=smtp_config["from_email"],
             )
         )
     if customer_email:
@@ -193,14 +246,16 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
                 "PEDIDO CONFIRMADO",
                 "Recibimos tu pedido. Te avisaremos cuando su estado cambie.",
                 False,
+                from_name=smtp_config["from_name"],
+                from_email=smtp_config["from_email"],
             )
         )
     if not messages:
         logger.warning("Pedido %s creado sin destinatarios para notificación", order.id)
         return
     try:
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
-            smtp.login(settings.smtp_username, settings.smtp_password)
+        with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
+            smtp.login(smtp_config["username"], smtp_config["password"])
             for message in messages:
                 smtp.send_message(message)
     except (OSError, smtplib.SMTPException):
