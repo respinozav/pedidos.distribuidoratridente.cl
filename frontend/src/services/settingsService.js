@@ -11,3 +11,13 @@ export const updateSettings = async (data) => {
   const response = await api.put(API_URL, data);
   return response.data;
 };
+
+export const getWhatsAppStatus = async () => {
+  const response = await api.get("/whatsapp/status");
+  return response.data;
+};
+
+export const getWhatsAppQR = async () => {
+  const response = await api.get("/whatsapp/qr");
+  return response.data;
+};

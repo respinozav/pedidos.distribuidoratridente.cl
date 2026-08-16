@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from_email: str = ""
     smtp_from_name: str = "Distribuidora Tridente"
+    evolution_api_url: str = "http://localhost:8080"
+    evolution_api_global_key: str = "tridente_global_secret_123"
+    whatsapp_instance_name: str = "tridente_ws"
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[3] / ".env",
