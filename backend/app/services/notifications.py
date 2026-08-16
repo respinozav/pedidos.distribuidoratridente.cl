@@ -163,20 +163,21 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
     if not settings.smtp_configured:
         logger.warning("Pedido %s creado sin notificación: SMTP no está configurado", order.id)
         return
-    administrators = list(
-        database.scalars(
+    recipients = [
+        correo.strip()
+        for correo in database.scalars(
             select(Usuario.correo)
-            .join(Rol, Usuario.rol_id == Rol.id)
-            .where(Usuario.activo.is_(True), Rol.activo.is_(True), Rol.nombre.ilike("ADMINISTRADOR"))
+            .where(Usuario.activo.is_(True), Usuario.recibe_pedido.is_(True))
         )
-    )
+        if correo and correo.strip()
+    ]
     customer_email = (order.cliente.correo or "").strip()
     messages: list[EmailMessage] = []
-    if administrators:
+    if recipients:
         messages.append(
             _build_order_message(
                 order,
-                ", ".join(administrators),
+                ", ".join(recipients),
                 f"Nuevo pedido #{str(order.id).split('-')[0].upper()} | Distribuidora Tridente",
                 "NUEVO PEDIDO",
                 "Se registró un nuevo pedido y requiere revisión.",

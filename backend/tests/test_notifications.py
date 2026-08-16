@@ -37,3 +37,73 @@ def test_order_pdf_contains_valid_header() -> None:
 
     assert pdf.startswith(b"%PDF-1.4")
     assert len(pdf) > 500
+
+
+def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) -> None:
+    from app.services.notifications import notify_administrators_of_order
+
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=20):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def login(self, user, password):
+            pass
+
+        def send_message(self, message):
+            sent_messages.append(message)
+
+    monkeypatch.setattr("smtplib.SMTP_SSL", FakeSMTP)
+    monkeypatch.setattr(
+        "app.services.notifications.get_settings",
+        lambda: SimpleNamespace(
+            smtp_configured=True,
+            smtp_host="localhost",
+            smtp_port=465,
+            smtp_username="test@example.com",
+            smtp_password="pwd",
+            smtp_from_name="Distribuidora Tridente",
+            smtp_from_email="pedidos@tridente.cl",
+        ),
+    )
+
+    class FakeDatabase:
+        def __init__(self, recipients):
+            self._recipients = recipients
+
+        def scalars(self, statement):
+            return self._recipients
+
+    order = SimpleNamespace(
+        id="12345678-1234-1234-1234-123456789abc",
+        cliente=SimpleNamespace(nombre="Cliente", rut="1-9", correo="cliente@example.com", celular="+56912345678"),
+        direccion=SimpleNamespace(direccion="Calle 1", comuna="Santiago"),
+        created_at=datetime.now(UTC),
+        detalles=[],
+        total=Decimal("1000"),
+    )
+
+    # Caso 1: Hay usuarios con recibe_pedido = True
+    db = FakeDatabase(["admin_pedidos@example.com"])
+    notify_administrators_of_order(db, order)
+
+    assert len(sent_messages) == 2
+    recipients = [msg["To"] for msg in sent_messages]
+    assert "admin_pedidos@example.com" in recipients
+    assert "cliente@example.com" in recipients
+
+    # Caso 2: No hay usuarios con recibe_pedido = True (recibe_pedido = False para todos)
+    sent_messages.clear()
+    db_empty = FakeDatabase([])
+    notify_administrators_of_order(db_empty, order)
+
+    assert len(sent_messages) == 1
+    assert sent_messages[0]["To"] == "cliente@example.com"
+

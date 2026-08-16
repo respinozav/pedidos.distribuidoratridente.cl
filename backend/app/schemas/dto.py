@@ -110,6 +110,13 @@ class CustomerOutput(CustomerInput, ORMModel):
     direcciones: list[AddressOutput] = []
 
 
+class CustomerPage(BaseModel):
+    items: list[CustomerOutput]
+    total: int
+    page: int
+    page_size: int
+
+
 class CustomerCreate(CustomerInput):
     correo: EmailStr
     password: str = Field(min_length=8, max_length=128)
@@ -153,8 +160,15 @@ class RoleOutput(ORMModel):
 class UserInput(BaseModel):
     nombre: str = Field(min_length=2, max_length=150)
     correo: EmailStr
+    celular: str | None = Field(default=None, max_length=30)
+    recibe_pedido: bool = False
     rol_id: UUID
     activo: bool = True
+
+    @field_validator("celular", mode="before")
+    @classmethod
+    def empty_celular_to_none(cls, value: str | None) -> str | None:
+        return value.strip() or None if isinstance(value, str) else value
 
 
 class UserCreate(UserInput):

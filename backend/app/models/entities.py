@@ -46,6 +46,8 @@ class Usuario(AuditMixin, Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     rol_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"), index=True)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    celular: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    recibe_pedido: Mapped[bool] = mapped_column(Boolean, default=False)
     rol: Mapped[Rol] = relationship(back_populates="usuarios")
 
 
