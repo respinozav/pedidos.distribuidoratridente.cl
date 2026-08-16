@@ -267,7 +267,7 @@ if [ -f "$DEPLOY_DIR/docker-compose.yml" ]; then
 
     if command -v docker &> /dev/null; then
 
-        docker compose up -d
+        sudo docker compose up -d
 
     else
 
