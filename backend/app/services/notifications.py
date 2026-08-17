@@ -209,10 +209,86 @@ def _build_order_message(
     return message
 
 
+def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_bytes: bytes | None = None) -> None:
+    """Envía la notificación del pedido y PDF por WhatsApp a los administradores con recibe_pedido=True."""
+    try:
+        from app.services.whatsapp_service import WhatsAppService
+
+        admin_users = list(
+            database.scalars(
+                select(Usuario).where(
+                    Usuario.activo.is_(True),
+                    Usuario.recibe_pedido.is_(True),
+                    Usuario.celular.isnot(None),
+                )
+            )
+        )
+        if not admin_users:
+            logger.info("No hay usuarios administradores con recibe_pedido=True y celular para WhatsApp")
+            return
+
+        order_code = str(order.id).split("-")[0].upper()
+        customer_name = order.cliente.nombre or order.cliente.rut or order.cliente.celular or "Cliente"
+        customer_id = order.cliente.rut or order.cliente.celular or "Sin identificador"
+        customer_phone = order.cliente.celular or "Sin teléfono"
+        address = ", ".join(part for part in (order.direccion.direccion, order.direccion.comuna) if part) or "Sin dirección registrada"
+
+        items_lines = [
+            f"• {d.cantidad}x {d.nombre_producto} ({_currency(d.subtotal)})"
+            for d in order.detalles[:8]
+        ]
+        if len(order.detalles) > 8:
+            items_lines.append(f"• ... y {len(order.detalles) - 8} producto(s) más")
+        items_summary = "\n".join(items_lines)
+
+        caption = (
+            f"🔔 *NUEVO PEDIDO REGISTRADO*\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 *Pedido:* #{order_code}\n"
+            f"👤 *Cliente:* {customer_name}\n"
+            f"🆔 *RUT/ID:* {customer_id}\n"
+            f"📞 *Teléfono:* {customer_phone}\n"
+            f"📍 *Despacho:* {address}\n"
+            f"💰 *Total:* {_currency(order.total)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 *Detalle:*\n{items_summary}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📄 _Se adjunta comprobante en PDF con el detalle oficial._"
+        )
+
+        if pdf_bytes is None:
+            pdf_bytes = _order_pdf(order)
+
+        ws_service = WhatsAppService()
+        filename = f"pedido-{order_code}.pdf"
+
+        for admin in admin_users:
+            phone = (admin.celular or "").strip()
+            if not phone:
+                continue
+            try:
+                result = ws_service.send_pdf_document_sync(
+                    phone=phone,
+                    pdf_bytes=pdf_bytes,
+                    filename=filename,
+                    caption=caption,
+                )
+                logger.info("Notificación WhatsApp de pedido #%s enviada a %s (%s): %s", order_code, admin.nombre, phone, result)
+            except Exception as e:
+                logger.exception("Error al enviar WhatsApp a %s (%s): %s", admin.nombre, phone, e)
+    except Exception as e:
+        logger.exception("Error general al procesar notificaciones WhatsApp para el pedido %s: %s", order.id, e)
+
+
 def notify_administrators_of_order(database: Session, order: Pedido) -> None:
+    # 1. Notificación vía WhatsApp con PDF adjunto
+    pdf_bytes = _order_pdf(order)
+    notify_administrators_via_whatsapp(database, order, pdf_bytes)
+
+    # 2. Notificación vía Correo Electrónico (SMTP)
     smtp_config = _get_smtp_settings(database)
     if not smtp_config["configured"]:
-        logger.warning("Pedido %s creado sin notificación: SMTP no está configurado", order.id)
+        logger.warning("Pedido %s creado sin notificación de correo: SMTP no está configurado", order.id)
         return
     recipients = [
         correo.strip()
@@ -251,7 +327,7 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
             )
         )
     if not messages:
-        logger.warning("Pedido %s creado sin destinatarios para notificación", order.id)
+        logger.warning("Pedido %s creado sin destinatarios para notificación de correo", order.id)
         return
     try:
         with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
@@ -259,4 +335,4 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
             for message in messages:
                 smtp.send_message(message)
     except (OSError, smtplib.SMTPException):
-        logger.exception("No fue posible notificar el pedido %s", order.id)
+        logger.exception("No fue posible notificar por correo el pedido %s", order.id)

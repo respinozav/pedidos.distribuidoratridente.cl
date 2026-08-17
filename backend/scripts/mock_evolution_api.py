@@ -96,8 +96,18 @@ async def connect_instance(instance_name: str):
 async def send_text(instance_name: str, payload: dict):
     number = payload.get("number")
     text = payload.get("text")
-    print(f"[MOCK EVOLUTION API] Mensaje enviado a {number}: {text}")
+    print(f"[MOCK EVOLUTION API] Mensaje de texto enviado a {number}: {text}")
     return {"status": "SUCCESS", "message": "Mensaje simulado enviado"}
+
+
+@app.post("/message/sendMedia/{instance_name}")
+async def send_media(instance_name: str, payload: dict):
+    number = payload.get("number")
+    filename = payload.get("fileName")
+    caption = payload.get("caption")
+    print(f"[MOCK EVOLUTION API] Documento/PDF '{filename}' enviado a {number}:\n{caption}")
+    return {"status": "SUCCESS", "message": "Documento simulado enviado", "fileName": filename}
+
 
 
 if __name__ == "__main__":

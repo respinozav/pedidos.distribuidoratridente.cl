@@ -1,9 +1,24 @@
+import base64
 import logging
 import httpx
 from fastapi import HTTPException
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def format_whatsapp_phone(phone: str) -> str:
+    """Limpia y estandariza el número de teléfono con código de país."""
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if not digits:
+        return ""
+    # Si es número móvil chileno de 9 dígitos (ej. 912345678), agregar 56
+    if len(digits) == 9 and digits.startswith("9"):
+        return f"56{digits}"
+    # Si viene con 8 dígitos sin el 9 (ej. 12345678), agregar 569
+    if len(digits) == 8:
+        return f"569{digits}"
+    return digits
 
 
 class WhatsAppService:
@@ -35,7 +50,6 @@ class WhatsAppService:
         """Crea la instancia si no existe y devuelve el QR en base64."""
         async with httpx.AsyncClient(timeout=15.0) as client:
             try:
-                # 1. Intentar crear la instancia
                 create_payload = {
                     "instanceName": self.instance_name,
                     "integration": "WHATSAPP-BAILEYS",
@@ -49,7 +63,6 @@ class WhatsAppService:
                 except Exception:
                     pass
 
-                # 2. Solicitar conexión para obtener QR
                 response = await client.get(
                     f"{self.base_url}/instance/connect/{self.instance_name}",
                     headers=self.headers,
@@ -74,9 +87,58 @@ class WhatsAppService:
                 logger.exception("Error al comunicarse con Evolution API")
                 raise HTTPException(status_code=503, detail=f"Evolution API no disponible ({str(e)})")
 
+    def send_message_sync(self, phone: str, text: str) -> dict:
+        """Envía un mensaje de texto síncrono."""
+        clean_phone = format_whatsapp_phone(phone)
+        if not clean_phone:
+            return {"status": "ERROR", "message": "Número telefónico inválido"}
+        with httpx.Client(timeout=15.0) as client:
+            payload = {
+                "number": clean_phone,
+                "text": text,
+                "delay": 1200,
+            }
+            response = client.post(
+                f"{self.base_url}/message/sendText/{self.instance_name}",
+                json=payload,
+                headers=self.headers,
+            )
+            return response.json()
+
+    def send_pdf_document_sync(self, phone: str, pdf_bytes: bytes, filename: str, caption: str = "") -> dict:
+        """Envía un documento PDF adjunto con mensaje/caption."""
+        clean_phone = format_whatsapp_phone(phone)
+        if not clean_phone:
+            return {"status": "ERROR", "message": "Número telefónico inválido"}
+        base64_media = base64.b64encode(pdf_bytes).decode("utf-8")
+        with httpx.Client(timeout=25.0) as client:
+            payload = {
+                "number": clean_phone,
+                "mediatype": "document",
+                "mimetype": "application/pdf",
+                "caption": caption,
+                "media": base64_media,
+                "fileName": filename,
+            }
+            response = client.post(
+                f"{self.base_url}/message/sendMedia/{self.instance_name}",
+                json=payload,
+                headers=self.headers,
+            )
+            if response.status_code in (200, 201):
+                return response.json()
+            # Si falla el envío de media, intentar enviar como texto de respaldo
+            logger.warning(
+                "Fallo al enviar PDF por WhatsApp (status %s). Enviando texto de respaldo.",
+                response.status_code,
+            )
+            return self.send_message_sync(clean_phone, caption)
+
     async def send_message(self, phone: str, text: str) -> dict:
-        """Envía un mensaje de texto. (Usar en el controlador de Pedidos)"""
-        clean_phone = "".join(ch for ch in phone if ch.isdigit())
+        """Envía un mensaje de texto asíncrono."""
+        clean_phone = format_whatsapp_phone(phone)
+        if not clean_phone:
+            return {"status": "ERROR", "message": "Número telefónico inválido"}
         async with httpx.AsyncClient(timeout=15.0) as client:
             payload = {
                 "number": clean_phone,
@@ -89,3 +151,4 @@ class WhatsAppService:
                 headers=self.headers,
             )
             return response.json()
+
