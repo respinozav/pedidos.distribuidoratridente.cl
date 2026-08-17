@@ -1110,7 +1110,7 @@ function ShopLegacy({ customer }) {
                       <div className="cart-stepper">
                         <button
                           type="button"
-                          className="cart-stepper-btn minus"
+                          className={`cart-stepper-btn minus ${item.quantity === 1 ? "is-trash" : ""}`}
                           onClick={() =>
                             setCart((current) =>
                               current
@@ -1121,7 +1121,7 @@ function ShopLegacy({ customer }) {
                           title={item.quantity === 1 ? "Eliminar del pedido" : "Restar 1"}
                           aria-label="Restar unidad"
                         >
-                          {item.quantity === 1 ? <Trash2 size={13} className="text-danger" /> : <Minus size={13} />}
+                          {item.quantity === 1 ? <Trash2 size={14} strokeWidth={2.2} /> : <Minus size={14} strokeWidth={2.5} />}
                         </button>
                         <span className="cart-stepper-val">{item.quantity}</span>
                         <button
@@ -1135,8 +1135,9 @@ function ShopLegacy({ customer }) {
                           title="Sumar 1"
                           aria-label="Sumar unidad"
                         >
-                          <Plus size={13} />
+                          <Plus size={14} strokeWidth={2.5} />
                         </button>
+
                       </div>
                     </div>
                   );
@@ -1751,12 +1752,12 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
                               <div className="cart-stepper">
                                 <button
                                   type="button"
-                                  className="cart-stepper-btn minus"
+                                  className={`cart-stepper-btn minus ${item.quantity === 1 ? "is-trash" : ""}`}
                                   onClick={() => updateQuantity(item.id, item.quantity - 1)}
                                   title={item.quantity === 1 ? "Eliminar del pedido" : "Restar 1"}
                                   aria-label="Quitar unidad"
                                 >
-                                  {item.quantity === 1 ? <Trash2 size={13} className="text-danger" /> : <Minus size={13} />}
+                                  {item.quantity === 1 ? <Trash2 size={14} strokeWidth={2.2} /> : <Minus size={14} strokeWidth={2.5} />}
                                 </button>
                                 <span className="cart-stepper-val">{item.quantity}</span>
                                 <button
@@ -1766,8 +1767,9 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
                                   title="Sumar 1"
                                   aria-label="Agregar unidad"
                                 >
-                                  <Plus size={13} />
+                                  <Plus size={14} strokeWidth={2.5} />
                                 </button>
+
                               </div>
                             </div>
                           );

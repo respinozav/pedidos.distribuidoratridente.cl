@@ -377,41 +377,54 @@ button, input { font: inherit; }
   align-items: center;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   display: inline-flex;
   flex-shrink: 0;
-  height: 30px;
+  height: 32px;
   overflow: hidden;
 }
 
 .cart-stepper-btn {
   align-items: center;
-  background: transparent;
+  background: #f8fafc;
   border: 0;
-  color: #475569;
+  color: #334155;
   cursor: pointer;
   display: inline-flex;
   height: 100%;
   justify-content: center;
   padding: 0;
   transition: all 0.15s ease;
-  width: 26px;
+  width: 28px;
 }
 
 .cart-stepper-btn:hover {
-  background: #f1f5f9;
+  background: #e2e8f0;
   color: #0f172a;
 }
 
 .cart-stepper-btn:active {
-  background: #e2e8f0;
+  background: #cbd5e1;
   transform: scale(0.92);
 }
 
-.cart-stepper-btn.minus:hover {
-  background: #fee2e2;
-  color: #dc2626;
+.cart-stepper-btn.minus {
+  border-right: 1px solid #e2e8f0;
+}
+
+.cart-stepper-btn.plus {
+  border-left: 1px solid #e2e8f0;
+}
+
+.cart-stepper-btn.is-trash {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+}
+
+.cart-stepper-btn.is-trash:hover {
+  background: #fecaca !important;
+  color: #991b1b !important;
 }
 
 .cart-stepper-val {
@@ -419,14 +432,15 @@ button, input { font: inherit; }
   background: #ffffff;
   color: #0f172a;
   display: inline-flex;
-  font-size: 0.84rem;
-  font-weight: 700;
+  font-size: 0.88rem;
+  font-weight: 750;
   justify-content: center;
-  min-width: 24px;
-  padding: 0 0.15rem;
+  min-width: 28px;
+  padding: 0 0.2rem;
   text-align: center;
   user-select: none;
 }
+
 
 .order-row {
   align-items: center;
