@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Boxes, CheckCircle2, ClipboardList, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Package, Pencil, Plus, Save, Search, Settings, ShoppingBag, Users, X } from "lucide-react";
+import { Boxes, CheckCircle2, ClipboardList, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Minus, Package, Pencil, Plus, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
+
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -1084,8 +1085,82 @@ function ShopLegacy({ customer }) {
   return <main className="customer-app"><header className="customer-topbar"><div className="container d-flex align-items-center justify-content-between"><div className="customer-brand"><span className="brand-mark">DT</span><strong>Distribuidora Tridente</strong></div><button className="btn btn-light btn-sm" onClick={loadOrders}><ClipboardList size={17} />Mis pedidos</button></div></header><div className="container py-4 py-lg-5"><header className="customer-heading"><p className="eyebrow">PORTAL DE PEDIDOS</p><h1>Hola, {customer.nombre}</h1><p>Selecciona los productos que necesitas para tu próximo despacho.</p></header>
     {view === "orders" ? <section className="content-panel"><button className="btn btn-link px-0 mb-3" onClick={() => setView("shop")}>Volver al catálogo</button><h2>Pedidos pendientes</h2>{orders.length ? orders.map((order) => <article className="order-row" key={order.id}><strong>{order.estado}</strong><span>{money.format(order.total)}</span><span>{order.detalles.length} productos</span></article>) : <p className="text-secondary mb-0">No hay pedidos pendientes.</p>}</section> : <div className="row g-4"><section className="col-lg-8"><div className="search-field"><Search size={20} /><label htmlFor="search" className="visually-hidden">Buscar producto</label><input id="search" className="form-control form-control-lg" placeholder="Busca por nombre de producto" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
       {notice && <div className="alert alert-success mt-3">{notice}</div>}<div className="product-grid mt-4">{products.map((product) => <article className="product" key={product.id}><div className="product-image">{product.imagen_url ? <img src={product.imagen_url} alt="" /> : <Package size={30} />}</div><small>{product.codigo}</small><h2>{product.nombre}</h2><strong>{money.format(product.precio_cliente ?? product.precio)}</strong><button className="btn btn-outline-primary mt-3" onClick={() => add(product)}><Plus size={17} />Agregar</button></article>)}</div></section>
-      <aside className="col-lg-4"><div className="cart"><div className="cart-title"><ShoppingBag size={20} /><h2>Tu carrito</h2></div>{cart.length === 0 ? <p className="text-secondary">Aún no agregas productos.</p> : <>{cart.map((item) => <div className="cart-line" key={item.id}><span>{item.nombre}</span><div><button onClick={() => setCart(cart.map((line) => line.id === item.id ? { ...line, quantity: Math.max(1, line.quantity - 1) } : line))}>-</button><span>{item.quantity}</span><button onClick={() => setCart(cart.map((line) => line.id === item.id ? { ...line, quantity: line.quantity + 1 } : line))}>+</button></div></div>)}<hr/><div className="d-flex justify-content-between"><strong>Total</strong><strong>{money.format(total)}</strong></div><button className="btn btn-primary w-100 mt-3" disabled>Selecciona dirección para finalizar</button></>}</div></aside></div>}</div></main>;
+      <aside className="col-lg-4">
+        <div className="cart">
+          <div className="cart-title">
+            <ShoppingBag size={20} />
+            <h2>Tu carrito</h2>
+          </div>
+          {cart.length === 0 ? (
+            <p className="text-secondary mb-0">Aún no agregas productos.</p>
+          ) : (
+            <>
+              <div className="cart-items">
+                {cart.map((item) => {
+                  const itemPrice = Number(item.precio_cliente ?? item.precio);
+                  const itemSubtotal = itemPrice * item.quantity;
+                  return (
+                    <div className="cart-line" key={item.id}>
+                      <div className="cart-item-info">
+                        <span className="cart-item-name" title={item.nombre}>{item.nombre}</span>
+                        <small className="cart-item-price">
+                          {money.format(itemPrice)} c/u · <strong className="text-primary">{money.format(itemSubtotal)}</strong>
+                        </small>
+                      </div>
+                      <div className="cart-stepper">
+                        <button
+                          type="button"
+                          className="cart-stepper-btn minus"
+                          onClick={() =>
+                            setCart((current) =>
+                              current
+                                .map((line) => (line.id === item.id ? { ...line, quantity: line.quantity - 1 } : line))
+                                .filter((line) => line.quantity > 0)
+                            )
+                          }
+                          title={item.quantity === 1 ? "Eliminar del pedido" : "Restar 1"}
+                          aria-label="Restar unidad"
+                        >
+                          {item.quantity === 1 ? <Trash2 size={13} className="text-danger" /> : <Minus size={13} />}
+                        </button>
+                        <span className="cart-stepper-val">{item.quantity}</span>
+                        <button
+                          type="button"
+                          className="cart-stepper-btn plus"
+                          onClick={() =>
+                            setCart((current) =>
+                              current.map((line) => (line.id === item.id ? { ...line, quantity: line.quantity + 1 } : line))
+                            )
+                          }
+                          title="Sumar 1"
+                          aria-label="Sumar unidad"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <hr />
+              <div className="d-flex justify-content-between">
+                <strong>Total</strong>
+                <strong>{money.format(total)}</strong>
+              </div>
+              <button className="btn btn-primary w-100 mt-3" disabled>
+                Selecciona dirección para finalizar
+              </button>
+            </>
+          )}
+        </div>
+      </aside>
+    </div>
+    }
+  </div>
+</main>;
 }
+
+
 
 function CustomerProfile({ customer, onProfileUpdated, onBack, onOrders, onLogout }) {
   const [profile, setProfile] = useState(customer);
@@ -1541,7 +1616,216 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
 
   const total = cart.reduce((sum, item) => sum + Number(item.precio_cliente ?? item.precio) * item.quantity, 0);
   const activeAddresses = customer.direcciones?.filter((address) => address.activo) ?? [];
-  return <main className="customer-portal"><aside className="customer-sidebar"><div className="customer-brand"><span className="brand-mark">DT</span><strong>Distribuidora Tridente</strong></div><p className="sidebar-label">MENU PRINCIPAL</p><nav className="customer-nav"><span className="customer-nav-title"><ClipboardList size={19} />Pedidos</span><button className={section === "create" ? "active" : ""} onClick={() => { setSection("create"); setError(""); }}><ShoppingBag size={17} />Realizar pedido</button><button className={section === "history" ? "active" : ""} onClick={openHistory}><ClipboardList size={17} />Pedidos históricos</button></nav><div className="customer-profile"><span>{(customer.nombre || customer.rut || customer.celular || "CL").slice(0, 2).toUpperCase()}</span><div><strong>{customer.nombre || "Cliente"}</strong><small>Sesión activa</small></div></div><button className="logout-button" onClick={onLogout}><LogOut size={18} />Cerrar sesión</button></aside><section className="customer-workspace"><header className="customer-portal-header"><div><p className="eyebrow">PEDIDOS</p><h1>{section === "create" ? "Realizar pedido" : "Pedidos históricos"}</h1></div><span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span></header><div className="customer-content">{notice && <div className="alert alert-success alert-dismissible fade show"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger">{error}</div>}{section === "create" ? <div className="row g-4"><section className="col-xl-8"><div className="search-field"><Search size={20} /><input className="form-control form-control-lg" placeholder="Busca por nombre de producto" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="product-grid mt-4">{products.map((product) => <article className="product" key={product.id}><div className="product-image">{productImageSource(product.imagen_url) ? <img src={productImageSource(product.imagen_url)} alt="" /> : <Package size={30} />}</div><small>{product.codigo}</small><h2>{product.nombre}</h2><strong>{money.format(product.precio_cliente ?? product.precio)}</strong><button className="btn btn-outline-primary mt-3" onClick={() => add(product)}><Plus size={17} />Agregar</button></article>)}</div>{!products.length && <p className="text-secondary mt-4">No se encontraron productos.</p>}</section><aside className="col-xl-4"><div className="cart"><div className="cart-title"><ShoppingBag size={20} /><h2>Tu pedido</h2></div><label className="form-label" htmlFor="delivery-address">Dirección de despacho</label><select id="delivery-address" className="form-select" value={selectedAddress} onChange={(event) => setSelectedAddress(event.target.value)}><option value="">Selecciona una dirección</option>{activeAddresses.map((address) => <option value={address.id} key={address.id}>{address.direccion}{address.comuna ? `, ${address.comuna}` : ""}{address.principal ? " (Principal)" : ""}</option>)}</select>{!activeAddresses.length && <small className="form-text">No tienes direcciones activas registradas.</small>}{cart.length ? <><div className="cart-items">{cart.map((item) => <div className="cart-line" key={item.id}><span>{item.nombre}</span><div><button onClick={() => updateQuantity(item.id, item.quantity - 1)} aria-label="Quitar unidad">-</button><span>{item.quantity}</span><button onClick={() => updateQuantity(item.id, item.quantity + 1)} aria-label="Agregar unidad">+</button></div></div>)}</div><hr /><div className="d-flex justify-content-between"><strong>Total</strong><strong>{money.format(total)}</strong></div><button className="btn btn-primary w-100 mt-3" onClick={createOrder} disabled={submitting || !selectedAddress}>{submitting ? "Enviando..." : "Enviar pedido"}</button></> : <p className="text-secondary mt-3 mb-0">Agrega productos para comenzar.</p>}</div></aside></div> : <section className="content-panel"><div className="panel-heading"><div><h2>Todos tus pedidos</h2><p>Revisa el estado e importe de cada solicitud.</p></div><span className="panel-count">{orders.length} pedidos</span></div><div className="order-history mt-4">{orders.length ? orders.map((order) => <article className="order-history-row" key={order.id}><div><strong>Pedido {order.id.slice(0, 8).toUpperCase()}</strong><small>{order.detalles.length} productos</small></div><span className={`order-status order-${order.estado.toLowerCase()}`}>{order.estado.replace("_", " ")}</span><strong>{money.format(order.total)}</strong></article>) : <p className="text-secondary mb-0">Aún no registras pedidos.</p>}</div></section>}</div></section></main>;
+  return (
+    <main className="customer-portal">
+      <aside className="customer-sidebar">
+        <div className="customer-brand">
+          <span className="brand-mark">DT</span>
+          <strong>Distribuidora Tridente</strong>
+        </div>
+        <p className="sidebar-label">MENU PRINCIPAL</p>
+        <nav className="customer-nav">
+          <span className="customer-nav-title">
+            <ClipboardList size={19} />
+            Pedidos
+          </span>
+          <button
+            className={section === "create" ? "active" : ""}
+            onClick={() => {
+              setSection("create");
+              setError("");
+            }}
+          >
+            <ShoppingBag size={17} />
+            Realizar pedido
+          </button>
+          <button className={section === "history" ? "active" : ""} onClick={openHistory}>
+            <ClipboardList size={17} />
+            Pedidos históricos
+          </button>
+        </nav>
+        <div className="customer-profile">
+          <span>{(customer.nombre || customer.rut || customer.celular || "CL").slice(0, 2).toUpperCase()}</span>
+          <div>
+            <strong>{customer.nombre || "Cliente"}</strong>
+            <small>Sesión activa</small>
+          </div>
+        </div>
+        <button className="logout-button" onClick={onLogout}>
+          <LogOut size={18} />
+          Cerrar sesión
+        </button>
+      </aside>
+      <section className="customer-workspace">
+        <header className="customer-portal-header">
+          <div>
+            <p className="eyebrow">PEDIDOS</p>
+            <h1>{section === "create" ? "Realizar pedido" : "Pedidos históricos"}</h1>
+          </div>
+          <span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span>
+        </header>
+        <div className="customer-content">
+          {notice && (
+            <div className="alert alert-success alert-dismissible fade show">
+              <CheckCircle2 size={18} />
+              {notice}
+              <button className="btn-close" type="button" onClick={() => setNotice("")} />
+            </div>
+          )}
+          {error && <div className="alert alert-danger">{error}</div>}
+          {section === "create" ? (
+            <div className="row g-4">
+              <section className="col-xl-8">
+                <div className="search-field">
+                  <Search size={20} />
+                  <input
+                    className="form-control form-control-lg"
+                    placeholder="Busca por nombre de producto"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </div>
+                <div className="product-grid mt-4">
+                  {products.map((product) => (
+                    <article className="product" key={product.id}>
+                      <div className="product-image">
+                        {productImageSource(product.imagen_url) ? (
+                          <img src={productImageSource(product.imagen_url)} alt="" />
+                        ) : (
+                          <Package size={30} />
+                        )}
+                      </div>
+                      <small>{product.codigo}</small>
+                      <h2>{product.nombre}</h2>
+                      <strong>{money.format(product.precio_cliente ?? product.precio)}</strong>
+                      <button className="btn btn-outline-primary mt-3" onClick={() => add(product)}>
+                        <Plus size={17} />
+                        Agregar
+                      </button>
+                    </article>
+                  ))}
+                </div>
+                {!products.length && <p className="text-secondary mt-4">No se encontraron productos.</p>}
+              </section>
+              <aside className="col-xl-4">
+                <div className="cart">
+                  <div className="cart-title">
+                    <ShoppingBag size={20} />
+                    <h2>Tu pedido</h2>
+                  </div>
+                  <label className="form-label" htmlFor="delivery-address">
+                    Dirección de despacho
+                  </label>
+                  <select
+                    id="delivery-address"
+                    className="form-select"
+                    value={selectedAddress}
+                    onChange={(event) => setSelectedAddress(event.target.value)}
+                  >
+                    <option value="">Selecciona una dirección</option>
+                    {activeAddresses.map((address) => (
+                      <option value={address.id} key={address.id}>
+                        {address.direccion}
+                        {address.comuna ? `, ${address.comuna}` : ""}
+                        {address.principal ? " (Principal)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {!activeAddresses.length && (
+                    <small className="form-text">No tienes direcciones activas registradas.</small>
+                  )}
+                  {cart.length ? (
+                    <>
+                      <div className="cart-items">
+                        {cart.map((item) => {
+                          const itemPrice = Number(item.precio_cliente ?? item.precio);
+                          const itemSubtotal = itemPrice * item.quantity;
+                          return (
+                            <div className="cart-line" key={item.id}>
+                              <div className="cart-item-info">
+                                <span className="cart-item-name" title={item.nombre}>{item.nombre}</span>
+                                <small className="cart-item-price">
+                                  {money.format(itemPrice)} c/u · <strong className="text-primary">{money.format(itemSubtotal)}</strong>
+                                </small>
+                              </div>
+                              <div className="cart-stepper">
+                                <button
+                                  type="button"
+                                  className="cart-stepper-btn minus"
+                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  title={item.quantity === 1 ? "Eliminar del pedido" : "Restar 1"}
+                                  aria-label="Quitar unidad"
+                                >
+                                  {item.quantity === 1 ? <Trash2 size={13} className="text-danger" /> : <Minus size={13} />}
+                                </button>
+                                <span className="cart-stepper-val">{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  className="cart-stepper-btn plus"
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  title="Sumar 1"
+                                  aria-label="Agregar unidad"
+                                >
+                                  <Plus size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <hr />
+                      <div className="d-flex justify-content-between">
+                        <strong>Total</strong>
+                        <strong>{money.format(total)}</strong>
+                      </div>
+                      <button
+                        className="btn btn-primary w-100 mt-3"
+                        onClick={createOrder}
+                        disabled={submitting || !selectedAddress}
+                      >
+                        {submitting ? "Enviando..." : "Enviar pedido"}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-secondary mt-3 mb-0">Agrega productos para comenzar.</p>
+                  )}
+                </div>
+              </aside>
+            </div>
+          ) : (
+            <section className="content-panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Todos tus pedidos</h2>
+                  <p>Revisa el estado e importe de cada solicitud.</p>
+                </div>
+                <span className="panel-count">{orders.length} pedidos</span>
+              </div>
+              <div className="order-history mt-4">
+                {orders.length ? (
+                  orders.map((order) => (
+                    <article className="order-history-row" key={order.id}>
+                      <div>
+                        <strong>Pedido {order.id.slice(0, 8).toUpperCase()}</strong>
+                        <small>{order.detalles.length} productos</small>
+                      </div>
+                      <span className={`order-status order-${order.estado.toLowerCase()}`}>
+                        {order.estado.replace("_", " ")}
+                      </span>
+                      <strong>{money.format(order.total)}</strong>
+                    </article>
+                  ))
+                ) : (
+                  <p className="text-secondary mb-0">Aún no registras pedidos.</p>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+
 }
 
 function PublicCatalog() {
