@@ -217,8 +217,9 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
         ws_service = WhatsAppService()
 
         # Validar si WhatsApp está realmente conectado/vinculado para evitar errores
-        if not ws_service.is_connected_sync():
-            logger.info("Notificación WhatsApp omitida: La instancia '%s' no está vinculada o conectada.", ws_service.instance_name)
+        is_connected = ws_service.is_connected_sync()
+        if not is_connected:
+            logger.info("Notificación WhatsApp omitida: La instancia '%s' no está vinculada o conectada a WhatsApp.", ws_service.instance_name)
             return
 
         admin_users = list(
@@ -226,14 +227,12 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
                 select(Usuario).where(
                     Usuario.activo.is_(True),
                     Usuario.recibe_pedido.is_(True),
-                    Usuario.celular.isnot(None),
                 )
             )
         )
         if not admin_users:
-            logger.info("No hay usuarios administradores con recibe_pedido=True y celular para WhatsApp")
+            logger.info("No hay usuarios activos con recibe_pedido=True configurados en el sistema.")
             return
-
 
         order_code = str(order.id).split("-")[0].upper()
         customer_name = order.cliente.nombre or order.cliente.rut or order.cliente.celular or "Cliente"
@@ -267,14 +266,19 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
         if pdf_bytes is None:
             pdf_bytes = _order_pdf(order)
 
-        ws_service = WhatsAppService()
         filename = f"pedido-{order_code}.pdf"
 
         for admin in admin_users:
             phone = (admin.celular or "").strip()
             if not phone:
+                logger.warning(
+                    "El usuario '%s' (%s) tiene 'Recibe pedidos = Sí' pero no tiene número celular registrado.",
+                    admin.nombre,
+                    admin.correo,
+                )
                 continue
             try:
+                logger.info("Enviando notificación WhatsApp de pedido #%s a %s (%s)...", order_code, admin.nombre, phone)
                 result = ws_service.send_pdf_document_sync(
                     phone=phone,
                     pdf_bytes=pdf_bytes,
@@ -286,6 +290,7 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
                 logger.exception("Error al enviar WhatsApp a %s (%s): %s", admin.nombre, phone, e)
     except Exception as e:
         logger.exception("Error general al procesar notificaciones WhatsApp para el pedido %s: %s", order.id, e)
+
 
 
 def notify_administrators_of_order(database: Session, order: Pedido) -> None:

@@ -192,7 +192,13 @@ class WhatsAppService:
                 json=payload,
                 headers=self.headers,
             )
-            return response.json()
+            try:
+                data = response.json()
+                logger.info("Resultado sendText WhatsApp (%s): %s", response.status_code, data)
+                return data
+            except Exception:
+                logger.warning("Respuesta sendText WhatsApp (%s): %s", response.status_code, response.text)
+                return {"status": response.status_code, "text": response.text}
 
     def send_pdf_document_sync(self, phone: str, pdf_bytes: bytes, filename: str, caption: str = "") -> dict:
         """Envía un documento PDF adjunto con mensaje/caption."""
@@ -215,13 +221,18 @@ class WhatsAppService:
                 headers=self.headers,
             )
             if response.status_code in (200, 201):
-                return response.json()
+                try:
+                    return response.json()
+                except Exception:
+                    return {"status": "SUCCESS"}
             # Si falla el envío de media, intentar enviar como texto de respaldo
             logger.warning(
-                "Fallo al enviar PDF por WhatsApp (status %s). Enviando texto de respaldo.",
+                "Fallo al enviar PDF por WhatsApp (status %s, resp: %s). Enviando texto de respaldo.",
                 response.status_code,
+                response.text,
             )
             return self.send_message_sync(clean_phone, caption)
+
 
     async def send_message(self, phone: str, text: str) -> dict:
         """Envía un mensaje de texto asíncrono."""
