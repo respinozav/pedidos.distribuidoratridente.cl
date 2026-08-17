@@ -35,46 +35,58 @@ class WhatsAppService:
         """Verifica si la instancia está conectada y obtiene los datos del número vinculado."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
-                response = await client.get(
-                    f"{self.base_url}/instance/connectionState/{self.instance_name}",
-                    headers=self.headers,
-                )
                 state = "DISCONNECTED"
-                if response.status_code == 200:
-                    state_data = response.json()
-                    state = (
-                        state_data.get("instance", {}).get("state")
-                        or state_data.get("state")
-                        or "DISCONNECTED"
-                    )
-
                 profile_name = None
                 owner_number = None
                 profile_pic_url = None
 
-                if state in ("open", "CONNECTED"):
-                    try:
-                        inst_resp = await client.get(
-                            f"{self.base_url}/instance/fetchInstances",
-                            params={"instanceName": self.instance_name},
-                            headers=self.headers,
+                # 1. Consultar estado de conexión
+                try:
+                    response = await client.get(
+                        f"{self.base_url}/instance/connectionState/{self.instance_name}",
+                        headers=self.headers,
+                    )
+                    if response.status_code == 200:
+                        state_data = response.json()
+                        state = (
+                            state_data.get("instance", {}).get("state")
+                            or state_data.get("state")
+                            or "DISCONNECTED"
                         )
-                        if inst_resp.status_code == 200:
-                            data = inst_resp.json()
-                            instances = data if isinstance(data, list) else data.get("instances", [])
-                            target = next(
-                                (i for i in instances if i.get("name") == self.instance_name or i.get("instanceName") == self.instance_name),
-                                instances[0] if instances else None
+                except Exception:
+                    pass
+
+                # 2. Consultar fetchInstances para obtener perfil, número y estado complementario
+                try:
+                    inst_resp = await client.get(
+                        f"{self.base_url}/instance/fetchInstances",
+                        params={"instanceName": self.instance_name},
+                        headers=self.headers,
+                    )
+                    if inst_resp.status_code == 200:
+                        data = inst_resp.json()
+                        instances = data if isinstance(data, list) else data.get("instances", [])
+                        target = next(
+                            (i for i in instances if i.get("name") == self.instance_name or i.get("instanceName") == self.instance_name),
+                            instances[0] if instances else None
+                        )
+                        if target:
+                            fetch_status = (
+                                target.get("connectionStatus")
+                                or target.get("status")
+                                or target.get("state")
                             )
-                            if target:
-                                owner_jid = target.get("ownerJid") or target.get("owner") or target.get("wuid") or ""
-                                raw_phone = owner_jid.split("@")[0] if "@" in owner_jid else owner_jid
-                                if raw_phone:
-                                    owner_number = f"+{raw_phone}" if not raw_phone.startswith("+") else raw_phone
-                                profile_name = target.get("profileName") or target.get("name")
-                                profile_pic_url = target.get("profilePicUrl")
-                    except Exception:
-                        pass
+                            if fetch_status and (state == "DISCONNECTED" or fetch_status in ("open", "CONNECTED")):
+                                state = fetch_status
+
+                            owner_jid = target.get("ownerJid") or target.get("owner") or target.get("wuid") or ""
+                            raw_phone = owner_jid.split("@")[0] if "@" in owner_jid else owner_jid
+                            if raw_phone:
+                                owner_number = f"+{raw_phone}" if not raw_phone.startswith("+") else raw_phone
+                            profile_name = target.get("profileName") or target.get("name")
+                            profile_pic_url = target.get("profilePicUrl")
+                except Exception:
+                    pass
 
                 return {
                     "instance": {
@@ -98,11 +110,32 @@ class WhatsAppService:
                     headers=self.headers,
                 )
                 if response.status_code == 200:
-                    return response.json()
+                    data = response.json()
+                    state = data.get("instance", {}).get("state") or data.get("state") or ""
+                    if state.lower() in ("open", "connected"):
+                        return data
+                # Fallback: consultar fetchInstances
+                fetch_resp = client.get(
+                    f"{self.base_url}/instance/fetchInstances",
+                    params={"instanceName": self.instance_name},
+                    headers=self.headers,
+                )
+                if fetch_resp.status_code == 200:
+                    data = fetch_resp.json()
+                    instances = data if isinstance(data, list) else data.get("instances", [])
+                    target = next(
+                        (i for i in instances if i.get("name") == self.instance_name or i.get("instanceName") == self.instance_name),
+                        instances[0] if instances else None
+                    )
+                    if target:
+                        fetch_status = target.get("connectionStatus") or target.get("status") or target.get("state") or ""
+                        if fetch_status.lower() in ("open", "connected"):
+                            return {"instance": {"state": "open", "instanceName": self.instance_name}}
                 return {"instance": {"state": "DISCONNECTED"}}
             except Exception:
                 logger.warning("No se pudo conectar a Evolution API en %s", self.base_url)
                 return {"instance": {"state": "ERROR_API_DOWN"}}
+
 
     def is_connected_sync(self) -> bool:
         """Indica si WhatsApp está realmente vinculado y listo para enviar mensajes."""
