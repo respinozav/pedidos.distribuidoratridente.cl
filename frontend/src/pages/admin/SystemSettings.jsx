@@ -11,17 +11,22 @@ import {
   RefreshCw,
   AlertCircle,
   Smartphone,
+  LogOut,
+  Phone,
+  Check,
 } from "lucide-react";
 import {
   getSettings,
   updateSettings,
   getWhatsAppStatus,
   getWhatsAppQR,
+  disconnectWhatsApp,
 } from "../../services/settingsService";
 
-function WhatsAppConnector() {
+function WhatsAppConnector({ onStatusUpdate }) {
   const [status, setStatus] = useState("LOADING"); // LOADING, CONNECTED, DISCONNECTED, QR_READY, ERROR_API_DOWN
   const [qrBase64, setQrBase64] = useState(null);
+  const [instanceInfo, setInstanceInfo] = useState(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const pollIntervalRef = useRef(null);
 
@@ -35,7 +40,11 @@ function WhatsAppConnector() {
   const checkStatus = async () => {
     try {
       const data = await getWhatsAppStatus();
-      const state = data?.instance?.state || data?.state || "DISCONNECTED";
+      const instance = data?.instance || {};
+      const state = instance.state || data?.state || "DISCONNECTED";
+      setInstanceInfo(instance);
+      if (onStatusUpdate) onStatusUpdate(instance);
+
       if (state === "open" || state === "CONNECTED" || state === "connecting") {
         setStatus(state === "open" ? "CONNECTED" : state);
         if (state === "open" || state === "CONNECTED") {
@@ -49,6 +58,7 @@ function WhatsAppConnector() {
       }
     } catch {
       setStatus("DISCONNECTED");
+      if (onStatusUpdate) onStatusUpdate({ state: "DISCONNECTED" });
     }
   };
 
@@ -65,10 +75,13 @@ function WhatsAppConnector() {
         pollIntervalRef.current = setInterval(async () => {
           try {
             const checkData = await getWhatsAppStatus();
-            const state = checkData?.instance?.state || checkData?.state;
+            const instance = checkData?.instance || {};
+            const state = instance.state || checkData?.state;
             if (state === "open" || state === "CONNECTED") {
               setStatus("CONNECTED");
               setQrBase64(null);
+              setInstanceInfo(instance);
+              if (onStatusUpdate) onStatusUpdate(instance);
               clearInterval(pollIntervalRef.current);
               Swal.fire({
                 icon: "success",
@@ -85,6 +98,7 @@ function WhatsAppConnector() {
       } else if (data.state === "CONNECTED" || data.state === "open") {
         setStatus("CONNECTED");
         setQrBase64(null);
+        await checkStatus();
       } else {
         await checkStatus();
       }
@@ -93,6 +107,41 @@ function WhatsAppConnector() {
       Swal.fire("Error", detail, "error");
     } finally {
       setLoadingAction(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    const result = await Swal.fire({
+      title: "¿Desvincular WhatsApp?",
+      text: "El sistema dejará de enviar notificaciones por WhatsApp hasta que vuelvas a vincular un dispositivo escaneando el código QR.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Sí, desvincular",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (result.isConfirmed) {
+      setLoadingAction(true);
+      try {
+        await disconnectWhatsApp();
+        setStatus("DISCONNECTED");
+        setQrBase64(null);
+        setInstanceInfo(null);
+        if (onStatusUpdate) onStatusUpdate({ state: "DISCONNECTED" });
+        Swal.fire({
+          icon: "success",
+          title: "Dispositivo Desvinculado",
+          text: "La sesión de WhatsApp ha sido cerrada correctamente.",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        Swal.fire("Error", "No fue posible desvincular el dispositivo.", "error");
+      } finally {
+        setLoadingAction(false);
+      }
     }
   };
 
@@ -111,30 +160,82 @@ function WhatsAppConnector() {
 
   if (status === "open" || status === "CONNECTED") {
     return (
-      <div className="text-center py-4">
+      <div className="text-center py-3">
         <div
-          className="d-inline-flex flex-column align-items-center p-4 rounded-3"
-          style={{ background: "#eaf8ef", border: "1px solid #c3edd2", maxWidth: "520px", width: "100%" }}
+          className="d-inline-flex flex-column p-4 rounded-3 text-start shadow-sm"
+          style={{ background: "#f8fdfa", border: "1px solid #c3edd2", maxWidth: "560px", width: "100%" }}
         >
-          <CheckCircle2 size={44} className="text-success mb-2" />
-          <h4 className="fw-bold text-success mb-1" style={{ fontSize: "1.1rem" }}>
-            WhatsApp Conectado Correctamente
-          </h4>
-          <p className="text-secondary mb-3" style={{ fontSize: "0.85rem" }}>
-            La instancia está activa y vinculada. El sistema puede enviar notificaciones automáticas a los clientes.
-          </p>
-          <button
-            type="button"
-            className="btn btn-outline-success btn-sm d-inline-flex align-items-center gap-2"
-            onClick={checkStatus}
-          >
-            <RefreshCw size={15} />
-            <span>Verificar estado de conexión</span>
-          </button>
+          <div className="d-flex align-items-center gap-3 w-100 mb-3 pb-3 border-bottom border-success-subtle">
+            <div className="p-3 bg-success text-white rounded-circle d-flex align-items-center justify-content-center">
+              <Smartphone size={26} />
+            </div>
+            <div>
+              <div className="d-flex align-items-center gap-2">
+                <h4 className="fw-bold text-success mb-0" style={{ fontSize: "1.1rem" }}>
+                  WhatsApp Vinculado
+                </h4>
+                <span className="badge bg-success text-white px-2 py-1" style={{ fontSize: "0.75rem" }}>
+                  En Línea
+                </span>
+              </div>
+              <p className="text-muted mb-0 mt-1" style={{ fontSize: "0.82rem" }}>
+                El sistema está conectado y listo para emitir notificaciones automáticas.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-100 mb-3 bg-white p-3 rounded-2 border">
+            <div className="row g-3">
+              <div className="col-12 col-sm-6">
+                <small className="text-muted d-block fw-semibold mb-1" style={{ fontSize: "0.74rem", letterSpacing: "0.5px" }}>
+                  NÚMERO VINCULADO
+                </small>
+                <div className="d-flex align-items-center gap-2">
+                  <Phone size={15} className="text-success" />
+                  <strong className="text-dark fs-6" style={{ letterSpacing: "0.3px" }}>
+                    {instanceInfo?.phone_number || "Dispositivo Conectado"}
+                  </strong>
+                </div>
+              </div>
+              <div className="col-12 col-sm-6">
+                <small className="text-muted d-block fw-semibold mb-1" style={{ fontSize: "0.74rem", letterSpacing: "0.5px" }}>
+                  PERFIL / INSTANCIA
+                </small>
+                <div className="d-flex align-items-center gap-1">
+                  <Check size={15} className="text-primary" />
+                  <span className="text-secondary fw-semibold">
+                    {instanceInfo?.profile_name || instanceInfo?.instanceName || "tridente_ws"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="d-flex justify-content-between align-items-center w-100 gap-2 pt-1">
+            <button
+              type="button"
+              className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-2"
+              onClick={handleDisconnect}
+              disabled={loadingAction}
+            >
+              <LogOut size={15} />
+              <span>Desvincular Dispositivo</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-success btn-sm d-inline-flex align-items-center gap-2"
+              onClick={checkStatus}
+              disabled={loadingAction}
+            >
+              <RefreshCw size={15} />
+              <span>Verificar Conexión</span>
+            </button>
+          </div>
         </div>
       </div>
     );
   }
+
 
   return (
     <div className="text-center py-3">
@@ -231,6 +332,7 @@ export default function SystemSettings() {
   const [fetching, setFetching] = useState(true);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [whatsappInfo, setWhatsappInfo] = useState(null);
   const [settings, setSettings] = useState({
     smtp_host: "",
     smtp_port: "",
@@ -326,8 +428,25 @@ export default function SystemSettings() {
             <p>Gestiona las credenciales de correo SMTP y canales de comunicación.</p>
           </div>
           <div className="summary-metric">
-            <span className="fs-4 fw-bold">{isSmtpConfigured ? "Activo" : "Pendiente"}</span>
-            <small>Estado Correo (SMTP)</small>
+            {activeTab === "smtp" ? (
+              <>
+                <span className="fs-4 fw-bold">{isSmtpConfigured ? "Configurado" : "Pendiente"}</span>
+                <small>Estado Correo (SMTP)</small>
+              </>
+            ) : (
+              <>
+                <span className="fs-4 fw-bold">
+                  {whatsappInfo?.state === "CONNECTED" || whatsappInfo?.state === "open"
+                    ? (whatsappInfo?.phone_number || "Vinculado")
+                    : "No Vinculado"}
+                </span>
+                <small>
+                  {whatsappInfo?.state === "CONNECTED" || whatsappInfo?.state === "open"
+                    ? "WhatsApp Vinculado"
+                    : "Estado WhatsApp"}
+                </small>
+              </>
+            )}
           </div>
         </section>
 
@@ -503,7 +622,7 @@ export default function SystemSettings() {
                     <MessageCircle size={18} className="text-success" />
                   </div>
                   <div className="settings-card-body">
-                    <WhatsAppConnector />
+                    <WhatsAppConnector onStatusUpdate={setWhatsappInfo} />
                   </div>
                 </div>
               )}
@@ -514,3 +633,4 @@ export default function SystemSettings() {
     </>
   );
 }
+

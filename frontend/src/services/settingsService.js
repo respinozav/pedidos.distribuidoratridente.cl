@@ -21,3 +21,9 @@ export const getWhatsAppQR = async () => {
   const response = await api.get("/whatsapp/qr");
   return response.data;
 };
+
+export const disconnectWhatsApp = async () => {
+  const response = await api.post("/whatsapp/logout");
+  return response.data;
+};
+

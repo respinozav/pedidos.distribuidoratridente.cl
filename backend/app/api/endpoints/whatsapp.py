@@ -14,3 +14,10 @@ async def get_whatsapp_status(_: AdminUser):
 @router.get("/qr")
 async def get_whatsapp_qr(_: AdminUser):
     return await ws_service.create_and_get_qr()
+
+
+@router.post("/logout")
+@router.delete("/logout")
+async def logout_whatsapp(_: AdminUser):
+    return await ws_service.logout_instance()
+

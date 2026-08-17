@@ -214,6 +214,13 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
     try:
         from app.services.whatsapp_service import WhatsAppService
 
+        ws_service = WhatsAppService()
+
+        # Validar si WhatsApp está realmente conectado/vinculado para evitar errores
+        if not ws_service.is_connected_sync():
+            logger.info("Notificación WhatsApp omitida: La instancia '%s' no está vinculada o conectada.", ws_service.instance_name)
+            return
+
         admin_users = list(
             database.scalars(
                 select(Usuario).where(
@@ -226,6 +233,7 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
         if not admin_users:
             logger.info("No hay usuarios administradores con recibe_pedido=True y celular para WhatsApp")
             return
+
 
         order_code = str(order.id).split("-")[0].upper()
         customer_name = order.cliente.nombre or order.cliente.rut or order.cliente.celular or "Cliente"

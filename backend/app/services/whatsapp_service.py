@@ -32,10 +32,68 @@ class WhatsAppService:
         self.instance_name = settings.whatsapp_instance_name
 
     async def get_instance_state(self) -> dict:
-        """Verifica si la instancia está conectada."""
+        """Verifica si la instancia está conectada y obtiene los datos del número vinculado."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.get(
+                    f"{self.base_url}/instance/connectionState/{self.instance_name}",
+                    headers=self.headers,
+                )
+                state = "DISCONNECTED"
+                if response.status_code == 200:
+                    state_data = response.json()
+                    state = (
+                        state_data.get("instance", {}).get("state")
+                        or state_data.get("state")
+                        or "DISCONNECTED"
+                    )
+
+                profile_name = None
+                owner_number = None
+                profile_pic_url = None
+
+                if state in ("open", "CONNECTED"):
+                    try:
+                        inst_resp = await client.get(
+                            f"{self.base_url}/instance/fetchInstances",
+                            params={"instanceName": self.instance_name},
+                            headers=self.headers,
+                        )
+                        if inst_resp.status_code == 200:
+                            data = inst_resp.json()
+                            instances = data if isinstance(data, list) else data.get("instances", [])
+                            target = next(
+                                (i for i in instances if i.get("name") == self.instance_name or i.get("instanceName") == self.instance_name),
+                                instances[0] if instances else None
+                            )
+                            if target:
+                                owner_jid = target.get("ownerJid") or target.get("owner") or target.get("wuid") or ""
+                                raw_phone = owner_jid.split("@")[0] if "@" in owner_jid else owner_jid
+                                if raw_phone:
+                                    owner_number = f"+{raw_phone}" if not raw_phone.startswith("+") else raw_phone
+                                profile_name = target.get("profileName") or target.get("name")
+                                profile_pic_url = target.get("profilePicUrl")
+                    except Exception:
+                        pass
+
+                return {
+                    "instance": {
+                        "instanceName": self.instance_name,
+                        "state": state,
+                        "phone_number": owner_number,
+                        "profile_name": profile_name,
+                        "profile_pic_url": profile_pic_url,
+                    }
+                }
+            except Exception:
+                logger.warning("No se pudo conectar a Evolution API en %s", self.base_url)
+                return {"instance": {"state": "ERROR_API_DOWN"}}
+
+    def get_instance_state_sync(self) -> dict:
+        """Verifica si la instancia está conectada de manera síncrona."""
+        with httpx.Client(timeout=8.0) as client:
+            try:
+                response = client.get(
                     f"{self.base_url}/instance/connectionState/{self.instance_name}",
                     headers=self.headers,
                 )
@@ -45,6 +103,37 @@ class WhatsAppService:
             except Exception:
                 logger.warning("No se pudo conectar a Evolution API en %s", self.base_url)
                 return {"instance": {"state": "ERROR_API_DOWN"}}
+
+    def is_connected_sync(self) -> bool:
+        """Indica si WhatsApp está realmente vinculado y listo para enviar mensajes."""
+        try:
+            state_data = self.get_instance_state_sync()
+            state = (
+                state_data.get("instance", {}).get("state")
+                or state_data.get("state")
+                or ""
+            )
+            return state.lower() in ("open", "connected")
+        except Exception:
+            return False
+
+    async def logout_instance(self) -> dict:
+        """Desvincula y cierra la sesión de WhatsApp en Evolution API."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                response = await client.delete(
+                    f"{self.base_url}/instance/logout/{self.instance_name}",
+                    headers=self.headers,
+                )
+                return {
+                    "status": "SUCCESS",
+                    "message": "Dispositivo desvinculado correctamente",
+                    "code": response.status_code,
+                }
+            except Exception as e:
+                logger.exception("Error al desvincular dispositivo en Evolution API")
+                raise HTTPException(status_code=500, detail=f"No se pudo desvincular: {str(e)}")
+
 
     async def create_and_get_qr(self) -> dict:
         """Crea la instancia si no existe y devuelve el QR en base64."""

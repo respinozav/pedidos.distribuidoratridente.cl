@@ -10,6 +10,7 @@ services:
       - AUTHENTICATION_API_KEY=tridente_global_secret_123
       - AUTHENTICATION_TYPE=apikey
       - CONFIG_SESSION_PHONE_CLIENT=Tridente Pedidos
+      - DEL_INSTANCE=false
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://dbmasteruser:aDxD%2A%2Cr.lNk%605lY8eN%2B%5EABk3T%2B%2A97W%60N@ls-b12cc9081f17b594187264e8c7fe42119a9bb93f.cgt2s428cp85.us-east-1.rds.amazonaws.com:5432/postgres?schema=evolution_api
@@ -19,3 +20,6 @@ services:
       - DATABASE_SAVE_MESSAGE_UPDATE=false
       - DATABASE_SAVE_DATA_CONTACTS=false
       - DATABASE_SAVE_DATA_CHATS=false
+    volumes:
+      - ./evolution_instances:/evolution/instances
+      - ./evolution_store:/evolution/store
