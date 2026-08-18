@@ -377,35 +377,35 @@ export default function NotificationLogs() {
               </div>
 
               {/* Paginación */}
-              <div className="product-pagination mt-4">
+              <nav className="product-pagination mt-4" aria-label="Paginación de logs">
                 <small>
-                  Página {page} de {totalPages} ({total} registros)
+                  Página {page} de {totalPages} · {total} registros
                 </small>
-                <div className="d-flex gap-2">
-                  <button
-                    className="btn btn-outline-secondary btn-sm"
-                    disabled={page <= 1}
-                    onClick={() => {
-                      const newPage = page - 1;
-                      setPage(newPage);
-                      loadLogs(newPage, filters);
-                    }}
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    className="btn btn-outline-secondary btn-sm"
-                    disabled={page >= totalPages}
-                    onClick={() => {
-                      const newPage = page + 1;
-                      setPage(newPage);
-                      loadLogs(newPage, filters);
-                    }}
-                  >
-                    Siguiente
-                  </button>
-                </div>
-              </div>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => {
+                    const newPage = page - 1;
+                    setPage(newPage);
+                    loadLogs(newPage, filters);
+                  }}
+                >
+                  Anterior
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => {
+                    const newPage = page + 1;
+                    setPage(newPage);
+                    loadLogs(newPage, filters);
+                  }}
+                >
+                  Siguiente
+                </button>
+              </nav>
             </>
           ) : (
             <p className="history-filter-empty">No hay registros que coincidan con los filtros.</p>
