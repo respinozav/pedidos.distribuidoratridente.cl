@@ -7,13 +7,11 @@ import {
   Copy,
   Eye,
   FileText,
-  Filter,
   Mail,
   MessageSquare,
   RefreshCw,
   RotateCcw,
   Search,
-  Send,
   X,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -23,6 +21,9 @@ const dateFormatter = new Intl.DateTimeFormat("es-CL", {
   dateStyle: "short",
   timeStyle: "medium",
 });
+
+const today = new Date().toISOString().slice(0, 10);
+const monthStart = `${today.slice(0, 7)}-01`;
 
 export default function NotificationLogs() {
   const [logs, setLogs] = useState([]);
@@ -42,8 +43,8 @@ export default function NotificationLogs() {
     canal: "",
     estado: "",
     search: "",
-    desde: "",
-    hasta: "",
+    desde: monthStart,
+    hasta: today,
   });
 
   const [loading, setLoading] = useState(true);
@@ -102,8 +103,8 @@ export default function NotificationLogs() {
       canal: "",
       estado: "",
       search: "",
-      desde: "",
-      hasta: "",
+      desde: monthStart,
+      hasta: today,
     });
     setPage(1);
   }
@@ -113,7 +114,7 @@ export default function NotificationLogs() {
 
     const confirmResult = await Swal.fire({
       title: "¿Reenviar notificaciones?",
-      text: "Se volverá a generar el comprobante PDF y se enviarán los avisos por WhatsApp y correo electrónico a administradores y cliente. Evita reenvíos repetitivos para prevenir bloqueos por spam.",
+      text: "Se generará nuevamente el PDF y se reenviarán los avisos por WhatsApp y correo. Evita hacer reenvíos seguidos para prevenir que WhatsApp o el servidor de correos bloqueen los mensajes por spam.",
       icon: "question",
       showCancelButton: true,
       confirmButtonColor: "#0f766e",
@@ -220,10 +221,11 @@ export default function NotificationLogs() {
     <>
       <header className="admin-topbar">
         <div className="topbar-title">
-          <p className="eyebrow mb-1">AUDITORIA & NOTIFICACIONES</p>
+          <p className="eyebrow mb-1">CONFIGURACION</p>
           <h1>Logs de Envíos</h1>
         </div>
         <div className="topbar-actions">
+          <span className="topbar-date d-none d-sm-inline">Auditoría de Notificaciones</span>
           <button
             className="btn btn-outline-secondary d-flex align-items-center gap-2"
             onClick={() => {
@@ -238,17 +240,49 @@ export default function NotificationLogs() {
         </div>
       </header>
 
-      <div className="admin-content">
+      <div className="admin-content dashboard-content">
+        {/* Banner Hero Azul Superior */}
+        <section className="dashboard-hero">
+          <div>
+            <p className="eyebrow">NOTIFICACIONES</p>
+            <h2>Historial y Auditoría de Notificaciones</h2>
+            <p>Revisa el estado de entrega en tiempo real de cada WhatsApp y correo electrónico.</p>
+          </div>
+          <div className="dashboard-date-filters">
+            <label>
+              Desde
+              <input
+                className="form-control"
+                type="date"
+                value={filters.desde}
+                max={filters.hasta || undefined}
+                onChange={(e) => setFilters((curr) => ({ ...curr, desde: e.target.value }))}
+              />
+            </label>
+            <label>
+              Hasta
+              <input
+                className="form-control"
+                type="date"
+                value={filters.hasta}
+                min={filters.desde || undefined}
+                max={today}
+                onChange={(e) => setFilters((curr) => ({ ...curr, hasta: e.target.value }))}
+              />
+            </label>
+          </div>
+        </section>
+
         {/* Tarjetas de Métricas Resumen */}
         <section className="dashboard-metrics mb-4">
-          <article className="log-stat-card">
+          <article>
             <span>TOTAL EVENTOS</span>
             <strong>{stats.total}</strong>
             <small>Auditorías registradas</small>
           </article>
-          <article className="log-stat-card border-success-subtle">
-            <span className="text-success">WHATSAPP ENVIADOS</span>
-            <strong className="text-success">{stats.whatsapp_enviados}</strong>
+          <article>
+            <span>WHATSAPP ENVIADOS</span>
+            <strong>{stats.whatsapp_enviados}</strong>
             <small>
               {stats.whatsapp_fallidos > 0 ? (
                 <span className="text-danger fw-bold">{stats.whatsapp_fallidos} fallidos</span>
@@ -257,9 +291,9 @@ export default function NotificationLogs() {
               )}
             </small>
           </article>
-          <article className="log-stat-card border-primary-subtle">
-            <span className="text-primary">CORREOS ENVIADOS</span>
-            <strong className="text-primary">{stats.email_enviados}</strong>
+          <article>
+            <span>CORREOS ENVIADOS</span>
+            <strong>{stats.email_enviados}</strong>
             <small>
               {stats.email_fallidos > 0 ? (
                 <span className="text-danger fw-bold">{stats.email_fallidos} fallidos</span>
@@ -268,10 +302,10 @@ export default function NotificationLogs() {
               )}
             </small>
           </article>
-          <article className="log-stat-card border-warning-subtle">
-            <span className="text-warning-emphasis">NOTIFICACIONES OMITIDAS</span>
-            <strong className="text-warning-emphasis">{stats.omitidos}</strong>
-            <small>Sin configurar o sin teléfono</small>
+          <article>
+            <span>NOTIFICACIONES OMITIDAS</span>
+            <strong>{stats.omitidos}</strong>
+            <small>Sin teléfono o config</small>
           </article>
         </section>
 
@@ -279,8 +313,8 @@ export default function NotificationLogs() {
         <section className="content-panel">
           <div className="panel-heading">
             <div>
-              <h2>Historial y Auditoría de Notificaciones</h2>
-              <p>Revisa el estado de entrega en tiempo real de cada WhatsApp y correo electrónico.</p>
+              <h2>Listado de registros</h2>
+              <p>Filtra por canal, estado o código de pedido.</p>
             </div>
             <span className="panel-count">{total} registros</span>
           </div>
@@ -310,49 +344,29 @@ export default function NotificationLogs() {
                 onChange={(e) => setFilters((curr) => ({ ...curr, estado: e.target.value }))}
               >
                 <option value="">Todos los estados</option>
-                <option value="ENVIADO">Enviado (Exitoso)</option>
-                <option value="FALLIDO">Fallido (Error)</option>
+                <option value="ENVIADO">Enviado</option>
+                <option value="FALLIDO">Fallido</option>
                 <option value="OMITIDO">Omitido</option>
               </select>
             </label>
 
             <label className="flex-grow-1">
-              Búsqueda
+              Pedido / Búsqueda
               <form onSubmit={handleSearchSubmit} className="d-flex gap-2">
                 <input
                   className="form-control"
                   type="search"
-                  placeholder="Destinatario, error, mensaje..."
+                  placeholder="Código de pedido, destinatario o mensaje..."
                   value={filters.search}
                   onChange={(e) => setFilters((curr) => ({ ...curr, search: e.target.value }))}
                 />
-                <button className="btn btn-outline-primary" type="submit">
+                <button className="btn btn-outline-primary" type="submit" title="Buscar">
                   <Search size={16} />
                 </button>
               </form>
             </label>
 
-            <label>
-              Desde
-              <input
-                className="form-control"
-                type="date"
-                value={filters.desde}
-                onChange={(e) => setFilters((curr) => ({ ...curr, desde: e.target.value }))}
-              />
-            </label>
-
-            <label>
-              Hasta
-              <input
-                className="form-control"
-                type="date"
-                value={filters.hasta}
-                onChange={(e) => setFilters((curr) => ({ ...curr, hasta: e.target.value }))}
-              />
-            </label>
-
-            {(filters.canal || filters.estado || filters.search || filters.desde || filters.hasta) && (
+            {(filters.canal || filters.estado || filters.search || filters.desde !== monthStart || filters.hasta !== today) && (
               <div className="d-flex align-items-end">
                 <button className="btn btn-link text-danger p-2" type="button" onClick={clearFilters}>
                   Limpiar
@@ -442,7 +456,7 @@ export default function NotificationLogs() {
               {/* Paginación */}
               <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                 <span className="text-secondary small">
-                  Página {page} de {totalPages} ({total} eventos totales)
+                  Página {page} de {totalPages} ({total} registros totales)
                 </span>
                 <div className="d-flex gap-2">
                   <button
