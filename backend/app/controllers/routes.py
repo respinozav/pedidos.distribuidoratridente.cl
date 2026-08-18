@@ -9,6 +9,7 @@ from app.api.dependencies import AdminUser, CustomerUser, DatabaseSession
 from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
 from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Rol, Usuario
 from app.repositories.base import Repository
+from app.repositories.system_settings_repository import SystemSettingsRepository
 from app.schemas.dto import (
     AddressInput,
     AddressOutput,
@@ -58,7 +59,8 @@ def login(payload: UserLogin, database: DatabaseSession) -> TokenOutput:
     user = database.scalar(select(Usuario).where(Usuario.correo == payload.correo, Usuario.activo.is_(True)))
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
-    return TokenOutput(access_token=create_access_token(user.id, user.rol.nombre))
+    expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
+    return TokenOutput(access_token=create_access_token(user.id, user.rol.nombre, expires_minutes=expire_minutes))
 
 
 @router.get("/roles", response_model=list[RoleOutput], tags=["Usuarios"])
@@ -115,7 +117,8 @@ def customer_login(payload: CustomerLogin, database: DatabaseSession) -> TokenOu
     )
     if not customer or not customer.password_hash or not verify_password(payload.password, customer.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
-    return TokenOutput(access_token=create_customer_access_token(customer.id))
+    expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
+    return TokenOutput(access_token=create_customer_access_token(customer.id, expires_minutes=expire_minutes))
 
 
 @router.get("/cliente/perfil", response_model=CustomerOutput, tags=["Perfil cliente"])

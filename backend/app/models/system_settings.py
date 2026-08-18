@@ -21,3 +21,6 @@ class SystemSettings(Base):
     whatsapp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     whatsapp_api_key: Mapped[str | None] = mapped_column(String, nullable=True)
     whatsapp_phone_number: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Session / JWT Settings
+    jwt_access_token_expire_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True, default=60)

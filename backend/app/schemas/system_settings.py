@@ -12,6 +12,7 @@ class SystemSettingsBase(BaseModel):
     whatsapp_enabled: bool = False
     whatsapp_api_key: Optional[str] = None
     whatsapp_phone_number: Optional[str] = None
+    jwt_access_token_expire_minutes: Optional[int] = 60
 
 
 class SystemSettingsUpdate(SystemSettingsBase):

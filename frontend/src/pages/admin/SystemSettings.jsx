@@ -3,6 +3,7 @@ import Swal from "sweetalert2";
 import {
   Mail,
   MessageCircle,
+  Clock,
   Save,
   CheckCircle2,
   Server,
@@ -151,122 +152,115 @@ function WhatsAppConnector({ onStatusUpdate }) {
         <div className="spinner-border text-primary" role="status">
           <span className="visually-hidden">Cargando...</span>
         </div>
-        <p className="text-muted mt-2 mb-0" style={{ fontSize: "0.85rem" }}>
-          Consultando estado de WhatsApp...
-        </p>
+        <p className="text-muted mt-2">Consultando estado del servicio de WhatsApp...</p>
       </div>
     );
   }
 
-  if (status === "open" || status === "CONNECTED") {
+  if (status === "ERROR_API_DOWN") {
     return (
-      <div className="text-center py-3">
-        <div
-          className="d-inline-flex flex-column p-4 rounded-3 text-start shadow-sm"
-          style={{ background: "#f8fdfa", border: "1px solid #c3edd2", maxWidth: "560px", width: "100%" }}
-        >
-          <div className="d-flex align-items-center gap-3 w-100 mb-3 pb-3 border-bottom border-success-subtle">
-            <div className="p-3 bg-success text-white rounded-circle d-flex align-items-center justify-content-center">
-              <Smartphone size={26} />
-            </div>
-            <div>
-              <div className="d-flex align-items-center gap-2">
-                <h4 className="fw-bold text-success mb-0" style={{ fontSize: "1.1rem" }}>
-                  WhatsApp Vinculado
-                </h4>
-                <span className="badge bg-success text-white px-2 py-1" style={{ fontSize: "0.75rem" }}>
-                  En Línea
-                </span>
-              </div>
-              <p className="text-muted mb-0 mt-1" style={{ fontSize: "0.82rem" }}>
-                El sistema está conectado y listo para emitir notificaciones automáticas.
-              </p>
-            </div>
-          </div>
-
-          <div className="w-100 mb-3 bg-white p-3 rounded-2 border">
-            <div className="row g-3">
-              <div className="col-12 col-sm-6">
-                <small className="text-muted d-block fw-semibold mb-1" style={{ fontSize: "0.74rem", letterSpacing: "0.5px" }}>
-                  NÚMERO VINCULADO
-                </small>
-                <div className="d-flex align-items-center gap-2">
-                  <Phone size={15} className="text-success" />
-                  <strong className="text-dark fs-6" style={{ letterSpacing: "0.3px" }}>
-                    {instanceInfo?.phone_number || "Dispositivo Conectado"}
-                  </strong>
-                </div>
-              </div>
-              <div className="col-12 col-sm-6">
-                <small className="text-muted d-block fw-semibold mb-1" style={{ fontSize: "0.74rem", letterSpacing: "0.5px" }}>
-                  PERFIL / INSTANCIA
-                </small>
-                <div className="d-flex align-items-center gap-1">
-                  <Check size={15} className="text-primary" />
-                  <span className="text-secondary fw-semibold">
-                    {instanceInfo?.profile_name || instanceInfo?.instanceName || "tridente_ws"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="d-flex justify-content-between align-items-center w-100 gap-2 pt-1">
-            <button
-              type="button"
-              className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-2"
-              onClick={handleDisconnect}
-              disabled={loadingAction}
-            >
-              <LogOut size={15} />
-              <span>Desvincular Dispositivo</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-success btn-sm d-inline-flex align-items-center gap-2"
-              onClick={checkStatus}
-              disabled={loadingAction}
-            >
-              <RefreshCw size={15} />
-              <span>Verificar Conexión</span>
-            </button>
-          </div>
+      <div className="text-center py-4">
+        <div className="text-danger mb-3">
+          <AlertCircle size={48} className="mx-auto" />
         </div>
+        <h5 className="fw-bold text-danger">Servicio de WhatsApp no disponible</h5>
+        <p className="text-muted max-w-md mx-auto small">
+          No fue posible establecer conexión con el motor de Evolution API. Por favor verifica que el servicio esté ejecutándose en el servidor.
+        </p>
+        <button
+          type="button"
+          className="btn btn-outline-primary btn-sm mt-2 d-inline-flex align-items-center gap-1"
+          onClick={checkStatus}
+        >
+          <RefreshCw size={14} />
+          <span>Reintentar Conexión</span>
+        </button>
       </div>
     );
   }
 
-
-  return (
-    <div className="text-center py-3">
-      {status === "ERROR_API_DOWN" && (
-        <div className="alert alert-warning d-inline-flex align-items-start gap-2 text-start mb-4" style={{ maxWidth: "600px" }}>
-          <AlertCircle size={20} className="text-warning flex-shrink-0 mt-1" />
-          <div style={{ fontSize: "0.84rem" }}>
-            <strong>Microservicio Evolution API no disponible</strong>
-            <p className="mb-0 mt-1">
-              Asegúrate de ejecutar <code>docker compose up -d</code> en el servidor para iniciar el contenedor de WhatsApp en el puerto 8080.
+  if (status === "CONNECTED") {
+    return (
+      <div className="py-3">
+        <div className="d-flex align-items-center gap-3 p-3 bg-light border border-success-subtle rounded-3 mb-4">
+          <div className="bg-success text-white rounded-circle p-2 d-flex align-items-center justify-content-center" style={{ width: "44px", height: "44px" }}>
+            <Check size={24} />
+          </div>
+          <div>
+            <div className="d-flex align-items-center gap-2">
+              <h6 className="mb-0 fw-bold text-success">Instancia Conectada y Operativa</h6>
+              <span className="badge bg-success-subtle text-success border border-success-subtle">Online</span>
+            </div>
+            <p className="text-muted mb-0 small">
+              Las notificaciones de pedidos se enviarán de forma automática a través de esta cuenta de WhatsApp.
             </p>
           </div>
         </div>
-      )}
 
-      <div className="mb-4" style={{ maxWidth: "540px", margin: "0 auto" }}>
-        <div className="d-flex align-items-center justify-content-center gap-2 mb-2 text-primary">
-          <Smartphone size={22} />
-          <span className="fw-bold" style={{ fontSize: "0.95rem" }}>Vinculación de Dispositivo</span>
+        {instanceInfo && (
+          <div className="row g-3 mb-4">
+            <div className="col-sm-6">
+              <div className="p-3 border rounded bg-white">
+                <small className="text-muted d-block">Número Conectado</small>
+                <div className="d-flex align-items-center gap-2 mt-1">
+                  <Smartphone size={16} className="text-secondary" />
+                  <strong className="font-monospace">
+                    {instanceInfo.phone_number ? `+${instanceInfo.phone_number}` : "Configurado en móvil"}
+                  </strong>
+                </div>
+              </div>
+            </div>
+            <div className="col-sm-6">
+              <div className="p-3 border rounded bg-white">
+                <small className="text-muted d-block">Perfil / Nombre</small>
+                <div className="d-flex align-items-center gap-2 mt-1">
+                  <Phone size={16} className="text-secondary" />
+                  <strong>{instanceInfo.profile_name || "Distribuidora Tridente"}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="d-flex gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1"
+            onClick={checkStatus}
+          >
+            <RefreshCw size={14} />
+            <span>Actualizar Estado</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
+            onClick={handleDisconnect}
+            disabled={loadingAction}
+          >
+            <LogOut size={14} />
+            <span>Desvincular Dispositivo</span>
+          </button>
         </div>
-        <p className="text-muted" style={{ fontSize: "0.84rem", lineHeight: 1.5 }}>
-          Escanea el código QR con el celular de la empresa (<strong>WhatsApp Business</strong> &gt; <strong>Dispositivos Vinculados</strong> &gt; <strong>Vincular un dispositivo</strong>) para habilitar las notificaciones.
-        </p>
       </div>
+    );
+  }
+
+  return (
+    <div className="text-center py-4">
+      <div className="mb-3">
+        <Smartphone size={40} className="text-muted mx-auto" />
+      </div>
+      <h5 className="fw-bold mb-2">Vincular WhatsApp de la Empresa</h5>
+      <p className="text-muted small mx-auto mb-4" style={{ maxWidth: "460px" }}>
+        Genera un código QR y escanéalo desde la app de WhatsApp de tu teléfono en <strong>Dispositivos vinculados &gt; Vincular un dispositivo</strong>.
+      </p>
 
       {status === "QR_READY" && qrBase64 ? (
-        <div className="d-inline-block p-4 bg-white border rounded-3 shadow-sm mb-3">
-          <div className="position-relative d-inline-block">
+        <div className="d-flex flex-column align-items-center my-3">
+          <div className="p-3 bg-white border rounded shadow-sm">
             <img
               src={qrBase64}
-              alt="Código QR de WhatsApp"
+              alt="Código QR WhatsApp"
               className="rounded"
               style={{ width: "240px", height: "240px", objectFit: "contain", display: "block" }}
             />
@@ -343,6 +337,7 @@ export default function SystemSettings() {
     whatsapp_enabled: false,
     whatsapp_api_key: "",
     whatsapp_phone_number: "",
+    jwt_access_token_expire_minutes: 60,
   });
 
   useEffect(() => {
@@ -357,6 +352,7 @@ export default function SystemSettings() {
         ...prev,
         ...data,
         smtp_port: data.smtp_port ? String(data.smtp_port) : "",
+        jwt_access_token_expire_minutes: data.jwt_access_token_expire_minutes || 60,
       }));
     } catch {
       setError("No fue posible cargar los ajustes del sistema.");
@@ -383,6 +379,9 @@ export default function SystemSettings() {
       const payload = {
         ...settings,
         smtp_port: settings.smtp_port ? parseInt(settings.smtp_port, 10) : null,
+        jwt_access_token_expire_minutes: settings.jwt_access_token_expire_minutes
+          ? parseInt(settings.jwt_access_token_expire_minutes, 10)
+          : 60,
       };
       await updateSettings(payload);
       setNotice("Ajustes actualizados correctamente.");
@@ -425,7 +424,7 @@ export default function SystemSettings() {
           <div>
             <p className="eyebrow">PARAMETROS</p>
             <h2>Configuración del Sistema</h2>
-            <p>Gestiona las credenciales de correo SMTP y canales de comunicación.</p>
+            <p>Gestiona credenciales de correo SMTP, canales de comunicación y expiración de sesiones.</p>
           </div>
           <div className="summary-metric">
             {activeTab === "smtp" ? (
@@ -433,7 +432,7 @@ export default function SystemSettings() {
                 <span className="fs-4 fw-bold">{isSmtpConfigured ? "Configurado" : "Pendiente"}</span>
                 <small>Estado Correo (SMTP)</small>
               </>
-            ) : (
+            ) : activeTab === "whatsapp" ? (
               <>
                 <span className="fs-4 fw-bold">
                   {whatsappInfo?.state === "CONNECTED" || whatsappInfo?.state === "open"
@@ -446,6 +445,11 @@ export default function SystemSettings() {
                     : "Estado WhatsApp"}
                 </small>
               </>
+            ) : (
+              <>
+                <span className="fs-4 fw-bold">{settings.jwt_access_token_expire_minutes || 60} min</span>
+                <small>Expiración de Sesión</small>
+              </>
             )}
           </div>
         </section>
@@ -453,10 +457,12 @@ export default function SystemSettings() {
         <section className="content-panel">
           <div className="panel-heading mb-3">
             <div>
-              <h2>Servicios de Comunicación</h2>
-              <p>Configura los servidores y parámetros para las notificaciones de pedidos.</p>
+              <h2>Parámetros y Servicios</h2>
+              <p>Configura los servidores, canales de notificación y duración de sesiones.</p>
             </div>
-            <span className="panel-count">{activeTab === "smtp" ? "SMTP" : "WhatsApp"}</span>
+            <span className="panel-count">
+              {activeTab === "smtp" ? "SMTP" : activeTab === "whatsapp" ? "WhatsApp" : "Sesión"}
+            </span>
           </div>
 
           <div className="settings-tab-bar">
@@ -475,6 +481,14 @@ export default function SystemSettings() {
             >
               <MessageCircle size={17} />
               <span>WhatsApp (QR)</span>
+            </button>
+            <button
+              type="button"
+              className={`settings-tab-btn ${activeTab === "session" ? "active" : ""}`}
+              onClick={() => setActiveTab("session")}
+            >
+              <Clock size={17} />
+              <span>Ajuste de Sesión</span>
             </button>
           </div>
 
@@ -626,6 +640,98 @@ export default function SystemSettings() {
                   </div>
                 </div>
               )}
+
+              {activeTab === "session" && (
+                <form onSubmit={handleSubmit}>
+                  <div className="settings-card">
+                    <div className="settings-card-header">
+                      <div>
+                        <h3>Duración y Expiración de Sesión</h3>
+                        <p>
+                          Establece el tiempo de validez del token de inicio de sesión (JWT) para administradores y clientes.
+                        </p>
+                      </div>
+                      <Clock size={18} className="text-primary" />
+                    </div>
+                    <div className="settings-card-body">
+                      <div className="mb-3">
+                        <label htmlFor="jwt_access_token_expire_minutes" className="form-label fw-bold">
+                          Duración de la sesión (en minutos)
+                        </label>
+                        <div className="input-group" style={{ maxWidth: "340px" }}>
+                          <input
+                            id="jwt_access_token_expire_minutes"
+                            type="number"
+                            min="1"
+                            max="525600"
+                            step="1"
+                            className="form-control"
+                            name="jwt_access_token_expire_minutes"
+                            value={settings.jwt_access_token_expire_minutes || ""}
+                            onChange={handleInputChange}
+                            required
+                          />
+                          <span className="input-group-text">minutos</span>
+                        </div>
+                        <small className="form-text text-muted mt-2 d-block">
+                          Al expirar este tiempo, el usuario o cliente deberá ingresar nuevamente sus credenciales.
+                        </small>
+                      </div>
+
+                      {/* Accesos directos / Presets */}
+                      <div className="mt-4 pt-3 border-top">
+                        <label className="form-label text-secondary small fw-bold d-block mb-2">
+                          Opciones rápidas predefinidas:
+                        </label>
+                        <div className="d-flex flex-wrap gap-2">
+                          {[
+                            { label: "15 min", value: 15 },
+                            { label: "30 min", value: 30 },
+                            { label: "1 hora (60 min)", value: 60 },
+                            { label: "8 horas (480 min)", value: 480 },
+                            { label: "24 horas (1440 min)", value: 1440 },
+                            { label: "7 días (10080 min)", value: 10080 },
+                          ].map((preset) => (
+                            <button
+                              key={preset.value}
+                              type="button"
+                              className={`btn btn-sm ${
+                                Number(settings.jwt_access_token_expire_minutes) === preset.value
+                                  ? "btn-primary"
+                                  : "btn-outline-secondary"
+                              }`}
+                              onClick={() =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  jwt_access_token_expire_minutes: preset.value,
+                                }))
+                              }
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="d-flex justify-content-end mt-4 pt-2">
+                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save size={17} />
+                          <span>Guardar Ajuste de Sesión</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
         </section>
@@ -633,4 +739,3 @@ export default function SystemSettings() {
     </>
   );
 }
-
