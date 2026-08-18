@@ -62,29 +62,32 @@ export function useSessionInactivity({ active, onLogout }) {
       const payload = decodeToken(token);
 
       const nowSec = Date.now() / 1000;
-      let totalDurationSec = 60 * 60; // 60 minutos por defecto (3600 segundos)
+      let totalDurationSec = 60 * 60; // 60 minutos por defecto (3600s)
       let tokenExpSec = null;
 
       if (payload) {
-        if (payload.exp && payload.iat) {
-          totalDurationSec = Math.max(10, payload.exp - payload.iat);
+        if (payload.minutes && payload.minutes > 0) {
+          totalDurationSec = payload.minutes * 60;
+        } else if (payload.exp && payload.iat && payload.exp > payload.iat) {
+          totalDurationSec = payload.exp - payload.iat;
         }
         if (payload.exp) {
           tokenExpSec = payload.exp;
         }
       }
 
-      // 1. Si el token ya expiró absolutamente por tiempo
-      if (tokenExpSec && nowSec >= tokenExpSec) {
-        if (modalOpenRef.current) {
-          Swal.close();
-          modalOpenRef.current = false;
-        }
+      // Si el modal ya está abierto, dejamos que el modal maneje la cuenta regresiva
+      if (modalOpenRef.current) return;
+
+      const tokenSecondsLeft = tokenExpSec ? Math.max(0, Math.ceil(tokenExpSec - nowSec)) : null;
+
+      // 1. Si el token ya expiró y el modal no estaba abierto
+      if (tokenSecondsLeft !== null && tokenSecondsLeft <= 0) {
         if (onLogout) onLogout();
         Swal.fire({
           icon: "warning",
           title: "Sesión caducada",
-          text: "Tu sesión ha expirado por tiempo límite. Por favor ingresa nuevamente con tus credenciales.",
+          text: "Tu sesión ha expirado por límite de tiempo. Por favor ingresa nuevamente con tus credenciales.",
           confirmButtonText: "Aceptar",
           confirmButtonColor: "#0d6efd",
           allowOutsideClick: false,
@@ -92,24 +95,19 @@ export function useSessionInactivity({ active, onLogout }) {
         return;
       }
 
-      if (modalOpenRef.current) return;
-
-      // 2. Comprobar inactividad y tiempo restante
-      const idleSec = (Date.now() - lastActivityRef.current) / 1000;
+      // 2. Ventana de advertencia: 59 segundos antes de expirar (o la mitad si dura <= 60s)
       const warningWindowSec = totalDurationSec > 60 ? 59 : Math.max(10, Math.floor(totalDurationSec / 2));
       const idleWarningTriggerSec = totalDurationSec - warningWindowSec;
+      const idleSec = (Date.now() - lastActivityRef.current) / 1000;
 
-      const remainingByToken = tokenExpSec ? Math.ceil(tokenExpSec - nowSec) : 999999;
-      const remainingByIdle = Math.ceil(totalDurationSec - idleSec);
-
-      const isTokenExpiringSoon = remainingByToken <= warningWindowSec && remainingByToken > 0;
+      const isTokenExpiringSoon = tokenSecondsLeft !== null && tokenSecondsLeft <= warningWindowSec && tokenSecondsLeft > 0;
       const isIdleExpiringSoon = idleSec >= idleWarningTriggerSec;
 
       if (isTokenExpiringSoon || isIdleExpiringSoon) {
         modalOpenRef.current = true;
         const initialSecondsLeft = Math.min(
           warningWindowSec,
-          Math.max(1, Math.min(remainingByToken, remainingByIdle))
+          Math.max(1, Math.min(tokenSecondsLeft ?? warningWindowSec, Math.ceil(totalDurationSec - idleSec)))
         );
 
         let timerInterval;
@@ -134,7 +132,7 @@ export function useSessionInactivity({ active, onLogout }) {
                 const leftSec = Math.ceil(leftMs / 1000);
                 if (b) b.textContent = `${leftSec}`;
               }
-            }, 500);
+            }, 400);
           },
           willClose: () => {
             clearInterval(timerInterval);
@@ -142,20 +140,21 @@ export function useSessionInactivity({ active, onLogout }) {
         }).then((result) => {
           modalOpenRef.current = false;
           if (result.isConfirmed) {
-            // Usuario mantiene su sesión
+            // El usuario confirmó que desea mantener la sesión activa
             lastActivityRef.current = Date.now();
           } else if (
             result.dismiss === Swal.DismissReason.timer ||
             result.dismiss === Swal.DismissReason.cancel
           ) {
-            // Terminó el temporizador o el usuario cerró sesión
+            // El contador llegó a 0 o el usuario pulsó "Cerrar sesión"
             if (onLogout) onLogout();
             Swal.fire({
               icon: "info",
               title: "Sesión cerrada",
-              text: "Tu sesión ha expirado por inactividad.",
+              text: "Tu sesión ha finalizado por inactividad.",
               confirmButtonText: "Aceptar",
               confirmButtonColor: "#0d6efd",
+              allowOutsideClick: false,
             });
           }
         });

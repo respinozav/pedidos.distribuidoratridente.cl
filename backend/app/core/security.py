@@ -26,9 +26,16 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def create_access_token(user_id: UUID, role: str, expires_minutes: int | None = None) -> str:
     minutes = expires_minutes if expires_minutes is not None and expires_minutes > 0 else settings.jwt_access_token_expire_minutes
-    expires_at = datetime.now(UTC) + timedelta(minutes=minutes)
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(minutes=minutes)
     return jwt.encode(
-        {"sub": str(user_id), "role": role, "exp": expires_at},
+        {
+            "sub": str(user_id),
+            "role": role,
+            "iat": int(now.timestamp()),
+            "exp": expires_at,
+            "minutes": minutes,
+        },
         get_jwt_secret(),
         algorithm=settings.jwt_algorithm,
     )
