@@ -123,11 +123,11 @@ button, input { font: inherit; }
 .category-form { display: grid; gap: .75rem; grid-template-columns: 1fr auto; margin-top: 1.75rem; }
 .form-control { border-color: #cbd7e5; min-height: 42px; }
 .form-control:focus { border-color: var(--blue); box-shadow: 0 0 0 .2rem rgb(20 108 206 / 15%); }
-.category-table, .product-table, .user-table, .customer-table, .admin-order-table, .credit-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.category-table, .product-table, .user-table, .customer-table, .admin-order-table, .credit-table, .admin-log-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .category-table-head, .category-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(180px, 1.4fr) minmax(90px, .8fr) minmax(110px, 1fr) 80px 80px; min-width: 540px; }
-.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .order-history-head, .address-table-head { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04rem; padding: .75rem 1rem; text-transform: uppercase; }
-.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .order-history-row, .address-row { align-items: center; border-top: 1px solid var(--line); color: var(--ink); font-size: .82rem; padding: .75rem 1rem; transition: background-color .15s ease; }
-.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .order-history-row:hover { background: #f8fafc; }
+.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04rem; padding: .75rem 1rem; text-transform: uppercase; }
+.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row { align-items: center; border-top: 1px solid var(--line); color: var(--ink); font-size: .82rem; padding: .75rem 1rem; transition: background-color .15s ease; }
+.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover { background: #f8fafc; }
 .category-percentage { color: var(--muted); font-size: .82rem; font-weight: 700; }
 .category-name { align-items: center; display: flex; gap: .75rem; }
 .category-icon { align-items: center; background: var(--sky); border-radius: 5px; color: var(--blue); display: inline-flex; height: 32px; justify-content: center; width: 32px; }
@@ -253,9 +253,10 @@ button, input { font: inherit; }
 .history-filter-empty { color: var(--muted); margin: 1rem 0 0; }
 .admin-order-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .admin-order-head, .admin-order-row { align-items: center; display: grid; gap: .8rem; grid-template-columns: minmax(150px, 1.2fr) minmax(160px, 1.2fr) minmax(140px, 1fr) 95px 95px 80px; min-width: 720px; }
-.admin-order-head span:last-child { text-align: center; }
-.admin-order-row > .icon-button { justify-self: center; }
-.admin-order-row small { display: block; margin-top: .15rem; }
+.admin-order-head span:last-child, .admin-log-head span:last-child { text-align: center; }
+.admin-order-row > .icon-button, .admin-log-row > .icon-button { justify-self: center; }
+.admin-order-row small, .admin-log-row small { display: block; margin-top: .15rem; }
+.admin-log-head, .admin-log-row { align-items: center; display: grid; gap: .8rem; grid-template-columns: minmax(160px, 1.3fr) minmax(130px, 1fr) 135px 105px 95px 80px; min-width: 720px; }
 .credit-filters { align-items: center; display: flex; gap: .65rem; margin-top: 1.25rem; max-width: 300px; }
 .credit-filters label { color: var(--muted); font-size: .8rem; font-weight: 750; white-space: nowrap; }
 .credit-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }

@@ -19,7 +19,7 @@ import { api } from "../../services/api";
 
 const dateFormatter = new Intl.DateTimeFormat("es-CL", {
   dateStyle: "short",
-  timeStyle: "medium",
+  timeStyle: "short",
 });
 
 const today = new Date().toISOString().slice(0, 10);
@@ -135,7 +135,6 @@ export default function NotificationLogs() {
         timer: 2500,
         showConfirmButton: false,
       });
-      // Recargar stats y logs tras 2s
       setTimeout(() => {
         loadStats();
         loadLogs(page);
@@ -168,51 +167,39 @@ export default function NotificationLogs() {
     if (canal === "WHATSAPP") {
       return (
         <span className="badge-channel badge-whatsapp">
-          <MessageSquare size={14} /> WhatsApp
+          <MessageSquare size={13} /> WhatsApp
         </span>
       );
     }
     if (canal === "EMAIL_ADMIN") {
       return (
         <span className="badge-channel badge-email-admin">
-          <Mail size={14} /> Correo Admin
+          <Mail size={13} /> Correo Admin
         </span>
       );
     }
     if (canal === "EMAIL_CLIENTE") {
       return (
         <span className="badge-channel badge-email-client">
-          <Mail size={14} /> Correo Cliente
+          <Mail size={13} /> Correo Cliente
         </span>
       );
     }
     return (
       <span className="badge-channel badge-system">
-        <FileText size={14} /> Sistema
+        <FileText size={13} /> Sistema
       </span>
     );
   }
 
   function renderStatusBadge(estado) {
     if (estado === "ENVIADO") {
-      return (
-        <span className="badge-status-pill status-success">
-          <CheckCircle2 size={13} /> Enviado
-        </span>
-      );
+      return <span className="status-active">Enviado</span>;
     }
     if (estado === "FALLIDO") {
-      return (
-        <span className="badge-status-pill status-failed">
-          <AlertCircle size={13} /> Fallido
-        </span>
-      );
+      return <span className="status-inactive">Fallido</span>;
     }
-    return (
-      <span className="badge-status-pill status-skipped">
-        <AlertTriangle size={13} /> Omitido
-      </span>
-    );
+    return <span className="status-skipped">Omitido</span>;
   }
 
   const totalPages = Math.ceil(total / pageSize) || 1;
@@ -375,89 +362,58 @@ export default function NotificationLogs() {
             )}
           </div>
 
-          {/* Tabla de Logs */}
+          {/* Grilla / Tabla con el mismo modelo de Pedidos y Productos */}
           {loading ? (
-            <div className="p-5 text-center text-secondary">
-              <RefreshCw size={24} className="animate-spin mb-2" />
-              <p>Cargando auditoría de notificaciones...</p>
-            </div>
+            <p className="mt-4 text-secondary">Cargando registros de auditoría...</p>
           ) : logs.length ? (
             <>
-              <div className="table-responsive mt-4">
-                <table className="table table-hover align-middle log-table">
-                  <thead>
-                    <tr>
-                      <th>Fecha / Hora</th>
-                      <th>Pedido</th>
-                      <th>Canal</th>
-                      <th>Destinatario</th>
-                      <th>Estado</th>
-                      <th>Duración</th>
-                      <th>Mensaje / Detalle</th>
-                      <th className="text-end">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logs.map((log) => (
-                      <tr key={log.id} className={log.estado === "FALLIDO" ? "table-danger-subtle" : ""}>
-                        <td className="text-nowrap font-monospace text-secondary small">
-                          {log.created_at ? dateFormatter.format(new Date(log.created_at)) : "-"}
-                        </td>
-                        <td>
-                          {log.pedido_id ? (
-                            <span className="badge bg-light text-dark border font-monospace">
-                              #{log.pedido_id.slice(0, 8).toUpperCase()}
-                            </span>
-                          ) : (
-                            <span className="text-muted small">-</span>
-                          )}
-                        </td>
-                        <td>{renderChannelBadge(log.canal)}</td>
-                        <td className="fw-semibold text-truncate" style={{ maxWidth: "200px" }} title={log.destinatario}>
-                          {log.destinatario}
-                        </td>
-                        <td>{renderStatusBadge(log.estado)}</td>
-                        <td className="text-nowrap small text-muted">
-                          {log.duracion_ms != null ? (
-                            <span className="d-inline-flex align-items-center gap-1">
-                              <Clock size={12} />
-                              {log.duracion_ms >= 1000
-                                ? `${(log.duracion_ms / 1000).toFixed(2)}s`
-                                : `${log.duracion_ms}ms`}
-                            </span>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                        <td className="small text-truncate" style={{ maxWidth: "260px" }} title={log.error || log.mensaje}>
-                          {log.error ? (
-                            <span className="text-danger fw-semibold">{log.mensaje || log.error}</span>
-                          ) : (
-                            <span className="text-secondary">{log.mensaje || "-"}</span>
-                          )}
-                        </td>
-                        <td className="text-end">
-                          <button
-                            className="icon-button category-edit"
-                            type="button"
-                            onClick={() => setSelectedLog(log)}
-                            aria-label="Ver detalle del log"
-                            title="Ver detalle completo"
-                          >
-                            <Eye size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="admin-log-table mt-4">
+                <div className="admin-log-head">
+                  <span>Número de pedido</span>
+                  <span>Fecha</span>
+                  <span>Canal</span>
+                  <span>Estado</span>
+                  <span>Duración</span>
+                  <span>Acciones</span>
+                </div>
+                {logs.map((log) => (
+                  <article className="admin-log-row" key={log.id}>
+                    <div>
+                      <strong>
+                        {log.pedido_id ? `Pedido #${log.pedido_id.slice(0, 8).toUpperCase()}` : "Sin pedido"}
+                      </strong>
+                      <small className="text-muted text-truncate" title={log.destinatario}>
+                        {log.destinatario}
+                      </small>
+                    </div>
+                    <span>{log.created_at ? dateFormatter.format(new Date(log.created_at)) : "-"}</span>
+                    <div>{renderChannelBadge(log.canal)}</div>
+                    <div>{renderStatusBadge(log.estado)}</div>
+                    <strong className="font-monospace text-secondary">
+                      {log.duracion_ms != null
+                        ? log.duracion_ms >= 1000
+                          ? `${(log.duracion_ms / 1000).toFixed(2)}s`
+                          : `${log.duracion_ms}ms`
+                        : "-"}
+                    </strong>
+                    <button
+                      className="icon-button category-edit"
+                      type="button"
+                      onClick={() => setSelectedLog(log)}
+                      aria-label="Ver detalle del log"
+                      title="Ver detalle completo"
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </article>
+                ))}
               </div>
 
               {/* Paginación */}
-              <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
-                <span className="text-secondary small">
-                  Página {page} de {totalPages} ({total} registros totales)
-                </span>
+              <div className="product-pagination mt-4">
+                <small>
+                  Página {page} de {totalPages} ({total} registros)
+                </small>
                 <div className="d-flex gap-2">
                   <button
                     className="btn btn-outline-secondary btn-sm"
@@ -485,11 +441,7 @@ export default function NotificationLogs() {
               </div>
             </>
           ) : (
-            <div className="p-5 text-center text-secondary">
-              <FileText size={36} className="text-muted mb-3 opacity-50" />
-              <h5>No hay registros de notificaciones</h5>
-              <p className="mb-0">No se encontraron logs que coincidan con los filtros seleccionados.</p>
-            </div>
+            <p className="history-filter-empty">No hay registros que coincidan con los filtros.</p>
           )}
         </section>
       </div>
