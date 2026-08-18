@@ -5,7 +5,7 @@ import { Activity, Boxes, CheckCircle2, ClipboardList, DollarSign, Eye, FileText
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
-import { api, setAdminToken, setCustomerToken } from "./services/api";
+import { api, clearSessionStorage, getStoredSession, saveSessionStorage, setAdminToken, setCustomerToken } from "./services/api";
 import SystemSettings from "./pages/admin/SystemSettings";
 import NotificationLogs from "./pages/admin/NotificationLogs";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
@@ -44,10 +44,12 @@ function Access({ onCustomerLogin, onAdminLogin }) {
         const { data } = await api.post("/clientes/login", { correo: email, password });
         setCustomerToken(data.access_token);
         const profile = await api.get("/cliente/perfil");
+        saveSessionStorage(data.access_token, "customer", profile.data);
         onCustomerLogin(profile.data);
       } else {
         const { data } = await api.post("/login", { correo: email, password });
         setAdminToken(data.access_token);
+        saveSessionStorage(data.access_token, "admin");
         onAdminLogin();
       }
     } catch {
@@ -82,6 +84,7 @@ function AdminAccess({ onLogin, onCustomerAccess }) {
     try {
       const { data } = await api.post("/login", { correo: email, password });
       setAdminToken(data.access_token);
+      saveSessionStorage(data.access_token, "admin");
       onLogin();
     } catch {
       setError("Correo o contraseña incorrectos.");
@@ -2000,10 +2003,29 @@ function PublicCatalog() {
 }
 
 function App() {
-  const [customer, setCustomer] = useState(null);
-  const [view, setView] = useState("customer-access");
+  const initialSession = getStoredSession();
+  const [customer, setCustomer] = useState(
+    initialSession?.role === "customer" ? initialSession.customer : null
+  );
+  const [view, setView] = useState(
+    initialSession?.role === "admin" ? "admin-dashboard" : "customer-access"
+  );
+
+  useEffect(() => {
+    if (initialSession?.role === "customer" && initialSession.token) {
+      api.get("/cliente/perfil")
+        .then(({ data }) => {
+          setCustomer(data);
+          saveSessionStorage(initialSession.token, "customer", data);
+        })
+        .catch(() => {
+          // Si el token es inválido, el interceptor 401 limpiará la sesión
+        });
+    }
+  }, []);
 
   const handleInactivityLogout = useCallback(() => {
+    clearSessionStorage();
     setAdminToken(null);
     setCustomerToken(null);
     setCustomer(null);
@@ -2066,8 +2088,8 @@ function App() {
   }, []);
 
   if (isPublicCatalogRoute) return <PublicCatalog />;
-  if (customer) return <Shop customer={customer} onProfileUpdated={setCustomer} onLogout={() => { setCustomerToken(null); setCustomer(null); }} />;
-  if (view === "admin-dashboard") return <AdminDashboard onLogout={() => setView("customer-access")} />;
+  if (customer) return <Shop customer={customer} onProfileUpdated={setCustomer} onLogout={() => { clearSessionStorage(); setCustomerToken(null); setCustomer(null); }} />;
+  if (view === "admin-dashboard") return <AdminDashboard onLogout={() => { clearSessionStorage(); setAdminToken(null); setView("customer-access"); }} />;
   if (view === "admin-access") return <AdminAccess onLogin={() => setView("admin-dashboard")} onCustomerAccess={() => setView("customer-access")} />;
   return <Access onCustomerLogin={setCustomer} onAdminLogin={() => setView("admin-dashboard")} />;
 }
