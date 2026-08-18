@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Swal from "sweetalert2";
-import { getActiveToken, setOnAuthExpired } from "../services/api";
+import { api, getActiveToken, getStoredSession, saveSessionStorage, setAdminToken, setOnAuthExpired } from "../services/api";
 
 function decodeToken(token) {
   if (!token) return null;
@@ -137,11 +137,29 @@ export function useSessionInactivity({ active, onLogout }) {
           willClose: () => {
             clearInterval(timerInterval);
           },
-        }).then((result) => {
+        }).then(async (result) => {
           modalOpenRef.current = false;
           if (result.isConfirmed) {
-            // El usuario confirmó que desea mantener la sesión activa
-            lastActivityRef.current = Date.now();
+            // El usuario confirmó que desea mantener la sesión activa: renovar token en backend
+            try {
+              const { data } = await api.post("/auth/refresh");
+              if (data?.access_token) {
+                const session = getStoredSession();
+                setAdminToken(data.access_token);
+                saveSessionStorage(data.access_token, session?.role || "admin", session?.customer);
+              }
+              lastActivityRef.current = Date.now();
+              Swal.fire({
+                toast: true,
+                position: "top-end",
+                icon: "success",
+                title: "Sesión renovada con éxito",
+                showConfirmButton: false,
+                timer: 2000,
+              });
+            } catch {
+              if (onLogout) onLogout();
+            }
           } else if (
             result.dismiss === Swal.DismissReason.timer ||
             result.dismiss === Swal.DismissReason.cancel

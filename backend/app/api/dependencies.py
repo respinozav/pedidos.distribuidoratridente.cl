@@ -52,3 +52,29 @@ def get_current_customer(
 
 
 CustomerUser = Annotated[Cliente, Depends(get_current_customer)]
+
+
+def get_current_user_or_customer(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+    database: DatabaseSession,
+) -> tuple[UUID, str]:
+    try:
+        payload = jwt.decode(credentials.credentials, get_jwt_secret(), algorithms=[settings.jwt_algorithm])
+        subject_id = UUID(payload["sub"])
+        role = payload.get("role", "ADMIN")
+    except (jwt.PyJWTError, KeyError, ValueError) as error:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token invalido") from error
+
+    if role == "CLIENTE":
+        customer = database.get(Cliente, subject_id)
+        if not customer or not customer.activo:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Cliente no autorizado")
+        return subject_id, "CLIENTE"
+    else:
+        user = database.get(Usuario, subject_id)
+        if not user or not user.activo:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no autorizado")
+        return subject_id, user.rol.nombre if user.rol else "ADMIN"
+
+
+AuthSubject = Annotated[tuple[UUID, str], Depends(get_current_user_or_customer)]

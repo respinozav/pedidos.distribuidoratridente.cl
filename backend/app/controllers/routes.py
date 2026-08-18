@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.dependencies import AdminUser, CustomerUser, DatabaseSession
+from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession
 from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
 from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Rol, Usuario
 from app.repositories.base import Repository
@@ -61,6 +61,14 @@ def login(payload: UserLogin, database: DatabaseSession) -> TokenOutput:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
     expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
     return TokenOutput(access_token=create_access_token(user.id, user.rol.nombre, expires_minutes=expire_minutes))
+
+
+@router.post("/auth/refresh", response_model=TokenOutput, tags=["Autenticacion"])
+def refresh_session_token(current_auth: AuthSubject, database: DatabaseSession) -> TokenOutput:
+    subject_id, role = current_auth
+    expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
+    new_token = create_access_token(subject_id, role, expires_minutes=expire_minutes)
+    return TokenOutput(access_token=new_token)
 
 
 @router.get("/roles", response_model=list[RoleOutput], tags=["Usuarios"])
