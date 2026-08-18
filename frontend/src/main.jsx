@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useRef, useState } from "react";
+import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Activity, Boxes, CheckCircle2, ClipboardList, DollarSign, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
 
@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 import { api, setAdminToken, setCustomerToken } from "./services/api";
 import SystemSettings from "./pages/admin/SystemSettings";
 import NotificationLogs from "./pages/admin/NotificationLogs";
+import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
 const money = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP" });
@@ -2001,6 +2002,18 @@ function PublicCatalog() {
 function App() {
   const [customer, setCustomer] = useState(null);
   const [view, setView] = useState("customer-access");
+
+  const handleInactivityLogout = useCallback(() => {
+    setAdminToken(null);
+    setCustomerToken(null);
+    setCustomer(null);
+    setView("customer-access");
+  }, []);
+
+  useSessionInactivity({
+    active: Boolean(customer) || view === "admin-dashboard",
+    onLogout: handleInactivityLogout,
+  });
 
   const isPublicCatalogRoute = window.location.pathname.replace(/\/$/, "").toLowerCase() === "/public/catalogo";
 
