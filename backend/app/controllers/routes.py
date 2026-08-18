@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import AdminUser, CustomerUser, DatabaseSession
 from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
-from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Producto, Rol, Usuario
+from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Rol, Usuario
 from app.repositories.base import Repository
 from app.schemas.dto import (
     AddressInput,
@@ -23,10 +23,13 @@ from app.schemas.dto import (
     CustomerPasswordUpdate,
     CustomerProfileUpdate,
     CustomerUpdate,
+    NotificationLogPage,
+    NotificationLogStats,
     OrderCreate,
     OrderOutput,
     OrderStateOutput,
     OrderStatusUpdate,
+    PedidoNotificacionLogOutput,
     ProductInput,
     ProductOutput,
     ProductPage,
@@ -39,7 +42,8 @@ from app.schemas.dto import (
 )
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
-from app.services.notifications import notify_customer_password_changed
+from app.services.notifications import dispatch_order_notifications_in_background, notify_customer_password_changed
+
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_price
 from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
@@ -459,3 +463,136 @@ def list_order_states(database: DatabaseSession, _: AdminUser) -> list[Estado]:
 @router.patch("/pedidos/{order_id}/estado", response_model=OrderOutput, tags=["Pedidos"])
 def update_order_status(order_id: UUID, payload: OrderStatusUpdate, database: DatabaseSession, _: AdminUser) -> object:
     return OrderService(database).change_status(order_id, payload.estado_id, payload.pagado, payload.dias_credito)
+
+
+@router.get("/admin/pedidos/logs", response_model=NotificationLogPage, tags=["Logs Notificaciones"])
+def list_notification_logs(
+    database: DatabaseSession,
+    _: AdminUser,
+    canal: str | None = None,
+    estado: str | None = None,
+    pedido_id: UUID | None = None,
+    search: str | None = Query(default=None, max_length=150),
+    desde: str | None = None,
+    hasta: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> NotificationLogPage:
+    """Lista los logs de notificaciones con filtros avanzados y paginación."""
+    statement = select(PedidoNotificacionLog)
+    if canal:
+        statement = statement.where(PedidoNotificacionLog.canal == canal)
+    if estado:
+        statement = statement.where(PedidoNotificacionLog.estado == estado)
+    if pedido_id:
+        statement = statement.where(PedidoNotificacionLog.pedido_id == pedido_id)
+    if search:
+        search_pattern = f"%{search.strip()}%"
+        statement = statement.where(
+            (PedidoNotificacionLog.destinatario.ilike(search_pattern))
+            | (PedidoNotificacionLog.mensaje.ilike(search_pattern))
+            | (PedidoNotificacionLog.error.ilike(search_pattern))
+        )
+    if desde:
+        try:
+            from_dt = datetime.strptime(f"{desde} 00:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+            statement = statement.where(PedidoNotificacionLog.created_at >= from_dt)
+        except ValueError:
+            pass
+    if hasta:
+        try:
+            to_dt = datetime.strptime(f"{hasta} 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+            statement = statement.where(PedidoNotificacionLog.created_at <= to_dt)
+        except ValueError:
+            pass
+
+    total = database.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    logs = list(
+        database.scalars(
+            statement.order_by(PedidoNotificacionLog.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    )
+    return NotificationLogPage(
+        items=[PedidoNotificacionLogOutput.model_validate(log, from_attributes=True) for log in logs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/admin/pedidos/logs/stats", response_model=NotificationLogStats, tags=["Logs Notificaciones"])
+def notification_logs_stats(database: DatabaseSession, _: AdminUser) -> NotificationLogStats:
+    """Obtiene métricas rápidas de los logs de notificaciones."""
+    total = database.scalar(select(func.count(PedidoNotificacionLog.id))) or 0
+    whatsapp_enviados = (
+        database.scalar(
+            select(func.count(PedidoNotificacionLog.id)).where(
+                PedidoNotificacionLog.canal == "WHATSAPP", PedidoNotificacionLog.estado == "ENVIADO"
+            )
+        )
+        or 0
+    )
+    whatsapp_fallidos = (
+        database.scalar(
+            select(func.count(PedidoNotificacionLog.id)).where(
+                PedidoNotificacionLog.canal == "WHATSAPP", PedidoNotificacionLog.estado == "FALLIDO"
+            )
+        )
+        or 0
+    )
+    email_enviados = (
+        database.scalar(
+            select(func.count(PedidoNotificacionLog.id)).where(
+                PedidoNotificacionLog.canal.in_(["EMAIL_ADMIN", "EMAIL_CLIENTE"]),
+                PedidoNotificacionLog.estado == "ENVIADO",
+            )
+        )
+        or 0
+    )
+    email_fallidos = (
+        database.scalar(
+            select(func.count(PedidoNotificacionLog.id)).where(
+                PedidoNotificacionLog.canal.in_(["EMAIL_ADMIN", "EMAIL_CLIENTE"]),
+                PedidoNotificacionLog.estado == "FALLIDO",
+            )
+        )
+        or 0
+    )
+    omitidos = (
+        database.scalar(
+            select(func.count(PedidoNotificacionLog.id)).where(PedidoNotificacionLog.estado == "OMITIDO")
+        )
+        or 0
+    )
+    return NotificationLogStats(
+        total=total,
+        whatsapp_enviados=whatsapp_enviados,
+        whatsapp_fallidos=whatsapp_fallidos,
+        email_enviados=email_enviados,
+        email_fallidos=email_fallidos,
+        omitidos=omitidos,
+    )
+
+
+@router.get("/admin/pedidos/{order_id}/logs", response_model=list[PedidoNotificacionLogOutput], tags=["Logs Notificaciones"])
+def order_notification_logs(order_id: UUID, database: DatabaseSession, _: AdminUser) -> list[PedidoNotificacionLog]:
+    """Obtiene el historial de notificaciones de un pedido en particular."""
+    return list(
+        database.scalars(
+            select(PedidoNotificacionLog)
+            .where(PedidoNotificacionLog.pedido_id == order_id)
+            .order_by(PedidoNotificacionLog.created_at.desc())
+        )
+    )
+
+
+@router.post("/admin/pedidos/{order_id}/reintentar-notificaciones", tags=["Logs Notificaciones"])
+def retry_order_notifications(order_id: UUID, database: DatabaseSession, _: AdminUser) -> dict[str, str]:
+    """Reenvía en segundo plano las notificaciones (WhatsApp y Correo) de un pedido existente."""
+    order = database.get(Pedido, order_id)
+    if not order:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido no encontrado")
+    dispatch_order_notifications_in_background(order_id, tipo="REINTENTO")
+    return {"message": "Reintento de notificaciones iniciado en segundo plano"}

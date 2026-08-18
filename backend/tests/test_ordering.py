@@ -56,8 +56,9 @@ def test_create_creates_default_state_when_none_exists(monkeypatch):
     )
     session = FakeSession(customer, address, product)
 
+    dispatched = []
     monkeypatch.setattr("app.services.ordering.customer_product_price", lambda product, customer: Decimal("1000"))
-    monkeypatch.setattr("app.services.ordering.notify_administrators_of_order", lambda database, order: None)
+    monkeypatch.setattr("app.services.ordering.dispatch_order_notifications_in_background", lambda order_id, tipo="NUEVO_PEDIDO": dispatched.append((order_id, tipo)))
     monkeypatch.setattr(OrderService, "get", lambda self, order_id: self.database.added[-1])
 
     service = OrderService(session)
@@ -71,3 +72,6 @@ def test_create_creates_default_state_when_none_exists(monkeypatch):
     assert order is not None
     assert session.committed is True
     assert any(getattr(item, "nombre", None) == "Pedido" for item in session.added)
+    assert len(dispatched) == 1
+    assert dispatched[0][0] == order.id
+

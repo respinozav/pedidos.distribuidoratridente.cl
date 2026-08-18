@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.entities import Cliente, Credito, DetallePedido, Direccion, Estado, Pedido, Producto
 from app.repositories.base import Repository
 from app.schemas.dto import OrderCreate
-from app.services.notifications import _order_pdf, notify_administrators_of_order
+from app.services.notifications import _order_pdf, dispatch_order_notifications_in_background, notify_administrators_of_order
 from app.services.pricing import customer_product_price
 
 
@@ -67,8 +67,9 @@ class OrderService:
         self.database.add(order)
         self.database.commit()
         created_order = self.get(order.id)
-        notify_administrators_of_order(self.database, created_order)
+        dispatch_order_notifications_in_background(created_order.id, tipo="NUEVO_PEDIDO")
         return created_order
+
 
     def get(self, order_id: UUID) -> Pedido:
         order = self.database.scalar(select(Pedido).options(selectinload(Pedido.detalles), selectinload(Pedido.estado), selectinload(Pedido.cliente), selectinload(Pedido.direccion)).where(Pedido.id == order_id))

@@ -1,12 +1,14 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Boxes, CheckCircle2, ClipboardList, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Minus, Package, Pencil, Plus, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { Activity, Boxes, CheckCircle2, ClipboardList, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
 import { api, setAdminToken, setCustomerToken } from "./services/api";
 import SystemSettings from "./pages/admin/SystemSettings";
+import NotificationLogs from "./pages/admin/NotificationLogs";
+
 
 const money = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP" });
 
@@ -724,6 +726,9 @@ function AdminOrderManager() {
   const [states, setStates] = useState([]);
   const [filters, setFilters] = useState({ estado: "Pedido", codigo: "", desde: "", hasta: "" });
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderLogs, setOrderLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [retryingLogs, setRetryingLogs] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -744,7 +749,44 @@ function AdminOrderManager() {
     }
   }
 
+  async function loadOrderLogs(orderId) {
+    if (!orderId) return;
+    setLoadingLogs(true);
+    try {
+      const { data } = await api.get(`/admin/pedidos/${orderId}/logs`);
+      setOrderLogs(data);
+    } catch {
+      setOrderLogs([]);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
+  async function retryOrderNotifications(orderId) {
+    if (!orderId) return;
+    setRetryingLogs(true);
+    try {
+      await api.post(`/admin/pedidos/${orderId}/reintentar-notificaciones`);
+      setNotice("Reintento de notificaciones solicitado en segundo plano.");
+      setTimeout(() => {
+        loadOrderLogs(orderId);
+      }, 1500);
+    } catch (err) {
+      setError(err.response?.data?.detail ?? "No fue posible reintentar las notificaciones.");
+    } finally {
+      setRetryingLogs(false);
+    }
+  }
+
   useEffect(() => { loadOrders(); }, []);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      loadOrderLogs(selectedOrder.id);
+    } else {
+      setOrderLogs([]);
+    }
+  }, [selectedOrder]);
 
   function availableTransitions(order) {
     const transitions = { Pedido: ["Despachado", "Cancelado"], Despachado: ["Entregado", "Cancelado"] };
@@ -857,7 +899,53 @@ function AdminOrderManager() {
   });
 
   const dateFormatter = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="order-history-filters"><label>Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label>Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label>Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{visibleOrders.map((order) => <article className="admin-order-row" key={order.id}><div><strong>Pedido {order.id.slice(0, 8).toUpperCase()}</strong><small>{order.detalles.length} productos</small></div><div><strong>{order.cliente.nombre || order.cliente.rut || order.cliente.celular || "Cliente"}</strong><small>{order.cliente.rut || order.cliente.celular || "Sin identificador"}</small></div><span>{order.created_at ? dateFormatter.format(new Date(order.created_at)) : "-"}</span><span className={`order-status order-${order.estado.nombre.toLowerCase()}`}>{order.estado.nombre}</span><strong>{money.format(order.total)}</strong><button className="icon-button category-edit" type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver detalle del pedido ${order.id.slice(0, 8).toUpperCase()}`}><Eye size={16} /></button></article>)}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente.nombre || selectedOrder.cliente.rut || "Cliente"}</span><span>{selectedOrder.created_at ? dateFormatter.format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>Precio</span><span>Subtotal</span></div>{selectedOrder.detalles.map((line) => <div key={line.producto_id}><span>{line.nombre_producto}</span><span>{line.cantidad}</span><span>{money.format(line.precio_unitario)}</span><strong>{money.format(line.subtotal)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total)}</strong></div></div><footer><div className="order-state-actions">{availableTransitions(selectedOrder).map((nextState) => <button className={nextState === "Cancelado" ? "btn btn-outline-danger" : "btn btn-primary"} type="button" key={nextState} onClick={() => { setDeliveryPayment(null); setCreditDays(""); setConfirmation({ order: selectedOrder, nextState }); }}>{nextState === "Despachado" ? "Despachar" : nextState === "Entregado" ? "Entregar" : "Cancelar pedido"}</button>)}</div><button className="btn btn-light" type="button" onClick={() => setSelectedOrder(null)}>Cerrar</button></footer></section></div>}{confirmation && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">CONFIRMAR ACCION</p><h2>{confirmation.nextState === "Entregado" ? "¿Cliente pagó su pedido?" : "¿Cambiar estado del pedido?"}</h2></div><button className="icon-button" type="button" onClick={() => setConfirmation(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El pedido <strong>{confirmation.order.id.slice(0, 8).toUpperCase()}</strong> cambiará de <strong>{confirmation.order.estado.nombre}</strong> a <strong>{confirmation.nextState}</strong>.</p>{confirmation.nextState === "Entregado" ? <><div className="payment-choice"><button type="button" className={deliveryPayment === true ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(true); setCreditDays(""); }}>Sí, pagó</button><button type="button" className={deliveryPayment === false ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => setDeliveryPayment(false)}>No, queda a crédito</button></div>{deliveryPayment === false && <div className="mt-3"><label className="form-label" htmlFor="credit-days">Días de crédito</label><input id="credit-days" className="form-control" type="number" min="1" step="1" value={creditDays} onChange={(event) => setCreditDays(event.target.value)} required autoFocus /><small className="form-text">El vencimiento se calcula desde la fecha de entrega.</small></div>}</> : <p className="mb-0">Esta acción actualizará el estado visible para el cliente.</p>}</div><footer><button className="btn btn-light" type="button" disabled={updatingState} onClick={() => setConfirmation(null)}>Volver</button><button className={confirmation.nextState === "Cancelado" ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={updatingState} onClick={changeOrderStatus}>{updatingState ? "Actualizando..." : confirmation.nextState === "Entregado" ? "Finalizar entrega" : "Confirmar cambio"}</button></footer></section></div>}</>;
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="order-history-filters"><label>Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label>Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label>Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{visibleOrders.map((order) => <article className="admin-order-row" key={order.id}><div><strong>Pedido {order.id.slice(0, 8).toUpperCase()}</strong><small>{order.detalles.length} productos</small></div><div><strong>{order.cliente.nombre || order.cliente.rut || order.cliente.celular || "Cliente"}</strong><small>{order.cliente.rut || order.cliente.celular || "Sin identificador"}</small></div><span>{order.created_at ? dateFormatter.format(new Date(order.created_at)) : "-"}</span><span className={`order-status order-${order.estado.nombre.toLowerCase()}`}>{order.estado.nombre}</span><strong>{money.format(order.total)}</strong><button className="icon-button category-edit" type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver detalle del pedido ${order.id.slice(0, 8).toUpperCase()}`}><Eye size={16} /></button></article>)}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente.nombre || selectedOrder.cliente.rut || "Cliente"}</span><span>{selectedOrder.created_at ? dateFormatter.format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>Precio</span><span>Subtotal</span></div>{selectedOrder.detalles.map((line) => <div key={line.producto_id}><span>{line.nombre_producto}</span><span>{line.cantidad}</span><span>{money.format(line.precio_unitario)}</span><strong>{money.format(line.subtotal)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total)}</strong></div>
+
+<div className="order-notifications-section mt-4 pt-3 border-top">
+  <div className="d-flex justify-content-between align-items-center mb-2">
+    <h6 className="mb-0 fw-bold d-flex align-items-center gap-2">
+      <Activity size={16} className="text-primary" />
+      Estado de Notificaciones
+    </h6>
+    <button
+      className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+      type="button"
+      disabled={retryingLogs}
+      onClick={() => retryOrderNotifications(selectedOrder.id)}
+    >
+      <RotateCcw size={14} className={retryingLogs ? "animate-spin" : ""} />
+      {retryingLogs ? "Reenviando..." : "Reenviar avisos"}
+    </button>
+  </div>
+  {loadingLogs ? (
+    <p className="small text-secondary mb-0">Cargando estado de envíos...</p>
+  ) : orderLogs.length ? (
+    <div className="order-logs-mini-list">
+      {orderLogs.map((log) => (
+        <div key={log.id} className="order-log-mini-item">
+          <div className="d-flex align-items-center gap-2">
+            <span className={`badge-channel badge-${log.canal.toLowerCase().replace('_', '-')}`}>
+              {log.canal === "WHATSAPP" ? "WhatsApp" : log.canal === "EMAIL_ADMIN" ? "Correo Admin" : log.canal === "EMAIL_CLIENTE" ? "Correo Cliente" : "Sistema"}
+            </span>
+            <span className={`badge-status-pill status-${log.estado === "ENVIADO" ? "success" : log.estado === "FALLIDO" ? "failed" : "skipped"}`}>
+              {log.estado}
+            </span>
+            <small className="text-muted text-truncate" style={{ maxWidth: "200px" }}>{log.destinatario}</small>
+          </div>
+          {log.error ? (
+            <small className="text-danger fw-semibold d-block mt-1">{log.mensaje || log.error}</small>
+          ) : (
+            <small className="text-secondary d-block mt-1">{log.mensaje}</small>
+          )}
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p className="small text-muted mb-0">Sin registros de notificación para este pedido.</p>
+  )}
+</div>
+
+</div><footer><div className="order-state-actions">{availableTransitions(selectedOrder).map((nextState) => <button className={nextState === "Cancelado" ? "btn btn-outline-danger" : "btn btn-primary"} type="button" key={nextState} onClick={() => { setDeliveryPayment(null); setCreditDays(""); setConfirmation({ order: selectedOrder, nextState }); }}>{nextState === "Despachado" ? "Despachar" : nextState === "Entregado" ? "Entregar" : "Cancelar pedido"}</button>)}</div><button className="btn btn-light" type="button" onClick={() => setSelectedOrder(null)}>Cerrar</button></footer></section></div>}{confirmation && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">CONFIRMAR ACCION</p><h2>{confirmation.nextState === "Entregado" ? "¿Cliente pagó su pedido?" : "¿Cambiar estado del pedido?"}</h2></div><button className="icon-button" type="button" onClick={() => setConfirmation(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El pedido <strong>{confirmation.order.id.slice(0, 8).toUpperCase()}</strong> cambiará de <strong>{confirmation.order.estado.nombre}</strong> a <strong>{confirmation.nextState}</strong>.</p>{confirmation.nextState === "Entregado" ? <><div className="payment-choice"><button type="button" className={deliveryPayment === true ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(true); setCreditDays(""); }}>Sí, pagó</button><button type="button" className={deliveryPayment === false ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => setDeliveryPayment(false)}>No, queda a crédito</button></div>{deliveryPayment === false && <div className="mt-3"><label className="form-label" htmlFor="credit-days">Días de crédito</label><input id="credit-days" className="form-control" type="number" min="1" step="1" value={creditDays} onChange={(event) => setCreditDays(event.target.value)} required autoFocus /><small className="form-text">El vencimiento se calcula desde la fecha de entrega.</small></div>}</> : <p className="mb-0">Esta acción actualizará el estado visible para el cliente.</p>}</div><footer><button className="btn btn-light" type="button" disabled={updatingState} onClick={() => setConfirmation(null)}>Volver</button><button className={confirmation.nextState === "Cancelado" ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={updatingState} onClick={changeOrderStatus}>{updatingState ? "Actualizando..." : confirmation.nextState === "Entregado" ? "Finalizar entrega" : "Confirmar cambio"}</button></footer></section></div>}</>;
 }
 
 function CreditManager() {
@@ -1038,10 +1126,12 @@ function AdminDashboard({ onLogout }) {
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
     [ClipboardList, "Créditos", "credits", true],
+    [Activity, "Logs Envíos", "notification_logs", true],
   ];
 
   return <main className="admin-app"><aside className={`admin-sidebar ${menuOpen ? "is-open" : ""}`}><div className="sidebar-brand"><BrandMark /><span>Distribuidora Tridente</span><button className="sidebar-close d-lg-none" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={20} /></button></div><p className="sidebar-label">OPERACION</p><nav className="sidebar-nav">{navigation.map(([Icon, label, key, enabled]) => <button key={label} className={section === key ? "active" : ""} disabled={!enabled} onClick={() => { setSection(key); setMenuOpen(false); }}><Icon size={19} /><span>{label}</span>{!enabled && <small>Pronto</small>}</button>)}<div className="sidebar-configuration"><button className={configurationOpen || section === "users" || section === "customers" || section === "settings" ? "active" : ""} onClick={() => setConfigurationOpen((current) => !current)}><Settings size={19} /><span>Configuración</span></button>{configurationOpen && <div className="sidebar-submenu"><button className={section === "users" ? "active" : ""} onClick={() => { setSection("users"); setMenuOpen(false); }}><Users size={17} /><span>Usuarios</span></button><button className={section === "customers" ? "active" : ""} onClick={() => { setSection("customers"); setMenuOpen(false); }}><Users size={17} /><span>Clientes</span></button><button className={section === "settings" ? "active" : ""} onClick={() => { setSection("settings"); setMenuOpen(false); }}><Settings size={17} /><span>Ajustes</span></button></div>}</div></nav><div className="sidebar-bottom"><div className="sidebar-user"><span>RE</span><div><strong>Administrador</strong><small>Sesión activa</small></div></div><button className="logout-button" onClick={logout}><LogOut size={18} />Cerrar sesión</button></div></aside><div className="sidebar-backdrop d-lg-none" hidden={!menuOpen} onClick={() => setMenuOpen(false)} /><button className="icon-button admin-mobile-menu d-lg-none" type="button" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={21} /></button>
-    {section === "summary" ? <section className="admin-workspace"><AdminSalesDashboard /></section> : section === "products" ? <section className="admin-workspace"><ProductManager categories={categories} /></section> : section === "orders" ? <section className="admin-workspace"><AdminOrderManager /></section> : section === "credits" ? <section className="admin-workspace"><CreditManager /></section> : section === "users" ? <section className="admin-workspace"><UserManager /></section> : section === "customers" ? <section className="admin-workspace"><CustomerManager /></section> : section === "settings" ? <section className="admin-workspace"><SystemSettings /></section> : <>
+    {section === "summary" ? <section className="admin-workspace"><AdminSalesDashboard /></section> : section === "products" ? <section className="admin-workspace"><ProductManager categories={categories} /></section> : section === "orders" ? <section className="admin-workspace"><AdminOrderManager /></section> : section === "credits" ? <section className="admin-workspace"><CreditManager /></section> : section === "notification_logs" ? <section className="admin-workspace"><NotificationLogs /></section> : section === "users" ? <section className="admin-workspace"><UserManager /></section> : section === "customers" ? <section className="admin-workspace"><CustomerManager /></section> : section === "settings" ? <section className="admin-workspace"><SystemSettings /></section> : <>
+
     <section className="admin-workspace"><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CATALOGO</p><h1>Categorías</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de Categoría</span><button className="btn btn-primary" onClick={() => document.getElementById("category-name")?.focus()}><Plus size={18} />Nueva categoría</button></div></header>
       <div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">INVENTARIO</p><h2>Organiza tu Categoría</h2><p>Las categorías agrupan los productos visibles para tus clientes.</p></div><div className="summary-metric"><span>{categories.length}</span><small>Categorías registradas</small></div></section>
         <section className="content-panel"><div className="panel-heading"><div><h2>Listado de categorías</h2><p>Administra la clasificación de tu catálogo.</p></div><span className="panel-count">{categories.length} registros</span></div><form className="category-form" onSubmit={createCategory}><div><label htmlFor="category-name" className="visually-hidden">Nombre de categoría</label><input id="category-name" className="form-control" placeholder="Escribe una nueva categoría" value={name} onChange={(event) => setName(event.target.value)} maxLength="120" required /></div><button className="btn btn-primary"><Plus size={18} />Agregar</button></form>

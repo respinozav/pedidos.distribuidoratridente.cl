@@ -61,6 +61,12 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
             sent_messages.append(message)
 
     monkeypatch.setattr("smtplib.SMTP_SSL", FakeSMTP)
+    class FakeWhatsAppService:
+        instance_name = "test_instance"
+        def is_connected_sync(self):
+            return False
+
+    monkeypatch.setattr("app.services.whatsapp_service.WhatsAppService", FakeWhatsAppService)
     monkeypatch.setattr(
         "app.services.notifications.get_settings",
         lambda: SimpleNamespace(
@@ -74,12 +80,23 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
         ),
     )
 
+
     class FakeDatabase:
         def __init__(self, recipients):
             self._recipients = recipients
+            self.added = []
 
         def scalars(self, statement):
             return self._recipients
+
+        def add(self, instance):
+            self.added.append(instance)
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
 
     order = SimpleNamespace(
         id="12345678-1234-1234-1234-123456789abc",
@@ -98,6 +115,7 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
     recipients = [msg["To"] for msg in sent_messages]
     assert "admin_pedidos@example.com" in recipients
     assert "cliente@example.com" in recipients
+    assert len(db.added) > 0  # Se registraron logs
 
     # Caso 2: No hay usuarios con recibe_pedido = True (recibe_pedido = False para todos)
     sent_messages.clear()
@@ -106,4 +124,5 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
 
     assert len(sent_messages) == 1
     assert sent_messages[0]["To"] == "cliente@example.com"
+
 

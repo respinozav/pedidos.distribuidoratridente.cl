@@ -1,11 +1,15 @@
 import html
 import logging
 import smtplib
+import threading
+import time
+import traceback
 from datetime import datetime
 from decimal import Decimal
 from email.message import EmailMessage
 from io import BytesIO
 from pathlib import Path
+from uuid import UUID
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
@@ -14,10 +18,10 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
-from app.models.entities import Cliente, Pedido, Rol, Usuario
+from app.models.entities import Cliente, Pedido, PedidoNotificacionLog, Rol, Usuario
 
 logger = logging.getLogger(__name__)
 LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "logo_tridente.png"
@@ -33,6 +37,41 @@ def _product_detail_label(detail: object) -> str:
     if code:
         return f"<b>{name}</b> <font color='#667085'>[{code}]</font>"
     return f"<b>{name}</b>"
+
+
+def _create_notification_log(
+    database: Session,
+    pedido_id: UUID | None,
+    canal: str,
+    tipo: str,
+    destinatario: str,
+    estado: str,
+    mensaje: str | None = None,
+    error: str | None = None,
+    duracion_ms: int | None = None,
+) -> PedidoNotificacionLog | None:
+    """Registra una entrada de log de notificación de manera segura."""
+    try:
+        log_entry = PedidoNotificacionLog(
+            pedido_id=pedido_id,
+            canal=canal,
+            tipo=tipo,
+            destinatario=destinatario,
+            estado=estado,
+            mensaje=mensaje,
+            error=error,
+            duracion_ms=duracion_ms,
+        )
+        database.add(log_entry)
+        database.commit()
+        return log_entry
+    except Exception as e:
+        logger.error("No fue posible guardar el log de notificación: %s", e)
+        try:
+            database.rollback()
+        except Exception:
+            pass
+        return None
 
 
 def _get_smtp_settings(database: Session | None = None) -> dict[str, object]:
@@ -209,17 +248,31 @@ def _build_order_message(
     return message
 
 
-def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_bytes: bytes | None = None) -> None:
-    """Envía la notificación del pedido y PDF por WhatsApp a los administradores con recibe_pedido=True."""
+def notify_administrators_via_whatsapp(
+    database: Session, order: Pedido, pdf_bytes: bytes | None = None, tipo: str = "NUEVO_PEDIDO"
+) -> None:
+    """Envía la notificación del pedido y PDF por WhatsApp a los administradores con recibe_pedido=True y registra logs."""
+    t_start = time.perf_counter()
     try:
         from app.services.whatsapp_service import WhatsAppService
 
         ws_service = WhatsAppService()
 
-        # Validar si WhatsApp está realmente conectado/vinculado para evitar errores
+        # Validar conexión de WhatsApp
         is_connected = ws_service.is_connected_sync()
         if not is_connected:
-            logger.info("Notificación WhatsApp omitida: La instancia '%s' no está vinculada o conectada a WhatsApp.", ws_service.instance_name)
+            dur_ms = int((time.perf_counter() - t_start) * 1000)
+            logger.info("Notificación WhatsApp omitida: La instancia '%s' no está vinculada o conectada.", ws_service.instance_name)
+            _create_notification_log(
+                database=database,
+                pedido_id=order.id,
+                canal="WHATSAPP",
+                tipo=tipo,
+                destinatario="Administradores",
+                estado="OMITIDO",
+                mensaje=f"Instancia de WhatsApp '{ws_service.instance_name}' no está conectada o vinculada.",
+                duracion_ms=dur_ms,
+            )
             return
 
         admin_users = list(
@@ -231,7 +284,18 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
             )
         )
         if not admin_users:
+            dur_ms = int((time.perf_counter() - t_start) * 1000)
             logger.info("No hay usuarios activos con recibe_pedido=True configurados en el sistema.")
+            _create_notification_log(
+                database=database,
+                pedido_id=order.id,
+                canal="WHATSAPP",
+                tipo=tipo,
+                destinatario="Administradores",
+                estado="OMITIDO",
+                mensaje="No hay usuarios administradores activos con 'Recibe pedidos' habilitado.",
+                duracion_ms=dur_ms,
+            )
             return
 
         order_code = str(order.id).split("-")[0].upper()
@@ -269,14 +333,24 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
         filename = f"pedido-{order_code}.pdf"
 
         for admin in admin_users:
+            admin_start = time.perf_counter()
             phone = (admin.celular or "").strip()
+            dest_label = f"{admin.nombre} ({phone})" if phone else admin.nombre
             if not phone:
-                logger.warning(
-                    "El usuario '%s' (%s) tiene 'Recibe pedidos = Sí' pero no tiene número celular registrado.",
-                    admin.nombre,
-                    admin.correo,
+                dur_ms = int((time.perf_counter() - admin_start) * 1000)
+                logger.warning("El usuario '%s' tiene 'Recibe pedidos' pero no tiene número celular.", admin.nombre)
+                _create_notification_log(
+                    database=database,
+                    pedido_id=order.id,
+                    canal="WHATSAPP",
+                    tipo=tipo,
+                    destinatario=dest_label,
+                    estado="OMITIDO",
+                    mensaje="El usuario administrador no tiene número celular registrado.",
+                    duracion_ms=dur_ms,
                 )
                 continue
+
             try:
                 logger.info("Enviando notificación WhatsApp de pedido #%s a %s (%s)...", order_code, admin.nombre, phone)
                 result = ws_service.send_pdf_document_sync(
@@ -285,25 +359,90 @@ def notify_administrators_via_whatsapp(database: Session, order: Pedido, pdf_byt
                     filename=filename,
                     caption=caption,
                 )
+                dur_ms = int((time.perf_counter() - admin_start) * 1000)
+                status_code = result.get("status") if isinstance(result, dict) else "OK"
+                is_error = status_code == "ERROR" or (isinstance(status_code, int) and status_code >= 400)
+                if is_error:
+                    _create_notification_log(
+                        database=database,
+                        pedido_id=order.id,
+                        canal="WHATSAPP",
+                        tipo=tipo,
+                        destinatario=dest_label,
+                        estado="FALLIDO",
+                        mensaje=f"Error en respuesta de API WhatsApp: {result.get('message', result)}",
+                        error=str(result),
+                        duracion_ms=dur_ms,
+                    )
+                else:
+                    _create_notification_log(
+                        database=database,
+                        pedido_id=order.id,
+                        canal="WHATSAPP",
+                        tipo=tipo,
+                        destinatario=dest_label,
+                        estado="ENVIADO",
+                        mensaje=f"Mensaje y comprobante PDF enviados correctamente a WhatsApp ({phone}).",
+                        duracion_ms=dur_ms,
+                    )
                 logger.info("Notificación WhatsApp de pedido #%s enviada a %s (%s): %s", order_code, admin.nombre, phone, result)
             except Exception as e:
+                dur_ms = int((time.perf_counter() - admin_start) * 1000)
                 logger.exception("Error al enviar WhatsApp a %s (%s): %s", admin.nombre, phone, e)
+                _create_notification_log(
+                    database=database,
+                    pedido_id=order.id,
+                    canal="WHATSAPP",
+                    tipo=tipo,
+                    destinatario=dest_label,
+                    estado="FALLIDO",
+                    mensaje=f"Excepción al enviar WhatsApp a {phone}: {str(e)}",
+                    error=traceback.format_exc(),
+                    duracion_ms=dur_ms,
+                )
     except Exception as e:
+        dur_ms = int((time.perf_counter() - t_start) * 1000)
         logger.exception("Error general al procesar notificaciones WhatsApp para el pedido %s: %s", order.id, e)
+        _create_notification_log(
+            database=database,
+            pedido_id=order.id,
+            canal="WHATSAPP",
+            tipo=tipo,
+            destinatario="Sistema WhatsApp",
+            estado="FALLIDO",
+            mensaje=f"Fallo general en proceso WhatsApp: {str(e)}",
+            error=traceback.format_exc(),
+            duracion_ms=dur_ms,
+        )
 
 
-
-def notify_administrators_of_order(database: Session, order: Pedido) -> None:
+def notify_administrators_of_order(
+    database: Session, order: Pedido, tipo: str = "NUEVO_PEDIDO"
+) -> None:
+    """Envía notificaciones de WhatsApp y Correo para un pedido y registra todos los logs."""
     # 1. Notificación vía WhatsApp con PDF adjunto
     pdf_bytes = _order_pdf(order)
-    notify_administrators_via_whatsapp(database, order, pdf_bytes)
+    notify_administrators_via_whatsapp(database, order, pdf_bytes, tipo=tipo)
 
     # 2. Notificación vía Correo Electrónico (SMTP)
+    smtp_start = time.perf_counter()
     smtp_config = _get_smtp_settings(database)
     if not smtp_config["configured"]:
+        dur_ms = int((time.perf_counter() - smtp_start) * 1000)
         logger.warning("Pedido %s creado sin notificación de correo: SMTP no está configurado", order.id)
+        _create_notification_log(
+            database=database,
+            pedido_id=order.id,
+            canal="EMAIL_ADMIN",
+            tipo=tipo,
+            destinatario="Administradores",
+            estado="OMITIDO",
+            mensaje="Servidor SMTP no está configurado en el sistema.",
+            duracion_ms=dur_ms,
+        )
         return
-    recipients = [
+
+    admin_recipients = [
         correo.strip()
         for correo in database.scalars(
             select(Usuario.correo)
@@ -312,12 +451,15 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
         if correo and correo.strip()
     ]
     customer_email = (order.cliente.correo or "").strip()
-    messages: list[EmailMessage] = []
-    if recipients:
-        messages.append(
-            _build_order_message(
+
+    # Envío a administradores
+    if admin_recipients:
+        admin_mail_start = time.perf_counter()
+        admin_dest = ", ".join(admin_recipients)
+        try:
+            admin_msg = _build_order_message(
                 order,
-                ", ".join(recipients),
+                admin_dest,
                 f"Nuevo pedido #{str(order.id).split('-')[0].upper()} | Distribuidora Tridente",
                 "NUEVO PEDIDO",
                 "Se registró un nuevo pedido y requiere revisión.",
@@ -325,10 +467,51 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
                 from_name=smtp_config["from_name"],
                 from_email=smtp_config["from_email"],
             )
+            with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
+                smtp.login(smtp_config["username"], smtp_config["password"])
+                smtp.send_message(admin_msg)
+            dur_ms = int((time.perf_counter() - admin_mail_start) * 1000)
+            _create_notification_log(
+                database=database,
+                pedido_id=order.id,
+                canal="EMAIL_ADMIN",
+                tipo=tipo,
+                destinatario=admin_dest,
+                estado="ENVIADO",
+                mensaje=f"Correo de nuevo pedido enviado exitosamente a {len(admin_recipients)} administrador(es).",
+                duracion_ms=dur_ms,
+            )
+        except Exception as e:
+            dur_ms = int((time.perf_counter() - admin_mail_start) * 1000)
+            logger.exception("Error al enviar correo a administradores para el pedido %s", order.id)
+            _create_notification_log(
+                database=database,
+                pedido_id=order.id,
+                canal="EMAIL_ADMIN",
+                tipo=tipo,
+                destinatario=admin_dest,
+                estado="FALLIDO",
+                mensaje=f"Fallo al enviar correo a administradores: {str(e)}",
+                error=traceback.format_exc(),
+                duracion_ms=dur_ms,
+            )
+    else:
+        _create_notification_log(
+            database=database,
+            pedido_id=order.id,
+            canal="EMAIL_ADMIN",
+            tipo=tipo,
+            destinatario="Administradores",
+            estado="OMITIDO",
+            mensaje="No hay correos de administradores activos configurados para recibir pedidos.",
+            duracion_ms=0,
         )
+
+    # Envío al cliente
     if customer_email:
-        messages.append(
-            _build_order_message(
+        cust_mail_start = time.perf_counter()
+        try:
+            cust_msg = _build_order_message(
                 order,
                 customer_email,
                 f"Confirmación de pedido #{str(order.id).split('-')[0].upper()} | Distribuidora Tridente",
@@ -338,14 +521,78 @@ def notify_administrators_of_order(database: Session, order: Pedido) -> None:
                 from_name=smtp_config["from_name"],
                 from_email=smtp_config["from_email"],
             )
+            with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
+                smtp.login(smtp_config["username"], smtp_config["password"])
+                smtp.send_message(cust_msg)
+            dur_ms = int((time.perf_counter() - cust_mail_start) * 1000)
+            _create_notification_log(
+                database=database,
+                pedido_id=order.id,
+                canal="EMAIL_CLIENTE",
+                tipo=tipo,
+                destinatario=customer_email,
+                estado="ENVIADO",
+                mensaje=f"Correo de confirmación de pedido enviado al cliente ({customer_email}).",
+                duracion_ms=dur_ms,
+            )
+        except Exception as e:
+            dur_ms = int((time.perf_counter() - cust_mail_start) * 1000)
+            logger.exception("Error al enviar correo al cliente %s para el pedido %s", customer_email, order.id)
+            _create_notification_log(
+                database=database,
+                pedido_id=order.id,
+                canal="EMAIL_CLIENTE",
+                tipo=tipo,
+                destinatario=customer_email,
+                estado="FALLIDO",
+                mensaje=f"Fallo al enviar correo al cliente: {str(e)}",
+                error=traceback.format_exc(),
+                duracion_ms=dur_ms,
+            )
+    else:
+        cust_name = order.cliente.nombre or "Cliente"
+        _create_notification_log(
+            database=database,
+            pedido_id=order.id,
+            canal="EMAIL_CLIENTE",
+            tipo=tipo,
+            destinatario=cust_name,
+            estado="OMITIDO",
+            mensaje="El cliente no tiene correo electrónico registrado.",
+            duracion_ms=0,
         )
-    if not messages:
-        logger.warning("Pedido %s creado sin destinatarios para notificación de correo", order.id)
-        return
+
+
+def _background_notification_runner(order_id: UUID, tipo: str = "NUEVO_PEDIDO") -> None:
+    """Función ejecutada en hilo independiente para no bloquear la respuesta HTTP."""
     try:
-        with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
-            smtp.login(smtp_config["username"], smtp_config["password"])
-            for message in messages:
-                smtp.send_message(message)
-    except (OSError, smtplib.SMTPException):
-        logger.exception("No fue posible notificar por correo el pedido %s", order.id)
+        from app.core.database import SessionLocal
+
+        with SessionLocal() as session:
+            order = session.scalar(
+                select(Pedido)
+                .options(
+                    selectinload(Pedido.detalles),
+                    selectinload(Pedido.estado),
+                    selectinload(Pedido.cliente),
+                    selectinload(Pedido.direccion),
+                )
+                .where(Pedido.id == order_id)
+            )
+            if not order:
+                logger.error("No se encontró el pedido %s para notificaciones en segundo plano.", order_id)
+                return
+
+            notify_administrators_of_order(session, order, tipo=tipo)
+    except Exception as e:
+        logger.exception("Excepción no controlada en background_notification_runner para pedido %s: %s", order_id, e)
+
+
+def dispatch_order_notifications_in_background(order_id: UUID, tipo: str = "NUEVO_PEDIDO") -> None:
+    """Despacha las notificaciones en un hilo daemon en segundo plano para respuesta ultra rápida."""
+    thread = threading.Thread(
+        target=_background_notification_runner,
+        args=(order_id, tipo),
+        daemon=True,
+    )
+    thread.start()

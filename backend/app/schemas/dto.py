@@ -273,3 +273,33 @@ class CreditOutput(ORMModel):
 
 class CreditPaymentInput(BaseModel):
     fecha_pago: date
+
+
+class PedidoNotificacionLogOutput(ORMModel):
+    id: UUID
+    pedido_id: UUID | None = None
+    canal: str
+    tipo: str
+    destinatario: str
+    estado: str
+    mensaje: str | None = None
+    error: str | None = None
+    duracion_ms: int | None = None
+    created_at: datetime
+
+
+class NotificationLogPage(BaseModel):
+    items: list[PedidoNotificacionLogOutput]
+    total: int
+    page: int
+    page_size: int
+
+
+class NotificationLogStats(BaseModel):
+    total: int
+    whatsapp_enviados: int
+    whatsapp_fallidos: int
+    email_enviados: int
+    email_fallidos: int
+    omitidos: int
+

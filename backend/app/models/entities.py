@@ -125,6 +125,9 @@ class Pedido(AuditMixin, Base):
     estado: Mapped[Estado] = relationship(back_populates="pedidos")
     detalles: Mapped[list["DetallePedido"]] = relationship(back_populates="pedido", cascade="all, delete-orphan")
     credito: Mapped["Credito | None"] = relationship(back_populates="pedido", uselist=False)
+    notificaciones_logs: Mapped[list["PedidoNotificacionLog"]] = relationship(
+        back_populates="pedido", cascade="all, delete-orphan", order_by="PedidoNotificacionLog.created_at.desc()"
+    )
 
 
 class Credito(AuditMixin, Base):
@@ -154,3 +157,26 @@ class DetallePedido(AuditMixin, Base):
     cantidad: Mapped[int] = mapped_column()
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     pedido: Mapped[Pedido] = relationship(back_populates="detalles")
+
+
+class PedidoNotificacionLog(AuditMixin, Base):
+    __tablename__ = "pedido_notificacion_logs"
+    __table_args__ = (
+        Index("ix_pedido_notificacion_logs_pedido_id", "pedido_id"),
+        Index("ix_pedido_notificacion_logs_canal_estado", "canal", "estado"),
+        Index("ix_pedido_notificacion_logs_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pedido_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pedidos.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    canal: Mapped[str] = mapped_column(String(30))  # "WHATSAPP", "EMAIL_ADMIN", "EMAIL_CLIENTE", "SISTEMA"
+    tipo: Mapped[str] = mapped_column(String(50))  # "NUEVO_PEDIDO", "REINTENTO", "CAMBIO_ESTADO"
+    destinatario: Mapped[str] = mapped_column(String(255))
+    estado: Mapped[str] = mapped_column(String(30))  # "ENVIADO", "FALLIDO", "OMITIDO"
+    mensaje: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duracion_ms: Mapped[int | None] = mapped_column(nullable=True)
+    pedido: Mapped[Pedido | None] = relationship(back_populates="notificaciones_logs")
+
