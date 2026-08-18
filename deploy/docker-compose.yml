@@ -22,6 +22,9 @@ services:
       - DATABASE_SAVE_DATA_CONTACTS=false
       - DATABASE_SAVE_DATA_CHATS=false
       - DATABASE_SAVE_DATA_LABELS=false
+      - REDIS_ENABLED=false
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
       - DATABASE_SAVE_DATA_HISTORIC=false
     volumes:
       - evolution_instances:/evolution/instances
