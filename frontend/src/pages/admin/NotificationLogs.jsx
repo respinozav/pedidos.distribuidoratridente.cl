@@ -246,7 +246,7 @@ export default function NotificationLogs() {
         </section>
 
         {/* Tarjetas de Métricas Resumen */}
-        <section className="dashboard-metrics mb-4">
+        <section className="dashboard-metrics log-metrics mb-4">
           <article>
             <span>TOTAL EVENTOS</span>
             <strong>{stats.total}</strong>

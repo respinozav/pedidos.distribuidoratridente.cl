@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, Boxes, CheckCircle2, ClipboardList, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { Activity, Boxes, CheckCircle2, ClipboardList, DollarSign, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
@@ -1159,7 +1159,7 @@ function AdminDashboard({ onLogout }) {
     [FolderTree, "Categorías", "categories", true],
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
-    [ClipboardList, "Créditos", "credits", true],
+    [DollarSign, "Créditos", "credits", true],
   ];
 
   return <main className="admin-app"><aside className={`admin-sidebar ${menuOpen ? "is-open" : ""}`}><div className="sidebar-brand"><BrandMark /><span>Distribuidora Tridente</span><button className="sidebar-close d-lg-none" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={20} /></button></div><p className="sidebar-label">OPERACION</p><nav className="sidebar-nav">{navigation.map(([Icon, label, key, enabled]) => <button key={label} className={section === key ? "active" : ""} disabled={!enabled} onClick={() => { setSection(key); setMenuOpen(false); }}><Icon size={19} /><span>{label}</span>{!enabled && <small>Pronto</small>}</button>)}<div className="sidebar-configuration"><button className={configurationOpen || section === "users" || section === "customers" || section === "settings" || section === "notification_logs" ? "active" : ""} onClick={() => setConfigurationOpen((current) => !current)}><Settings size={19} /><span>Configuración</span></button>{configurationOpen && <div className="sidebar-submenu"><button className={section === "users" ? "active" : ""} onClick={() => { setSection("users"); setMenuOpen(false); }}><Users size={17} /><span>Usuarios</span></button><button className={section === "customers" ? "active" : ""} onClick={() => { setSection("customers"); setMenuOpen(false); }}><Users size={17} /><span>Clientes</span></button><button className={section === "settings" ? "active" : ""} onClick={() => { setSection("settings"); setMenuOpen(false); }}><Settings size={17} /><span>Ajustes</span></button><button className={section === "notification_logs" ? "active" : ""} onClick={() => { setSection("notification_logs"); setMenuOpen(false); }}><Activity size={17} /><span>Logs Envíos</span></button></div>}</div></nav><div className="sidebar-bottom"><div className="sidebar-user"><span>RE</span><div><strong>Administrador</strong><small>Sesión activa</small></div></div><button className="logout-button" onClick={logout}><LogOut size={18} />Cerrar sesión</button></div></aside><div className="sidebar-backdrop d-lg-none" hidden={!menuOpen} onClick={() => setMenuOpen(false)} /><button className="icon-button admin-mobile-menu d-lg-none" type="button" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={21} /></button>
