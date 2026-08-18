@@ -43,7 +43,8 @@ export default function NotificationLogs() {
     hasta: today,
   });
 
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
   const [retrying, setRetrying] = useState(false);
 
@@ -81,6 +82,7 @@ export default function NotificationLogs() {
       });
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   }
 
@@ -91,17 +93,6 @@ export default function NotificationLogs() {
     }, 250);
     return () => clearTimeout(timer);
   }, [filters.canal, filters.estado, filters.search, filters.desde, filters.hasta]);
-
-  function clearFilters() {
-    setFilters({
-      canal: "",
-      estado: "",
-      search: "",
-      desde: monthStart,
-      hasta: today,
-    });
-    setPage(1);
-  }
 
   async function handleRetry(orderId) {
     if (!orderId || retrying) return;
@@ -131,7 +122,7 @@ export default function NotificationLogs() {
       });
       setTimeout(() => {
         loadStats();
-        loadLogs(page);
+        loadLogs(page, filters);
       }, 2000);
     } catch (err) {
       const isRateLimit = err.response?.status === 429;
@@ -211,7 +202,7 @@ export default function NotificationLogs() {
             className="btn btn-outline-secondary d-flex align-items-center gap-2"
             onClick={() => {
               loadStats();
-              loadLogs(page);
+              loadLogs(page, filters);
             }}
             disabled={loading}
           >
@@ -300,7 +291,7 @@ export default function NotificationLogs() {
             <span className="panel-count">{total} registros</span>
           </div>
 
-          {/* Filtros Alineados Sin Botón Buscar (Búsqueda al tipear) */}
+          {/* Filtros Alineados Sin Botón Buscar ni Limpiar */}
           <div className="order-history-filters log-filters">
             <label>
               Canal
@@ -341,16 +332,10 @@ export default function NotificationLogs() {
                 onChange={(e) => setFilters((curr) => ({ ...curr, search: e.target.value }))}
               />
             </label>
-
-            {(filters.canal || filters.estado || filters.search || filters.desde !== monthStart || filters.hasta !== today) && (
-              <button className="btn btn-link text-danger p-2" type="button" onClick={clearFilters}>
-                Limpiar
-              </button>
-            )}
           </div>
 
           {/* Grilla / Tabla con el mismo modelo de Pedidos y Productos */}
-          {loading ? (
+          {initialLoading ? (
             <p className="mt-4 text-secondary">Cargando registros de auditoría...</p>
           ) : logs.length ? (
             <>
@@ -403,7 +388,7 @@ export default function NotificationLogs() {
                     onClick={() => {
                       const newPage = page - 1;
                       setPage(newPage);
-                      loadLogs(newPage);
+                      loadLogs(newPage, filters);
                     }}
                   >
                     Anterior
@@ -414,7 +399,7 @@ export default function NotificationLogs() {
                     onClick={() => {
                       const newPage = page + 1;
                       setPage(newPage);
-                      loadLogs(newPage);
+                      loadLogs(newPage, filters);
                     }}
                   >
                     Siguiente

@@ -483,7 +483,7 @@ button, input { font: inherit; }
 .badge-email-client { background: #f3ebff; color: #702ac8; border: 1px solid #dcbcff; }
 .badge-system { background: #f0f4f8; color: #486581; border: 1px solid #d9e2ec; }
 
-.log-filters { grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(200px, 2fr) auto; margin-top: 1rem; }
+.log-filters { grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(200px, 2fr); margin-top: 1rem; }
 
 .log-table { font-size: .86rem; border-collapse: separate; border-spacing: 0; }
 .log-table th { background: #f8fafc; color: var(--muted); font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: .85rem .75rem; border-bottom: 1px solid var(--line); }
