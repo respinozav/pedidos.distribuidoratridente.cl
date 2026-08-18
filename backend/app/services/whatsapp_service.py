@@ -210,78 +210,103 @@ class WhatsAppService:
                 raise HTTPException(status_code=503, detail=f"Evolution API no disponible ({str(e)})")
 
     def send_message_sync(self, phone: str, text: str) -> dict:
-        """Envía un mensaje de texto síncrono."""
+        """Envía un mensaje de texto síncrono con manejo de timeout."""
         clean_phone = format_whatsapp_phone(phone)
         if not clean_phone:
             return {"status": "ERROR", "message": "Número telefónico inválido"}
-        with httpx.Client(timeout=15.0) as client:
-            payload = {
-                "number": clean_phone,
-                "text": text,
-                "delay": 1200,
-            }
-            response = client.post(
-                f"{self.base_url}/message/sendText/{self.instance_name}",
-                json=payload,
-                headers=self.headers,
-            )
-            try:
-                data = response.json()
-                logger.info("Resultado sendText WhatsApp (%s): %s", response.status_code, data)
-                return data
-            except Exception:
-                logger.warning("Respuesta sendText WhatsApp (%s): %s", response.status_code, response.text)
-                return {"status": response.status_code, "text": response.text}
+        try:
+            with httpx.Client(timeout=httpx.Timeout(10.0, connect=4.0)) as client:
+                payload = {
+                    "number": clean_phone,
+                    "text": text,
+                    "delay": 1200,
+                }
+                response = client.post(
+                    f"{self.base_url}/message/sendText/{self.instance_name}",
+                    json=payload,
+                    headers=self.headers,
+                )
+                try:
+                    data = response.json()
+                    logger.info("Resultado sendText WhatsApp (%s): %s", response.status_code, data)
+                    return data
+                except Exception:
+                    logger.warning("Respuesta sendText WhatsApp (%s): %s", response.status_code, response.text)
+                    return {"status": response.status_code, "text": response.text}
+        except httpx.TimeoutException as e:
+            logger.warning("Timeout al enviar texto por WhatsApp a %s: %s", clean_phone, e)
+            return {"status": "ERROR", "message": f"Tiempo de espera agotado al conectar con Evolution API (Timeout: {e})"}
+        except Exception as e:
+            logger.warning("Error al enviar texto por WhatsApp a %s: %s", clean_phone, e)
+            return {"status": "ERROR", "message": f"Error de red o conexión con Evolution API: {e}"}
 
     def send_pdf_document_sync(self, phone: str, pdf_bytes: bytes, filename: str, caption: str = "") -> dict:
-        """Envía un documento PDF adjunto con mensaje/caption."""
+        """Envía un documento PDF adjunto con mensaje/caption y fallback a texto en caso de timeout."""
         clean_phone = format_whatsapp_phone(phone)
         if not clean_phone:
             return {"status": "ERROR", "message": "Número telefónico inválido"}
+        
         base64_media = base64.b64encode(pdf_bytes).decode("utf-8")
-        with httpx.Client(timeout=25.0) as client:
-            payload = {
-                "number": clean_phone,
-                "mediatype": "document",
-                "mimetype": "application/pdf",
-                "caption": caption,
-                "media": base64_media,
-                "fileName": filename,
-            }
-            response = client.post(
-                f"{self.base_url}/message/sendMedia/{self.instance_name}",
-                json=payload,
-                headers=self.headers,
-            )
-            if response.status_code in (200, 201):
+        media_sent = False
+        try:
+            with httpx.Client(timeout=httpx.Timeout(12.0, connect=4.0)) as client:
+                payload = {
+                    "number": clean_phone,
+                    "mediatype": "document",
+                    "mimetype": "application/pdf",
+                    "caption": caption,
+                    "media": base64_media,
+                    "fileName": filename,
+                }
+                response = client.post(
+                    f"{self.base_url}/message/sendMedia/{self.instance_name}",
+                    json=payload,
+                    headers=self.headers,
+                )
+                if response.status_code in (200, 201):
+                    try:
+                        return response.json()
+                    except Exception:
+                        return {"status": "SUCCESS"}
+                logger.warning(
+                    "Fallo al enviar PDF por WhatsApp (status %s, resp: %s). Intentando texto de respaldo...",
+                    response.status_code,
+                    response.text,
+                )
+        except httpx.TimeoutException as e:
+            logger.warning("Timeout (%s) al subir PDF por WhatsApp a %s. Intentando envío como texto de respaldo...", e, clean_phone)
+        except Exception as e:
+            logger.warning("Error (%s) al enviar PDF por WhatsApp a %s. Intentando envío como texto de respaldo...", e, clean_phone)
+
+        # Fallback garantizado: enviar el resumen del pedido en texto plano si falla la subida del archivo PDF
+        return self.send_message_sync(clean_phone, caption)
+
+    async def send_message(self, phone: str, text: str) -> dict:
+        """Envía un mensaje de texto asíncrono con protección ante timeouts."""
+        clean_phone = format_whatsapp_phone(phone)
+        if not clean_phone:
+            return {"status": "ERROR", "message": "Número telefónico inválido"}
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=4.0)) as client:
+                payload = {
+                    "number": clean_phone,
+                    "text": text,
+                    "delay": 1200,
+                }
+                response = await client.post(
+                    f"{self.base_url}/message/sendText/{self.instance_name}",
+                    json=payload,
+                    headers=self.headers,
+                )
                 try:
                     return response.json()
                 except Exception:
-                    return {"status": "SUCCESS"}
-            # Si falla el envío de media, intentar enviar como texto de respaldo
-            logger.warning(
-                "Fallo al enviar PDF por WhatsApp (status %s, resp: %s). Enviando texto de respaldo.",
-                response.status_code,
-                response.text,
-            )
-            return self.send_message_sync(clean_phone, caption)
+                    return {"status": response.status_code, "text": response.text}
+        except httpx.TimeoutException as e:
+            logger.warning("Timeout al enviar mensaje asíncrono por WhatsApp a %s: %s", clean_phone, e)
+            return {"status": "ERROR", "message": f"Timeout en Evolution API: {e}"}
+        except Exception as e:
+            logger.warning("Error al enviar mensaje asíncrono por WhatsApp a %s: %s", clean_phone, e)
+            return {"status": "ERROR", "message": str(e)}
 
-
-    async def send_message(self, phone: str, text: str) -> dict:
-        """Envía un mensaje de texto asíncrono."""
-        clean_phone = format_whatsapp_phone(phone)
-        if not clean_phone:
-            return {"status": "ERROR", "message": "Número telefónico inválido"}
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            payload = {
-                "number": clean_phone,
-                "text": text,
-                "delay": 1200,
-            }
-            response = await client.post(
-                f"{self.base_url}/message/sendText/{self.instance_name}",
-                json=payload,
-                headers=self.headers,
-            )
-            return response.json()
 
