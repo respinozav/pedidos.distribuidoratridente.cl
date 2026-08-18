@@ -677,41 +677,6 @@ export default function SystemSettings() {
                           Al expirar este tiempo, el usuario o cliente deberá ingresar nuevamente sus credenciales.
                         </small>
                       </div>
-
-                      {/* Accesos directos / Presets */}
-                      <div className="mt-4 pt-3 border-top">
-                        <label className="form-label text-secondary small fw-bold d-block mb-2">
-                          Opciones rápidas predefinidas:
-                        </label>
-                        <div className="d-flex flex-wrap gap-2">
-                          {[
-                            { label: "15 min", value: 15 },
-                            { label: "30 min", value: 30 },
-                            { label: "1 hora (60 min)", value: 60 },
-                            { label: "8 horas (480 min)", value: 480 },
-                            { label: "24 horas (1440 min)", value: 1440 },
-                            { label: "7 días (10080 min)", value: 10080 },
-                          ].map((preset) => (
-                            <button
-                              key={preset.value}
-                              type="button"
-                              className={`btn btn-sm ${
-                                Number(settings.jwt_access_token_expire_minutes) === preset.value
-                                  ? "btn-primary"
-                                  : "btn-outline-secondary"
-                              }`}
-                              onClick={() =>
-                                setSettings((prev) => ({
-                                  ...prev,
-                                  jwt_access_token_expire_minutes: preset.value,
-                                }))
-                              }
-                            >
-                              {preset.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
                     </div>
                   </div>
 
