@@ -590,9 +590,31 @@ def order_notification_logs(order_id: UUID, database: DatabaseSession, _: AdminU
 
 @router.post("/admin/pedidos/{order_id}/reintentar-notificaciones", tags=["Logs Notificaciones"])
 def retry_order_notifications(order_id: UUID, database: DatabaseSession, _: AdminUser) -> dict[str, str]:
-    """Reenvía en segundo plano las notificaciones (WhatsApp y Correo) de un pedido existente."""
+    """Reenvía en segundo plano las notificaciones (WhatsApp y Correo) de un pedido existente con protección anti-spam."""
     order = database.get(Pedido, order_id)
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido no encontrado")
+
+    # Protección anti-spam: evitar reenvíos masivos en menos de 30 segundos
+    last_log = database.scalar(
+        select(PedidoNotificacionLog)
+        .where(PedidoNotificacionLog.pedido_id == order_id)
+        .order_by(PedidoNotificacionLog.created_at.desc())
+        .limit(1)
+    )
+    if last_log and last_log.created_at:
+        now = datetime.now(UTC)
+        created_at = last_log.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        elapsed_seconds = (now - created_at).total_seconds()
+        COOLDOWN_SECONDS = 30
+        if elapsed_seconds < COOLDOWN_SECONDS:
+            remaining = int(COOLDOWN_SECONDS - elapsed_seconds)
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                f"Por seguridad anti-spam, espera {remaining} segundo(s) antes de volver a reenviar notificaciones para este pedido.",
+            )
+
     dispatch_order_notifications_in_background(order_id, tipo="REINTENTO")
     return {"message": "Reintento de notificaciones iniciado en segundo plano"}

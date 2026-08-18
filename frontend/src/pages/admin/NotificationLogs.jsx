@@ -109,30 +109,45 @@ export default function NotificationLogs() {
   }
 
   async function handleRetry(orderId) {
-    if (!orderId) return;
+    if (!orderId || retrying) return;
+
+    const confirmResult = await Swal.fire({
+      title: "¿Reenviar notificaciones?",
+      text: "Se volverá a generar el comprobante PDF y se enviarán los avisos por WhatsApp y correo electrónico a administradores y cliente. Evita reenvíos repetitivos para prevenir bloqueos por spam.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#0f766e",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Sí, reenviar ahora",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
     setRetrying(true);
     try {
       await api.post(`/admin/pedidos/${orderId}/reintentar-notificaciones`);
       Swal.fire({
         icon: "success",
-        title: "Reintento iniciado",
-        text: "Las notificaciones se están procesando nuevamente en segundo plano.",
+        title: "Reintento en curso",
+        text: "Las notificaciones se están procesando en segundo plano.",
         timer: 2500,
         showConfirmButton: false,
       });
-      // Recargar stats y logs tras 1.5s
+      // Recargar stats y logs tras 2s
       setTimeout(() => {
         loadStats();
         loadLogs(page);
-      }, 1500);
+      }, 2000);
     } catch (err) {
+      const isRateLimit = err.response?.status === 429;
       Swal.fire({
-        icon: "error",
-        title: "No fue posible reintentar",
+        icon: isRateLimit ? "warning" : "error",
+        title: isRateLimit ? "Límite de reenvío alcanzado" : "No fue posible reintentar",
         text: err.response?.data?.detail ?? "Ocurrió un error al solicitar el reintento.",
       });
     } finally {
-      setRetrying(false);
+      setTimeout(() => setRetrying(false), 3000);
     }
   }
 
