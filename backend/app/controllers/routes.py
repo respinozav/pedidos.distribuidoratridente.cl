@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import AdminUser, CustomerUser, DatabaseSession
@@ -487,11 +487,14 @@ def list_notification_logs(
     if pedido_id:
         statement = statement.where(PedidoNotificacionLog.pedido_id == pedido_id)
     if search:
-        search_pattern = f"%{search.strip()}%"
+        cleaned_search = search.strip().lstrip("#").strip()
+        search_pattern = f"%{cleaned_search}%"
+        raw_pattern = f"%{search.strip()}%"
         statement = statement.where(
-            (PedidoNotificacionLog.destinatario.ilike(search_pattern))
-            | (PedidoNotificacionLog.mensaje.ilike(search_pattern))
-            | (PedidoNotificacionLog.error.ilike(search_pattern))
+            (cast(PedidoNotificacionLog.pedido_id, String).ilike(search_pattern))
+            | (PedidoNotificacionLog.destinatario.ilike(raw_pattern))
+            | (PedidoNotificacionLog.mensaje.ilike(raw_pattern))
+            | (PedidoNotificacionLog.error.ilike(raw_pattern))
         )
     if desde:
         try:

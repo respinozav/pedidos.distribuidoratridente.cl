@@ -56,18 +56,18 @@ export default function NotificationLogs() {
     }
   }
 
-  async function loadLogs(targetPage = page) {
+  async function loadLogs(targetPage = page, currentFilters = filters) {
     setLoading(true);
     try {
       const params = {
         page: targetPage,
         page_size: pageSize,
       };
-      if (filters.canal) params.canal = filters.canal;
-      if (filters.estado) params.estado = filters.estado;
-      if (filters.search.trim()) params.search = filters.search.trim();
-      if (filters.desde) params.desde = filters.desde;
-      if (filters.hasta) params.hasta = filters.hasta;
+      if (currentFilters.canal) params.canal = currentFilters.canal;
+      if (currentFilters.estado) params.estado = currentFilters.estado;
+      if (currentFilters.search && currentFilters.search.trim()) params.search = currentFilters.search.trim();
+      if (currentFilters.desde) params.desde = currentFilters.desde;
+      if (currentFilters.hasta) params.hasta = currentFilters.hasta;
 
       const { data } = await api.get("/admin/pedidos/logs", { params });
       setLogs(data.items);
@@ -87,7 +87,7 @@ export default function NotificationLogs() {
   useEffect(() => {
     loadStats();
     const timer = setTimeout(() => {
-      loadLogs(1);
+      loadLogs(1, filters);
     }, 250);
     return () => clearTimeout(timer);
   }, [filters.canal, filters.estado, filters.search, filters.desde, filters.hasta]);
@@ -366,7 +366,7 @@ export default function NotificationLogs() {
                 {logs.map((log) => (
                   <article className="admin-log-row" key={log.id}>
                     <strong>
-                      {log.pedido_id ? `Pedido #${log.pedido_id.slice(0, 8).toUpperCase()}` : "Sin pedido"}
+                      {log.pedido_id ? `Pedido ${log.pedido_id.slice(0, 8).toUpperCase()}` : "Sin pedido"}
                     </strong>
                     <span>{log.created_at ? dateFormatter.format(new Date(log.created_at)) : "-"}</span>
                     <div>{renderChannelBadge(log.canal)}</div>
@@ -476,7 +476,7 @@ export default function NotificationLogs() {
                   <small className="text-muted d-block">Pedido Asociado</small>
                   {selectedLog.pedido_id ? (
                     <span className="badge bg-light text-dark border font-monospace">
-                      #{selectedLog.pedido_id.slice(0, 8).toUpperCase()}
+                      Pedido {selectedLog.pedido_id.slice(0, 8).toUpperCase()}
                     </span>
                   ) : (
                     "Sin pedido"
