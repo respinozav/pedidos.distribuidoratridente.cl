@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
   Clock,
   Copy,
   Eye,
-  FileText,
   Mail,
   MessageSquare,
   RefreshCw,
   RotateCcw,
-  Search,
   X,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -90,13 +86,11 @@ export default function NotificationLogs() {
 
   useEffect(() => {
     loadStats();
-    loadLogs(1);
-  }, [filters.canal, filters.estado, filters.desde, filters.hasta]);
-
-  function handleSearchSubmit(e) {
-    e.preventDefault();
-    loadLogs(1);
-  }
+    const timer = setTimeout(() => {
+      loadLogs(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [filters.canal, filters.estado, filters.search, filters.desde, filters.hasta]);
 
   function clearFilters() {
     setFilters({
@@ -187,7 +181,7 @@ export default function NotificationLogs() {
     }
     return (
       <span className="badge-channel badge-system">
-        <FileText size={13} /> Sistema
+        Sistema
       </span>
     );
   }
@@ -306,8 +300,8 @@ export default function NotificationLogs() {
             <span className="panel-count">{total} registros</span>
           </div>
 
-          {/* Filtros */}
-          <div className="order-history-filters log-filters mt-3">
+          {/* Filtros Alineados Sin Botón Buscar (Búsqueda al tipear) */}
+          <div className="order-history-filters log-filters">
             <label>
               Canal
               <select
@@ -315,9 +309,9 @@ export default function NotificationLogs() {
                 value={filters.canal}
                 onChange={(e) => setFilters((curr) => ({ ...curr, canal: e.target.value }))}
               >
-                <option value="">Todos los canales</option>
+                <option value="">Todos</option>
                 <option value="WHATSAPP">WhatsApp</option>
-                <option value="EMAIL_ADMIN">Correo Administrador</option>
+                <option value="EMAIL_ADMIN">Correo Admin</option>
                 <option value="EMAIL_CLIENTE">Correo Cliente</option>
                 <option value="SISTEMA">Sistema</option>
               </select>
@@ -330,35 +324,28 @@ export default function NotificationLogs() {
                 value={filters.estado}
                 onChange={(e) => setFilters((curr) => ({ ...curr, estado: e.target.value }))}
               >
-                <option value="">Todos los estados</option>
+                <option value="">Todos</option>
                 <option value="ENVIADO">Enviado</option>
                 <option value="FALLIDO">Fallido</option>
                 <option value="OMITIDO">Omitido</option>
               </select>
             </label>
 
-            <label className="flex-grow-1">
-              Pedido / Búsqueda
-              <form onSubmit={handleSearchSubmit} className="d-flex gap-2">
-                <input
-                  className="form-control"
-                  type="search"
-                  placeholder="Código de pedido, destinatario o mensaje..."
-                  value={filters.search}
-                  onChange={(e) => setFilters((curr) => ({ ...curr, search: e.target.value }))}
-                />
-                <button className="btn btn-outline-primary" type="submit" title="Buscar">
-                  <Search size={16} />
-                </button>
-              </form>
+            <label>
+              Pedido
+              <input
+                className="form-control"
+                type="search"
+                placeholder="Ej. 4CB969B1 o destinatario"
+                value={filters.search}
+                onChange={(e) => setFilters((curr) => ({ ...curr, search: e.target.value }))}
+              />
             </label>
 
             {(filters.canal || filters.estado || filters.search || filters.desde !== monthStart || filters.hasta !== today) && (
-              <div className="d-flex align-items-end">
-                <button className="btn btn-link text-danger p-2" type="button" onClick={clearFilters}>
-                  Limpiar
-                </button>
-              </div>
+              <button className="btn btn-link text-danger p-2" type="button" onClick={clearFilters}>
+                Limpiar
+              </button>
             )}
           </div>
 
@@ -378,14 +365,9 @@ export default function NotificationLogs() {
                 </div>
                 {logs.map((log) => (
                   <article className="admin-log-row" key={log.id}>
-                    <div>
-                      <strong>
-                        {log.pedido_id ? `Pedido #${log.pedido_id.slice(0, 8).toUpperCase()}` : "Sin pedido"}
-                      </strong>
-                      <small className="text-muted text-truncate" title={log.destinatario}>
-                        {log.destinatario}
-                      </small>
-                    </div>
+                    <strong>
+                      {log.pedido_id ? `Pedido #${log.pedido_id.slice(0, 8).toUpperCase()}` : "Sin pedido"}
+                    </strong>
                     <span>{log.created_at ? dateFormatter.format(new Date(log.created_at)) : "-"}</span>
                     <div>{renderChannelBadge(log.canal)}</div>
                     <div>{renderStatusBadge(log.estado)}</div>

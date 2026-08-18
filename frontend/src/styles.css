@@ -477,16 +477,13 @@ button, input { font: inherit; }
 @media (max-width: 575px) { .admin-topbar { align-items: flex-start; } .topbar-actions .btn { font-size: 0; height: 38px; padding: .5rem; width: 38px; } .topbar-actions .btn svg { margin: 0; } .admin-summary { align-items: flex-start; flex-direction: column; gap: 1.5rem; } .summary-metric { border-left: 0; border-top: 1px solid #42698f; margin-left: 0; padding: 1rem 0 0; width: 100%; } .panel-heading { align-items: flex-start; flex-direction: column; } .category-form { grid-template-columns: 1fr; } .cart { position: static; } .dashboard-date-filters, .dashboard-metrics { grid-template-columns: 1fr; } .dashboard-metrics strong { font-size: 1.15rem; } .product-pagination { align-items: stretch; display: grid; grid-template-columns: 1fr 1fr; } .product-pagination small { grid-column: 1 / -1; margin: 0; text-align: center; } .product-pagination .btn { width: 100%; } .customer-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); } .customer-nav-title { grid-column: auto; } .customer-nav button { font-size: .74rem; justify-content: center; padding: .55rem .25rem; } .customer-welcome { display: none; } .customer-portal-header { min-height: 70px; } .customer-product-filters, .customer-product-filters + .search-field { display: block; margin-right: 0; width: 100%; } .order-detail-meta { align-items: flex-start; flex-direction: column; gap: .25rem; } .order-detail-lines > div { font-size: .78rem; gap: .4rem; grid-template-columns: minmax(0, 1fr) 45px 72px; } .order-detail-lines > div > :nth-child(3) { display: none; } .order-detail-lines > div > :nth-child(4) { text-align: right; } .account-address { align-items: stretch; flex-direction: column; } .account-address-actions { justify-content: stretch; } .account-address-actions .btn { flex: 1; } .product-form-grid { grid-template-columns: 1fr; } .product-form-wide { grid-column: auto; } }
 
 /* Notification Logs & Badges */
-.badge-channel { display: inline-flex; align-items: center; gap: .35rem; padding: .25rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+.badge-channel { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .55rem; border-radius: 99px; font-size: .72rem !important; font-weight: 750; line-height: 1; letter-spacing: .02rem; }
 .badge-whatsapp { background: #e6f9ed; color: #0f8a3c; border: 1px solid #b3eec6; }
 .badge-email-admin { background: #eaf4ff; color: #146cce; border: 1px solid #b8daff; }
 .badge-email-client { background: #f3ebff; color: #702ac8; border: 1px solid #dcbcff; }
 .badge-system { background: #f0f4f8; color: #486581; border: 1px solid #d9e2ec; }
 
-.badge-status-pill { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .55rem; border-radius: 999px; font-size: .76rem; font-weight: 600; }
-.status-success { background: #e3fcef; color: #0a6c38; }
-.status-failed { background: #ffe8e8; color: #c52828; }
-.status-skipped { background: #fff8e1; color: #a16207; }
+.log-filters { grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(200px, 2fr) auto; margin-top: 1rem; }
 
 .log-table { font-size: .86rem; border-collapse: separate; border-spacing: 0; }
 .log-table th { background: #f8fafc; color: var(--muted); font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: .85rem .75rem; border-bottom: 1px solid var(--line); }
