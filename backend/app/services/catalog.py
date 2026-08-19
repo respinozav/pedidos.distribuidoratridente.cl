@@ -267,7 +267,7 @@ def _build_catalog_pdf_internal(database: Session, is_public: bool, force_refres
     if is_public:
         query = query.where(Categoria.en_catalogo_publico.is_(True))
 
-    categories = list(database.scalars(query.order_by(Categoria.nombre)))
+    categories = list(database.scalars(query.order_by(Categoria.orden, Categoria.nombre)))
 
     cat_ids = [c.id for c in categories]
     all_products = list(

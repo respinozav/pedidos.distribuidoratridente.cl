@@ -131,11 +131,12 @@ button, input { font: inherit; }
 .form-control { border-color: #cbd7e5; min-height: 42px; }
 .form-control:focus { border-color: var(--blue); box-shadow: 0 0 0 .2rem rgb(20 108 206 / 15%); }
 .category-table, .product-table, .user-table, .customer-table, .admin-order-table, .credit-table, .admin-log-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.category-table-head, .category-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(180px, 1.4fr) minmax(90px, .8fr) minmax(110px, 1fr) 80px 80px; min-width: 540px; }
+.category-table-head, .category-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: 65px minmax(170px, 1.4fr) minmax(90px, .8fr) minmax(110px, 1fr) 80px 80px; min-width: 580px; }
 .category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04rem; padding: .75rem 1rem; text-transform: uppercase; }
 .category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row { align-items: center; border-top: 1px solid var(--line); color: var(--ink); font-size: .82rem; padding: .75rem 1rem; transition: background-color .15s ease; }
 .category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover { background: #f8fafc; }
 .category-percentage { color: var(--muted); font-size: .82rem; font-weight: 700; }
+.category-order-badge { align-items: center; background: #e0f2fe; border-radius: 4px; color: #0369a1; display: inline-flex; font-size: .8rem; font-weight: 750; height: 26px; justify-content: center; min-width: 32px; padding: 0 .4rem; }
 .category-name { align-items: center; display: flex; gap: .75rem; }
 .category-icon { align-items: center; background: var(--sky); border-radius: 5px; color: var(--blue); display: inline-flex; height: 32px; justify-content: center; width: 32px; }
 .status-active, .status-inactive { border-radius: 99px; font-size: .72rem !important; font-weight: 750; justify-self: start; line-height: 1; padding: .3rem .55rem; }

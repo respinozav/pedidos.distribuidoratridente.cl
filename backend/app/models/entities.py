@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -56,6 +56,7 @@ class Categoria(AuditMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nombre: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    orden: Mapped[int] = mapped_column(Integer, default=0)
     usa_porcentaje_cliente: Mapped[bool] = mapped_column(Boolean, default=True)
     porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -210,12 +210,18 @@ def list_categories(database: DatabaseSession, active_only: bool = True) -> list
     statement = select(Categoria).where(Categoria.eliminado_at.is_(None))
     if active_only:
         statement = statement.where(Categoria.activo.is_(True))
-    return list(database.scalars(statement.order_by(Categoria.nombre)))
+    return list(database.scalars(statement.order_by(Categoria.orden, Categoria.nombre)))
 
 
 @router.post("/categorias", response_model=CategoryOutput, status_code=status.HTTP_201_CREATED, tags=["Categorias"])
 def create_category(payload: CategoryInput, database: DatabaseSession, _: AdminUser) -> Categoria:
-    entity = Repository(Categoria, database).add(Categoria(**payload.model_dump()))
+    data = payload.model_dump()
+    if not data.get("orden") or data["orden"] <= 0:
+        max_order = database.scalar(
+            select(func.coalesce(func.max(Categoria.orden), 0)).where(Categoria.eliminado_at.is_(None))
+        ) or 0
+        data["orden"] = max_order + 1
+    entity = Repository(Categoria, database).add(Categoria(**data))
     database.commit()
     invalidate_catalog_cache()
     return entity
@@ -226,7 +232,25 @@ def update_category(category_id: UUID, payload: CategoryInput, database: Databas
     entity = Repository(Categoria, database).get(category_id)
     if not entity or entity.eliminado_at:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria no encontrada")
-    Repository(Categoria, database).update(entity, payload.model_dump())
+
+    data = payload.model_dump()
+    new_order = data.get("orden")
+    old_order = entity.orden
+
+    if new_order is None or new_order <= 0:
+        data["orden"] = old_order
+    elif new_order != old_order:
+        target_cat = database.scalar(
+            select(Categoria).where(
+                Categoria.orden == new_order,
+                Categoria.id != category_id,
+                Categoria.eliminado_at.is_(None),
+            )
+        )
+        if target_cat:
+            target_cat.orden = old_order
+
+    Repository(Categoria, database).update(entity, data)
     database.commit()
     invalidate_catalog_cache()
     return entity

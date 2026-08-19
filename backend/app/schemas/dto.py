@@ -18,6 +18,7 @@ class Page(BaseModel):
 
 class CategoryInput(BaseModel):
     nombre: str = Field(min_length=2, max_length=120)
+    orden: int | None = Field(default=None)
     usa_porcentaje_cliente: bool = True
     porcentaje: Decimal = Field(default=0, ge=0, le=100, max_digits=5, decimal_places=2)
     activo: bool = True
