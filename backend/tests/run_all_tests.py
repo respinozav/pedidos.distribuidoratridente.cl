@@ -1,6 +1,7 @@
 import tests.test_catalog as tc
 import tests.test_ordering as to
 import tests.test_notifications as tn
+import tests.test_publicidad as tp
 
 
 class MonkeyPatch:
@@ -23,7 +24,8 @@ def main():
     tn.test_product_detail_label_compacts_code_on_same_line()
     tn.test_order_pdf_contains_valid_header()
     tn.test_notify_administrators_only_sends_to_recibe_pedido_users(mp)
-    print(">>> ALL 6 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    tp.test_publicidad_crud_cycle()
+    print(">>> ALL 7 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

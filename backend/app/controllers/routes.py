@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession
 from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
-from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Rol, Usuario
+from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Publicidad, Rol, Usuario
 from app.repositories.base import Repository
 from app.repositories.system_settings_repository import SystemSettingsRepository
 from app.schemas.dto import (
@@ -34,6 +34,9 @@ from app.schemas.dto import (
     ProductInput,
     ProductOutput,
     ProductPage,
+    PublicidadInput,
+    PublicidadOutput,
+    PublicidadProductoOutput,
     RoleOutput,
     TokenOutput,
     UserCreate,
@@ -294,7 +297,7 @@ def list_products(
     search: str | None = Query(default=None, max_length=180),
     customer_id: UUID | None = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=10, ge=1, le=10),
+    page_size: int = Query(default=10, ge=1, le=500),
 ) -> ProductPage:
     statement = select(Producto).options(selectinload(Producto.categoria)).where(Producto.eliminado_at.is_(None), Producto.activo.is_(True))
     if category_id:
@@ -320,7 +323,7 @@ def list_admin_products(
     search: str | None = Query(default=None, max_length=180),
     stock_lt: int | None = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=10, ge=1, le=10),
+    page_size: int = Query(default=10, ge=1, le=500),
 ) -> ProductPage:
     statement = select(Producto).where(Producto.eliminado_at.is_(None))
     if category_id:
@@ -655,4 +658,151 @@ def retry_order_notifications(order_id: UUID, database: DatabaseSession, _: Admi
             )
 
     dispatch_order_notifications_in_background(order_id, tipo="REINTENTO")
-    return {"message": "Reintento de notificaciones iniciado en segundo plano"}
+    return {"message": "Reintento de notificaciones iniciado en segundo plano"}
+
+
+def _serialize_publicidad(publicidad: Publicidad, customer: Cliente | None = None) -> PublicidadOutput:
+    producto_dto = None
+    if publicidad.producto and not publicidad.producto.eliminado_at:
+        precio_cliente = customer_product_price(publicidad.producto, customer) if customer else None
+        producto_dto = PublicidadProductoOutput(
+            id=publicidad.producto.id,
+            codigo=publicidad.producto.codigo,
+            nombre=publicidad.producto.nombre,
+            precio=publicidad.producto.precio,
+            precio_cliente=precio_cliente,
+            cantidad=publicidad.producto.cantidad,
+            imagen_url=publicidad.producto.imagen_url,
+            activo=publicidad.producto.activo,
+        )
+
+    return PublicidadOutput(
+        id=publicidad.id,
+        producto_id=publicidad.producto_id,
+        titulo=publicidad.titulo,
+        subtitulo=publicidad.subtitulo,
+        etiqueta_1=publicidad.etiqueta_1,
+        etiqueta_roja=publicidad.etiqueta_roja,
+        texto_boton=publicidad.texto_boton,
+        color_fondo=publicidad.color_fondo,
+        orden=publicidad.orden,
+        producto=producto_dto,
+        created_at=publicidad.created_at,
+        updated_at=publicidad.updated_at,
+    )
+
+
+@router.get("/publicidades", response_model=list[PublicidadOutput], tags=["Publicidad"])
+def list_public_publicidades(
+    database: DatabaseSession, customer_id: UUID | None = None
+) -> list[PublicidadOutput]:
+    """Obtiene los banners publicitarios visibles para los clientes y catálogo."""
+    customer = database.get(Cliente, customer_id) if customer_id else None
+    statement = (
+        select(Publicidad)
+        .options(selectinload(Publicidad.producto).selectinload(Producto.categoria))
+        .order_by(Publicidad.orden.asc(), Publicidad.created_at.desc())
+    )
+    banners = database.scalars(statement)
+    return [_serialize_publicidad(banner, customer) for banner in banners]
+
+
+@router.get("/admin/publicidades", response_model=list[PublicidadOutput], tags=["Publicidad"])
+def list_admin_publicidades(
+    database: DatabaseSession, _: AdminUser
+) -> list[PublicidadOutput]:
+    """Obtiene todos los banners publicitarios para gestión administrativa."""
+    statement = (
+        select(Publicidad)
+        .options(selectinload(Publicidad.producto))
+        .order_by(Publicidad.orden.asc(), Publicidad.created_at.desc())
+    )
+    banners = database.scalars(statement)
+    return [_serialize_publicidad(banner) for banner in banners]
+
+
+@router.post("/admin/publicidades", response_model=PublicidadOutput, status_code=status.HTTP_201_CREATED, tags=["Publicidad"])
+def create_publicidad(
+    payload: PublicidadInput, database: DatabaseSession, _: AdminUser
+) -> PublicidadOutput:
+    """Crea un nuevo banner publicitario."""
+    if payload.producto_id:
+        producto = database.get(Producto, payload.producto_id)
+        if not producto or producto.eliminado_at:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "El producto vinculado no existe")
+
+    values = payload.model_dump()
+
+    max_order = database.scalar(
+        select(func.coalesce(func.max(Publicidad.orden), 0))
+    ) or 0
+
+    if not values.get("orden") or values["orden"] <= 0:
+        values["orden"] = max_order + 1
+    else:
+        existing_with_order = database.scalar(
+            select(Publicidad).where(Publicidad.orden == values["orden"])
+        )
+        if existing_with_order:
+            values["orden"] = max_order + 1
+
+    entity = Repository(Publicidad, database).add(Publicidad(**values))
+    database.commit()
+    database.refresh(entity)
+    if entity.producto_id:
+        entity.producto = database.get(Producto, entity.producto_id)
+    return _serialize_publicidad(entity)
+
+
+@router.put("/admin/publicidades/{publicidad_id}", response_model=PublicidadOutput, tags=["Publicidad"])
+def update_publicidad(
+    publicidad_id: UUID, payload: PublicidadInput, database: DatabaseSession, _: AdminUser
+) -> PublicidadOutput:
+    """Actualiza un banner publicitario existente."""
+    entity = database.get(Publicidad, publicidad_id)
+    if not entity:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Publicidad no encontrada")
+
+    if payload.producto_id:
+        producto = database.get(Producto, payload.producto_id)
+        if not producto or producto.eliminado_at:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "El producto vinculado no existe")
+
+    values = payload.model_dump()
+
+    new_order = values.get("orden")
+    old_order = entity.orden
+
+    if new_order is None or new_order <= 0:
+        values["orden"] = old_order
+    elif new_order != old_order:
+        target_pub = database.scalar(
+            select(Publicidad).where(
+                Publicidad.orden == new_order,
+                Publicidad.id != publicidad_id,
+            )
+        )
+        if target_pub:
+            target_pub.orden = old_order
+
+    Repository(Publicidad, database).update(entity, values)
+    database.commit()
+    database.refresh(entity)
+    if entity.producto_id:
+        entity.producto = database.get(Producto, entity.producto_id)
+    return _serialize_publicidad(entity)
+
+
+@router.delete("/admin/publicidades/{publicidad_id}", tags=["Publicidad"])
+def delete_publicidad(
+    publicidad_id: UUID, database: DatabaseSession, _: AdminUser
+) -> dict[str, str]:
+    """Elimina definitivamente un banner publicitario de la base de datos."""
+    entity = database.get(Publicidad, publicidad_id)
+    if not entity:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Publicidad no encontrada")
+
+    database.delete(entity)
+    database.commit()
+    return {"message": "Publicidad eliminada correctamente"}
+

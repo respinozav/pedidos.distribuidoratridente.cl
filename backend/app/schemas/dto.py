@@ -304,3 +304,33 @@ class NotificationLogStats(BaseModel):
     email_fallidos: int
     omitidos: int
 
+
+class PublicidadProductoOutput(ORMModel):
+    id: UUID
+    codigo: str
+    nombre: str
+    precio: Decimal
+    precio_cliente: Decimal | None = None
+    cantidad: int = 0
+    imagen_url: str | None = None
+    activo: bool = True
+
+
+class PublicidadInput(BaseModel):
+    producto_id: UUID | None = None
+    titulo: str = Field(min_length=2, max_length=200)
+    subtitulo: str | None = None
+    etiqueta_1: str | None = Field(default=None, max_length=255)
+    etiqueta_roja: str = Field(default="OFERTA", max_length=50)
+    texto_boton: str = Field(default="Aprovechar Beneficio →", max_length=80)
+    color_fondo: str = Field(default="#082620", max_length=60)
+    orden: int = Field(default=0)
+
+
+class PublicidadOutput(PublicidadInput, ORMModel):
+    id: UUID
+    producto: PublicidadProductoOutput | None = None
+    created_at: datetime
+    updated_at: datetime
+
+

@@ -66,6 +66,7 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
         def is_connected_sync(self):
             return False
 
+    monkeypatch.setattr("app.services.notifications.WhatsAppService", FakeWhatsAppService)
     monkeypatch.setattr("app.services.whatsapp_service.WhatsAppService", FakeWhatsAppService)
     monkeypatch.setattr(
         "app.services.notifications.get_settings",

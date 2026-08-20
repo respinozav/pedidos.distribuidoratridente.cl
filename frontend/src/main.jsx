@@ -1,6 +1,6 @@
 import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, Boxes, CheckCircle2, ClipboardList, DollarSign, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { Activity, Boxes, CheckCircle2, ClipboardList, DollarSign, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
@@ -8,6 +8,8 @@ import Swal from "sweetalert2";
 import { api, clearSessionStorage, getStoredSession, saveSessionStorage, setAdminToken, setCustomerToken } from "./services/api";
 import SystemSettings from "./pages/admin/SystemSettings";
 import NotificationLogs from "./pages/admin/NotificationLogs";
+import PublicidadManager from "./pages/admin/PublicidadManager";
+import PromoBannerCarousel from "./components/PromoBannerCarousel";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
@@ -1171,10 +1173,11 @@ function AdminDashboard({ onLogout }) {
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
     [DollarSign, "Créditos", "credits", true],
+    [Megaphone, "Publicidad", "publicidad", true],
   ];
 
   return <main className="admin-app"><aside className={`admin-sidebar ${menuOpen ? "is-open" : ""}`}><div className="sidebar-brand"><BrandMark /><span>Distribuidora Tridente</span><button className="sidebar-close d-lg-none" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={20} /></button></div><p className="sidebar-label">OPERACION</p><nav className="sidebar-nav">{navigation.map(([Icon, label, key, enabled]) => <button key={label} className={section === key ? "active" : ""} disabled={!enabled} onClick={() => { setSection(key); setConfigurationOpen(false); setMenuOpen(false); }}><Icon size={19} /><span>{label}</span>{!enabled && <small>Pronto</small>}</button>)}<div className="sidebar-configuration"><button className={configurationOpen || section === "users" || section === "customers" || section === "settings" || section === "notification_logs" ? "active" : ""} onClick={() => setConfigurationOpen((current) => !current)}><Settings size={19} /><span>Configuración</span></button>{configurationOpen && <div className="sidebar-submenu"><button className={section === "users" ? "active" : ""} onClick={() => { setSection("users"); setMenuOpen(false); }}><Users size={17} /><span>Usuarios</span></button><button className={section === "customers" ? "active" : ""} onClick={() => { setSection("customers"); setMenuOpen(false); }}><Users size={17} /><span>Clientes</span></button><button className={section === "settings" ? "active" : ""} onClick={() => { setSection("settings"); setMenuOpen(false); }}><Settings size={17} /><span>Ajustes</span></button><button className={section === "notification_logs" ? "active" : ""} onClick={() => { setSection("notification_logs"); setMenuOpen(false); }}><Activity size={17} /><span>Logs Envíos</span></button></div>}</div></nav><div className="sidebar-bottom"><div className="sidebar-user"><span>RE</span><div><strong>Administrador</strong><small>Sesión activa</small></div></div><button className="logout-button" onClick={logout}><LogOut size={18} />Cerrar sesión</button></div></aside><div className="sidebar-backdrop d-lg-none" hidden={!menuOpen} onClick={() => setMenuOpen(false)} /><button className="icon-button admin-mobile-menu d-lg-none" type="button" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={21} /></button>
-    {section === "summary" ? <section className="admin-workspace"><AdminSalesDashboard /></section> : section === "products" ? <section className="admin-workspace"><ProductManager categories={categories} /></section> : section === "orders" ? <section className="admin-workspace"><AdminOrderManager /></section> : section === "credits" ? <section className="admin-workspace"><CreditManager /></section> : section === "notification_logs" ? <section className="admin-workspace"><NotificationLogs /></section> : section === "users" ? <section className="admin-workspace"><UserManager /></section> : section === "customers" ? <section className="admin-workspace"><CustomerManager /></section> : section === "settings" ? <section className="admin-workspace"><SystemSettings /></section> : <>
+    {section === "summary" ? <section className="admin-workspace"><AdminSalesDashboard /></section> : section === "products" ? <section className="admin-workspace"><ProductManager categories={categories} /></section> : section === "orders" ? <section className="admin-workspace"><AdminOrderManager /></section> : section === "credits" ? <section className="admin-workspace"><CreditManager /></section> : section === "publicidad" ? <section className="admin-workspace"><PublicidadManager /></section> : section === "notification_logs" ? <section className="admin-workspace"><NotificationLogs /></section> : section === "users" ? <section className="admin-workspace"><UserManager /></section> : section === "customers" ? <section className="admin-workspace"><CustomerManager /></section> : section === "settings" ? <section className="admin-workspace"><SystemSettings /></section> : <>
 
     <section className="admin-workspace"><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CATALOGO</p><h1>Categorías</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de Categoría</span><button className="btn btn-primary" onClick={() => document.getElementById("category-name")?.focus()}><Plus size={18} />Nueva categoría</button></div></header>
       <div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">INVENTARIO</p><h2>Organiza tu Categoría</h2><p>Las categorías agrupan los productos visibles para tus clientes.</p></div><div className="summary-metric"><span>{categories.length}</span><small>Categorías registradas</small></div></section>
@@ -1453,6 +1456,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
   const [totalProducts, setTotalProducts] = useState(0);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [publicidades, setPublicidades] = useState([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [cart, setCart] = useState([]);
@@ -1464,6 +1468,15 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  async function loadPublicidades() {
+    try {
+      const { data } = await api.get("/publicidades", { params: { customer_id: customer.id } });
+      setPublicidades(data);
+    } catch {
+      // Ignorar si falla la publicidad
+    }
+  }
 
   async function loadProducts() {
     try {
@@ -1481,6 +1494,10 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     const timer = setTimeout(loadProducts, 200);
     return () => clearTimeout(timer);
   }, [query, selectedCategory, customer.id, page]);
+
+  useEffect(() => {
+    loadPublicidades();
+  }, [customer.id]);
 
   useEffect(() => {
     api.get("/categorias").then(({ data }) => setCategories(data)).catch(() => setError("No fue posible cargar las categorías."));
@@ -1660,6 +1677,19 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     setNotice(`${product.nombre} agregado al pedido.`);
   }
 
+  function handleAddFromBanner(product, qty = 1) {
+    const quantity = Math.max(1, parseInt(qty) || 1);
+    setCart((current) => {
+      const line = current.find((item) => item.id === product.id);
+      return line
+        ? current.map((item) =>
+            item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+          )
+        : [...current, { ...product, quantity }];
+    });
+    setNotice(`${quantity} un. de ${product.nombre} agregadas al pedido.`);
+  }
+
   function updateQuantity(productId, quantity) {
     setCart((current) => quantity < 1 ? current.filter((item) => item.id !== productId) : current.map((item) => item.id === productId ? { ...item, quantity } : item));
   }
@@ -1809,8 +1839,17 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
           )}
           {error && <div className="alert alert-danger">{error}</div>}
           {section === "create" ? (
-            <div className="row g-4">
-              <section className="col-xl-8">
+            <>
+              {publicidades.length > 0 && (
+                <div className="mb-4">
+                  <PromoBannerCarousel
+                    banners={publicidades}
+                    onAddToCart={handleAddFromBanner}
+                  />
+                </div>
+              )}
+              <div className="row g-4">
+                <section className="col-xl-8">
                 <div className="search-field">
                   <Search size={20} />
                   <input
@@ -1928,6 +1967,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
                 </div>
               </aside>
             </div>
+            </>
           ) : (
             <section className="content-panel">
               <div className="panel-heading">

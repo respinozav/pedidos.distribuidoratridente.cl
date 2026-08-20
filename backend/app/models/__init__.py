@@ -7,6 +7,7 @@ from app.models.entities import (
     Pedido,
     PedidoNotificacionLog,
     Producto,
+    Publicidad,
     Rol,
     Usuario,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "Pedido",
     "PedidoNotificacionLog",
     "Producto",
+    "Publicidad",
     "Rol",
     "SystemSettings",
     "Usuario",

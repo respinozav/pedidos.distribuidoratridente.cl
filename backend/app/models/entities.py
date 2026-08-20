@@ -181,3 +181,26 @@ class PedidoNotificacionLog(AuditMixin, Base):
     duracion_ms: Mapped[int | None] = mapped_column(nullable=True)
     pedido: Mapped[Pedido | None] = relationship(back_populates="notificaciones_logs")
 
+
+class Publicidad(AuditMixin, Base):
+    __tablename__ = "publicidades"
+    __table_args__ = (
+        Index("ix_publicidades_orden", "orden"),
+        Index("ix_publicidades_producto_id", "producto_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    producto_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("productos.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    titulo: Mapped[str] = mapped_column(String(200))
+    subtitulo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    etiqueta_1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    etiqueta_roja: Mapped[str] = mapped_column(String(50), default="OFERTA")
+    texto_boton: Mapped[str] = mapped_column(String(80), default="Aprovechar Beneficio →")
+    color_fondo: Mapped[str] = mapped_column(String(60), default="#082620")
+    orden: Mapped[int] = mapped_column(Integer, default=0)
+
+    producto: Mapped[Producto | None] = relationship("Producto")
+
+
