@@ -1,4 +1,4 @@
-import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
+import React, { Component, StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Activity, Boxes, CheckCircle2, ClipboardList, DollarSign, Eye, FileText, FolderTree, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
 
@@ -821,25 +821,60 @@ function AdminOrderManager() {
     }
   }, [selectedOrder]);
 
+  function getOrderStateName(order) {
+    if (!order) return "";
+    if (typeof order.estado === "string") return order.estado;
+    return order.estado?.nombre || "";
+  }
+
   function availableTransitions(order) {
-    const transitions = { Pedido: ["Despachado", "Cancelado"], Despachado: ["Entregado", "Cancelado"] };
-    return transitions[order.estado.nombre] ?? [];
+    if (!order) return [];
+    const stateName = getOrderStateName(order)?.trim();
+    const transitions = {
+      Pedido: ["Despachado", "Cancelado"],
+      Pendiente: ["Despachado", "Cancelado"],
+      Nuevo: ["Despachado", "Cancelado"],
+      Despachado: ["Entregado", "Cancelado"],
+    };
+    return transitions[stateName] ?? [];
   }
 
   async function changeOrderStatus() {
     if (!confirmation) return;
-    const nextState = states.find((state) => state.nombre === confirmation.nextState);
+    const targetState = confirmation.nextState?.trim().toLowerCase();
+    let nextState = states.find((state) => state.nombre?.trim().toLowerCase() === targetState);
     if (!nextState) {
-      setError("No fue posible identificar el estado seleccionado.");
+      try {
+        const { data: freshStates } = await api.get("/estados");
+        setStates(freshStates);
+        nextState = freshStates.find((state) => state.nombre?.trim().toLowerCase() === targetState);
+      } catch {
+        // ignore
+      }
+    }
+    if (!nextState) {
+      Swal.fire({
+        icon: "error",
+        title: "Estado no disponible",
+        text: `No fue posible encontrar el estado "${confirmation.nextState}" en el sistema.`,
+      });
       setConfirmation(null);
       return;
     }
     if (confirmation.nextState === "Entregado" && deliveryPayment === null) {
-      setError("Indica si el cliente pagó el pedido.");
+      Swal.fire({
+        icon: "warning",
+        title: "Pago requerido",
+        text: "Indica si el cliente pagó el pedido.",
+      });
       return;
     }
     if (confirmation.nextState === "Entregado" && !deliveryPayment && (!Number.isInteger(Number(creditDays)) || Number(creditDays) < 1)) {
-      setError("Indica una cantidad válida de días de crédito.");
+      Swal.fire({
+        icon: "warning",
+        title: "Días de crédito requeridos",
+        text: "Indica una cantidad válida de días de crédito (al menos 1 día).",
+      });
       return;
     }
     setUpdatingState(true);
@@ -852,13 +887,24 @@ function AdminOrderManager() {
       const { data } = await api.patch(`/pedidos/${confirmation.order.id}/estado`, payload);
       setOrders((current) => current.map((order) => order.id === data.id ? data : order));
       setSelectedOrder(data);
-      setNotice(`Pedido ${data.id.slice(0, 8).toUpperCase()} actualizado a ${data.estado.nombre}.`);
+      Swal.fire({
+        icon: "success",
+        title: "Estado actualizado",
+        text: `Pedido ${data.id?.slice(0, 8).toUpperCase()} actualizado a ${getOrderStateName(data)}.`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
       setError("");
+      setNotice("");
       setConfirmation(null);
       setDeliveryPayment(null);
       setCreditDays("");
     } catch (requestError) {
-      setError(requestError.response?.data?.detail ?? "No fue posible actualizar el estado del pedido.");
+      Swal.fire({
+        icon: "error",
+        title: "Error al actualizar",
+        text: requestError.response?.data?.detail ?? "No fue posible actualizar el estado del pedido.",
+      });
       setConfirmation(null);
     } finally {
       setUpdatingState(false);
@@ -866,59 +912,24 @@ function AdminOrderManager() {
   }
 
   async function exportOrderPdf(order) {
-    const code = order.id.slice(0, 8).toUpperCase();
-    const { data } = await api.get(`/pedidos/${order.id}/pdf`, { responseType: "blob" });
-    const url = URL.createObjectURL(data);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `pedido-${code}.pdf`;
-    link.click();
-    URL.revokeObjectURL(url);
+    if (!order) return;
+    const code = order.id?.slice(0, 8).toUpperCase() || "ORDEN";
+    try {
+      const { data } = await api.get(`/pedidos/${order.id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pedido-${code}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      Swal.fire({
+        icon: "error",
+        title: "Error al exportar PDF",
+        text: "No fue posible descargar el comprobante en PDF.",
+      });
+    }
   }
-
-  useEffect(() => {
-    if (!selectedOrder) return undefined;
-    const actions = document.querySelector(".admin-app .order-detail-modal .order-state-actions");
-    if (!actions || actions.querySelector(".export-order-pdf")) return undefined;
-    const button = document.createElement("button");
-    button.className = "btn btn-outline-primary export-order-pdf";
-    button.type = "button";
-    button.textContent = "Exportar PDF";
-    const exportPdf = () => exportOrderPdf(selectedOrder);
-    button.addEventListener("click", exportPdf);
-    actions.prepend(button);
-    return () => {
-      button.removeEventListener("click", exportPdf);
-      button.remove();
-    };
-  }, [selectedOrder]);
-
-  useEffect(() => {
-    const messageText = notice || error;
-    if (!selectedOrder || !messageText) return undefined;
-    const body = document.querySelector(".admin-app .order-detail-modal .modal-body-custom");
-    if (!body || body.querySelector(".order-detail-notice")) return undefined;
-    const alert = document.createElement("div");
-    alert.className = `alert alert-${notice ? "success" : "danger"} order-detail-notice`;
-    alert.setAttribute("role", notice ? "status" : "alert");
-    const message = document.createElement("span");
-    message.textContent = messageText;
-    const dismiss = document.createElement("button");
-    dismiss.className = "btn-close";
-    dismiss.type = "button";
-    dismiss.setAttribute("aria-label", "Cerrar mensaje");
-    const dismissMessage = () => {
-      setNotice("");
-      setError("");
-    };
-    dismiss.addEventListener("click", dismissMessage);
-    alert.append(message, dismiss);
-    body.prepend(alert);
-    return () => {
-      dismiss.removeEventListener("click", dismissMessage);
-      alert.remove();
-    };
-  }, [selectedOrder, notice, error]);
 
   useEffect(() => {
     setOrderPage(1);
@@ -929,8 +940,9 @@ function AdminOrderManager() {
     const createdAt = order.created_at ? new Date(order.created_at) : null;
     const from = filters.desde ? new Date(`${filters.desde}T00:00:00`) : null;
     const to = filters.hasta ? new Date(`${filters.hasta}T23:59:59.999`) : null;
-    return order.estado.nombre === filters.estado
-      && (!code || order.id.slice(0, 8).toUpperCase().includes(code))
+    const stateName = getOrderStateName(order);
+    return stateName.toLowerCase() === filters.estado.toLowerCase()
+      && (!code || order.id?.slice(0, 8).toUpperCase().includes(code))
       && (!from || (createdAt && createdAt >= from))
       && (!to || (createdAt && createdAt <= to));
   });
@@ -939,7 +951,12 @@ function AdminOrderManager() {
   const paginatedOrders = visibleOrders.slice((orderPage - 1) * pageSize, orderPage * pageSize);
 
   const dateFormatter = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="order-history-filters"><label>Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label>Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label>Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => <article className="admin-order-row" key={order.id}><div><strong>Pedido {order.id.slice(0, 8).toUpperCase()}</strong><small>{order.detalles.length} productos</small></div><div><strong>{order.cliente.nombre || order.cliente.rut || order.cliente.celular || "Cliente"}</strong><small>{order.cliente.rut || order.cliente.celular || "Sin identificador"}</small></div><span>{order.created_at ? dateFormatter.format(new Date(order.created_at)) : "-"}</span><span className={`order-status order-${order.estado.nombre.toLowerCase()}`}>{order.estado.nombre}</span><strong>{money.format(order.total)}</strong><button className="icon-button category-edit" type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver detalle del pedido ${order.id.slice(0, 8).toUpperCase()}`}><Eye size={16} /></button></article>)}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente.nombre || selectedOrder.cliente.rut || "Cliente"}</span><span>{selectedOrder.created_at ? dateFormatter.format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>Precio</span><span>Subtotal</span></div>{selectedOrder.detalles.map((line) => <div key={line.producto_id}><span>{line.nombre_producto}</span><span>{line.cantidad}</span><span>{money.format(line.precio_unitario)}</span><strong>{money.format(line.subtotal)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total)}</strong></div>
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="order-history-filters"><label>Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label>Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label>Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
+    const stateName = getOrderStateName(order);
+    const customerName = order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
+    const customerSub = order.cliente?.rut || order.cliente?.celular || "Sin identificador";
+    return <article className="admin-order-row" key={order.id}><div><strong>Pedido {order.id?.slice(0, 8).toUpperCase()}</strong><small>{order.detalles?.length ?? 0} productos</small></div><div><strong>{customerName}</strong><small>{customerSub}</small></div><span>{order.created_at ? dateFormatter.format(new Date(order.created_at)) : "-"}</span><span className={`order-status order-${stateName.toLowerCase()}`}>{stateName || "-"}</span><strong>{money.format(order.total ?? 0)}</strong><button className="icon-button category-edit" type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver detalle del pedido ${order.id?.slice(0, 8).toUpperCase()}`}><Eye size={16} /></button></article>;
+  })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{selectedOrder.created_at ? dateFormatter.format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}</span><span>{line.cantidad}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
 
 <div className="order-notifications-section mt-4 pt-3 border-top">
   <div className="d-flex justify-content-between align-items-center mb-2">
@@ -985,7 +1002,7 @@ function AdminOrderManager() {
   )}
 </div>
 
-</div><footer><div className="order-state-actions">{availableTransitions(selectedOrder).map((nextState) => <button className={nextState === "Cancelado" ? "btn btn-outline-danger" : "btn btn-primary"} type="button" key={nextState} onClick={() => { setDeliveryPayment(null); setCreditDays(""); setConfirmation({ order: selectedOrder, nextState }); }}>{nextState === "Despachado" ? "Despachar" : nextState === "Entregado" ? "Entregar" : "Cancelar pedido"}</button>)}</div><button className="btn btn-light" type="button" onClick={() => setSelectedOrder(null)}>Cerrar</button></footer></section></div>}{confirmation && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">CONFIRMAR ACCION</p><h2>{confirmation.nextState === "Entregado" ? "¿Cliente pagó su pedido?" : "¿Cambiar estado del pedido?"}</h2></div><button className="icon-button" type="button" onClick={() => setConfirmation(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El pedido <strong>{confirmation.order.id.slice(0, 8).toUpperCase()}</strong> cambiará de <strong>{confirmation.order.estado.nombre}</strong> a <strong>{confirmation.nextState}</strong>.</p>{confirmation.nextState === "Entregado" ? <><div className="payment-choice"><button type="button" className={deliveryPayment === true ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(true); setCreditDays(""); }}>Sí, pagó</button><button type="button" className={deliveryPayment === false ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => setDeliveryPayment(false)}>No, queda a crédito</button></div>{deliveryPayment === false && <div className="mt-3"><label className="form-label" htmlFor="credit-days">Días de crédito</label><input id="credit-days" className="form-control" type="number" min="1" step="1" value={creditDays} onChange={(event) => setCreditDays(event.target.value)} required autoFocus /><small className="form-text">El vencimiento se calcula desde la fecha de entrega.</small></div>}</> : <p className="mb-0">Esta acción actualizará el estado visible para el cliente.</p>}</div><footer><button className="btn btn-light" type="button" disabled={updatingState} onClick={() => setConfirmation(null)}>Volver</button><button className={confirmation.nextState === "Cancelado" ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={updatingState} onClick={changeOrderStatus}>{updatingState ? "Actualizando..." : confirmation.nextState === "Entregado" ? "Finalizar entrega" : "Confirmar cambio"}</button></footer></section></div>}</>;
+</div><footer><div className="order-state-actions"><button className="btn btn-outline-primary export-order-pdf" type="button" onClick={() => exportOrderPdf(selectedOrder)}>Exportar PDF</button>{availableTransitions(selectedOrder).map((nextState) => <button className={nextState === "Cancelado" ? "btn btn-outline-danger" : "btn btn-primary"} type="button" key={nextState} onClick={() => { setDeliveryPayment(null); setCreditDays(""); setConfirmation({ order: selectedOrder, nextState }); }}>{nextState === "Despachado" ? "Despachar" : nextState === "Entregado" ? "Entregar" : "Cancelar pedido"}</button>)}</div><button className="btn btn-light" type="button" onClick={() => setSelectedOrder(null)}>Cerrar</button></footer></section></div>}{confirmation && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">CONFIRMAR ACCION</p><h2>{confirmation.nextState === "Entregado" ? "¿Cliente pagó su pedido?" : "¿Cambiar estado del pedido?"}</h2></div><button className="icon-button" type="button" onClick={() => setConfirmation(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El pedido <strong>{confirmation.order?.id?.slice(0, 8).toUpperCase()}</strong> cambiará de <strong>{getOrderStateName(confirmation.order)}</strong> a <strong>{confirmation.nextState}</strong>.</p>{confirmation.nextState === "Entregado" ? <><div className="payment-choice"><button type="button" className={deliveryPayment === true ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(true); setCreditDays(""); }}>Sí, pagó</button><button type="button" className={deliveryPayment === false ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => setDeliveryPayment(false)}>No, queda a crédito</button></div>{deliveryPayment === false && <div className="mt-3"><label className="form-label" htmlFor="credit-days">Días de crédito</label><input id="credit-days" className="form-control" type="number" min="1" step="1" value={creditDays} onChange={(event) => setCreditDays(event.target.value)} required autoFocus /><small className="form-text">El vencimiento se calcula desde la fecha de entrega.</small></div>}</> : <p className="mb-0">Esta acción actualizará el estado visible para el cliente.</p>}</div><footer><button className="btn btn-light" type="button" disabled={updatingState} onClick={() => setConfirmation(null)}>Volver</button><button className={confirmation.nextState === "Cancelado" ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={updatingState} onClick={changeOrderStatus}>{updatingState ? "Actualizando..." : confirmation.nextState === "Entregado" ? "Finalizar entrega" : "Confirmar cambio"}</button></footer></section></div>}</>;
 }
 
 function CreditManager() {
@@ -1030,10 +1047,10 @@ function CreditManager() {
   }
 
   const dateFormatter = new Intl.DateTimeFormat("es-CL", { dateStyle: "short" });
-  const customerName = (credit) => credit.cliente.nombre || credit.cliente.rut || credit.cliente.celular || "Cliente";
+  const customerName = (credit) => credit.cliente?.nombre || credit.cliente?.rut || credit.cliente?.celular || "Cliente";
   const dueDays = (credit) => Math.max(0, Math.ceil((new Date(credit.fecha_vencimiento) - new Date()) / 86_400_000));
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">COBRANZAS</p><h1>Créditos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de cuentas por cobrar</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">CRÉDITOS</p><h2>{paidFilter === "pending" ? "Créditos pendientes" : "Historial de créditos pagados"}</h2><p>Controla los plazos de pago registrados al entregar los pedidos.</p></div><div className="summary-metric"><span>{credits.length}</span><small>{paidFilter === "pending" ? "Pendientes de pago" : "Pagados"}</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de créditos</h2><p>Consulta vencimientos y registra pagos recibidos.</p></div><span className="panel-count">{credits.length} registros</span></div><div className="credit-filters"><label htmlFor="credit-status">Vista</label><select id="credit-status" className="form-select" value={paidFilter} onChange={(event) => setPaidFilter(event.target.value)}><option value="pending">Pendientes</option><option value="paid">Historial pagados</option></select></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando créditos...</p> : <div className="credit-table mt-4"><div className="credit-table-head"><span>Cliente</span><span>Pedido</span><span>Días crédito</span><span>Entrega</span><span>Días al vencimiento</span><span>Vencimiento</span><span>{paidFilter === "paid" ? "Fecha pago" : "Acciones"}</span></div>{credits.length ? credits.map((credit) => <article className="credit-row" key={credit.id}><div><strong>{customerName(credit)}</strong><small>{credit.cliente.rut || credit.cliente.celular || "Sin identificador"}</small></div><strong>#{credit.pedido.id.slice(0, 8).toUpperCase()}</strong><span>{credit.dias_credito}</span><span>{dateFormatter.format(new Date(credit.fecha_entrega))}</span><span>{paidFilter === "pending" ? dueDays(credit) : "-"}</span><span>{dateFormatter.format(new Date(credit.fecha_vencimiento))}</span>{paidFilter === "paid" ? <span>{credit.fecha_pago ? dateFormatter.format(new Date(credit.fecha_pago)) : "-"}</span> : <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => { setPaymentDate(new Date().toISOString().slice(0, 10)); setSelectedCredit(credit); }}>Marcar pagado</button>}</article>) : <p className="history-filter-empty">No hay créditos {paidFilter === "pending" ? "pendientes" : "pagados"}.</p>}</div>}</section></div>{selectedCredit && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="credit-payment-title"><header><div><p className="eyebrow">REGISTRAR PAGO</p><h2 id="credit-payment-title">¿Confirmar pago del crédito?</h2></div><button className="icon-button" type="button" onClick={() => setSelectedCredit(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El crédito del pedido <strong>#{selectedCredit.pedido.id.slice(0, 8).toUpperCase()}</strong> quedará marcado como pagado.</p><label className="form-label" htmlFor="credit-payment-date">Fecha de pago</label><input id="credit-payment-date" className="form-control" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /></div><footer><button className="btn btn-light" type="button" disabled={saving} onClick={() => setSelectedCredit(null)}>No</button><button className="btn btn-primary" type="button" disabled={saving || !paymentDate} onClick={confirmPayment}>{saving ? "Guardando..." : "Sí, marcar pagado"}</button></footer></section></div>}</>;
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">COBRANZAS</p><h1>Créditos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de cuentas por cobrar</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">CRÉDITOS</p><h2>{paidFilter === "pending" ? "Créditos pendientes" : "Historial de créditos pagados"}</h2><p>Controla los plazos de pago registrados al entregar los pedidos.</p></div><div className="summary-metric"><span>{credits.length}</span><small>{paidFilter === "pending" ? "Pendientes de pago" : "Pagados"}</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de créditos</h2><p>Consulta vencimientos y registra pagos recibidos.</p></div><span className="panel-count">{credits.length} registros</span></div><div className="credit-filters"><label htmlFor="credit-status">Vista</label><select id="credit-status" className="form-select" value={paidFilter} onChange={(event) => setPaidFilter(event.target.value)}><option value="pending">Pendientes</option><option value="paid">Historial pagados</option></select></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando créditos...</p> : <div className="credit-table mt-4"><div className="credit-table-head"><span>Cliente</span><span>Pedido</span><span>Días crédito</span><span>Entrega</span><span>Días al vencimiento</span><span>Vencimiento</span><span>{paidFilter === "paid" ? "Fecha pago" : "Acciones"}</span></div>{credits.length ? credits.map((credit) => <article className="credit-row" key={credit.id}><div><strong>{customerName(credit)}</strong><small>{credit.cliente?.rut || credit.cliente?.celular || "Sin identificador"}</small></div><strong>#{credit.pedido?.id?.slice(0, 8).toUpperCase()}</strong><span>{credit.dias_credito}</span><span>{dateFormatter.format(new Date(credit.fecha_entrega))}</span><span>{paidFilter === "pending" ? dueDays(credit) : "-"}</span><span>{dateFormatter.format(new Date(credit.fecha_vencimiento))}</span>{paidFilter === "paid" ? <span>{credit.fecha_pago ? dateFormatter.format(new Date(credit.fecha_pago)) : "-"}</span> : <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => { setPaymentDate(new Date().toISOString().slice(0, 10)); setSelectedCredit(credit); }}>Marcar pagado</button>}</article>) : <p className="history-filter-empty">No hay créditos {paidFilter === "pending" ? "pendientes" : "pagados"}.</p>}</div>}</section></div>{selectedCredit && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="credit-payment-title"><header><div><p className="eyebrow">REGISTRAR PAGO</p><h2 id="credit-payment-title">¿Confirmar pago del crédito?</h2></div><button className="icon-button" type="button" onClick={() => setSelectedCredit(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El crédito del pedido <strong>#{selectedCredit.pedido?.id?.slice(0, 8).toUpperCase()}</strong> quedará marcado como pagado.</p><label className="form-label" htmlFor="credit-payment-date">Fecha de pago</label><input id="credit-payment-date" className="form-control" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /></div><footer><button className="btn btn-light" type="button" disabled={saving} onClick={() => setSelectedCredit(null)}>No</button><button className="btn btn-primary" type="button" disabled={saving || !paymentDate} onClick={confirmPayment}>{saving ? "Guardando..." : "Sí, marcar pagado"}</button></footer></section></div>}</>;
 }
 
 function AdminSalesDashboard() {
@@ -1048,27 +1065,29 @@ function AdminSalesDashboard() {
     api.get("/pedidos").then(({ data }) => setOrders(data)).catch((requestError) => setError(requestError.response?.data?.detail ?? "No fue posible cargar los indicadores.")).finally(() => setLoading(false));
   }, []);
 
+  const getOrderState = (order) => (typeof order.estado === "string" ? order.estado : order.estado?.nombre || "");
+
   const salesOrders = orders.filter((order) => {
     const createdAt = order.created_at ? new Date(order.created_at) : null;
     const from = filters.desde ? new Date(`${filters.desde}T00:00:00`) : null;
     const to = filters.hasta ? new Date(`${filters.hasta}T23:59:59.999`) : null;
-    return order.estado.nombre !== "Cancelado" && (!from || (createdAt && createdAt >= from)) && (!to || (createdAt && createdAt <= to));
+    return getOrderState(order) !== "Cancelado" && (!from || (createdAt && createdAt >= from)) && (!to || (createdAt && createdAt <= to));
   });
-  const totalSales = salesOrders.reduce((total, order) => total + Number(order.total), 0);
-  const totalUnits = salesOrders.reduce((total, order) => total + order.detalles.reduce((sum, line) => sum + line.cantidad, 0), 0);
+  const totalSales = salesOrders.reduce((total, order) => total + Number(order.total || 0), 0);
+  const totalUnits = salesOrders.reduce((total, order) => total + (order.detalles || []).reduce((sum, line) => sum + (line.cantidad || 0), 0), 0);
   const customerRanking = Object.values(salesOrders.reduce((ranking, order) => {
-    const id = order.cliente.id;
-    const name = order.cliente.nombre || order.cliente.rut || order.cliente.celular || "Cliente";
+    const id = order.cliente?.id || order.cliente_id || "unknown";
+    const name = order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     ranking[id] ??= { id, name, orders: 0, total: 0 };
     ranking[id].orders += 1;
-    ranking[id].total += Number(order.total);
+    ranking[id].total += Number(order.total || 0);
     return ranking;
   }, {})).sort((first, second) => second.total - first.total).slice(0, 10);
   const productRanking = Object.values(salesOrders.reduce((ranking, order) => {
-    order.detalles.forEach((line) => {
+    (order.detalles || []).forEach((line) => {
       ranking[line.producto_id] ??= { id: line.producto_id, name: line.nombre_producto, units: 0, total: 0 };
-      ranking[line.producto_id].units += line.cantidad;
-      ranking[line.producto_id].total += Number(line.subtotal);
+      ranking[line.producto_id].units += (line.cantidad || 0);
+      ranking[line.producto_id].total += Number(line.subtotal || 0);
     });
     return ranking;
   }, {})).sort((first, second) => second.units - first.units || second.total - first.total).slice(0, 10);
@@ -1478,9 +1497,11 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     }
   }
 
+  const PAGE_SIZE = 15;
+
   async function loadProducts() {
     try {
-      const { data } = await api.get("/productos", { params: { category_id: selectedCategory || undefined, search: query || undefined, customer_id: customer.id, page, page_size: 10 } });
+      const { data } = await api.get("/productos", { params: { category_id: selectedCategory || undefined, search: query || undefined, customer_id: customer.id, page, page_size: PAGE_SIZE } });
       setProducts(data.items);
       setTotalProducts(data.total);
     } catch {
@@ -1508,55 +1529,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     setSelectedAddress((current) => (current && customer.direcciones?.some((address) => address.id === current && address.activo)) ? current : activeAddressId);
   }, [customer.direcciones]);
 
-  useEffect(() => {
-    if (section !== "create") return undefined;
-    const searchField = document.querySelector(".customer-workspace .search-field");
-    if (!searchField || searchField.previousElementSibling?.classList.contains("customer-product-filters")) return undefined;
-    const filters = document.createElement("div");
-    filters.className = "customer-product-filters";
-    const categorySelect = document.createElement("select");
-    categorySelect.className = "form-select";
-    categorySelect.setAttribute("aria-label", "Filtrar productos por categoría");
-    categorySelect.append(new Option("Todas las categorías", ""));
-    categories.forEach((category) => categorySelect.append(new Option(category.nombre, category.id)));
-    categorySelect.value = selectedCategory;
-    categorySelect.addEventListener("change", (event) => { setSelectedCategory(event.target.value); setPage(1); });
-    filters.append(categorySelect);
-    searchField.before(filters);
-    return () => filters.remove();
-  }, [categories, section]);
 
-  useEffect(() => {
-    const productGrid = document.querySelector(".customer-workspace .product-grid");
-    if (section !== "create" || !productGrid || totalProducts <= 10) return undefined;
-    const totalPages = Math.ceil(totalProducts / 10);
-    const pager = document.createElement("nav");
-    pager.className = "product-pagination customer-product-pagination";
-    pager.setAttribute("aria-label", "Paginación del catálogo");
-    const summary = document.createElement("small");
-    summary.textContent = `Página ${page} de ${totalPages} · ${totalProducts} productos`;
-    const previous = document.createElement("button");
-    previous.className = "btn btn-outline-primary btn-sm";
-    previous.type = "button";
-    previous.textContent = "Anterior";
-    previous.disabled = page === 1;
-    const next = document.createElement("button");
-    next.className = "btn btn-primary btn-sm";
-    next.type = "button";
-    next.textContent = "Siguiente";
-    next.disabled = page === totalPages;
-    const goPrevious = () => setPage((current) => Math.max(1, current - 1));
-    const goNext = () => setPage((current) => Math.min(totalPages, current + 1));
-    previous.addEventListener("click", goPrevious);
-    next.addEventListener("click", goNext);
-    pager.append(summary, previous, next);
-    productGrid.after(pager);
-    return () => {
-      previous.removeEventListener("click", goPrevious);
-      next.removeEventListener("click", goNext);
-      pager.remove();
-    };
-  }, [page, section, totalProducts]);
 
   async function loadHistory() {
     try {
@@ -1850,37 +1823,104 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
               )}
               <div className="row g-4">
                 <section className="col-xl-8">
-                <div className="search-field">
-                  <Search size={20} />
-                  <input
-                    className="form-control form-control-lg"
-                    placeholder="Busca por nombre de producto"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                  />
-                </div>
-                <div className="product-grid mt-4">
-                  {products.map((product) => (
-                    <article className="product" key={product.id}>
-                      <div className="product-image">
-                        {productImageSource(product.imagen_url) ? (
-                          <img src={productImageSource(product.imagen_url)} alt="" />
-                        ) : (
-                          <Package size={30} />
+                  <div className="row g-2 align-items-center mb-3">
+                    <div className="col-12 col-md-5 col-lg-4">
+                      <select
+                        className="form-select"
+                        aria-label="Filtrar productos por categoría"
+                        value={selectedCategory}
+                        onChange={(event) => {
+                          setSelectedCategory(event.target.value);
+                          setPage(1);
+                        }}
+                      >
+                        <option value="">Todas las categorías</option>
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-12 col-md-7 col-lg-8">
+                      <div className="search-field">
+                        <Search size={18} />
+                        <input
+                          className="form-control"
+                          placeholder="Busca por nombre de producto..."
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                        />
+                        {query && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link text-muted pe-2 py-0 border-0"
+                            onClick={() => setQuery("")}
+                            title="Limpiar búsqueda"
+                          >
+                            <X size={16} />
+                          </button>
                         )}
                       </div>
-                      <small>{product.codigo}</small>
-                      <h2>{product.nombre}</h2>
-                      <strong>{money.format(product.precio_cliente ?? product.precio)}</strong>
-                      <button className="btn btn-outline-primary mt-3" onClick={() => add(product)}>
-                        <Plus size={17} />
-                        Agregar
+                    </div>
+                  </div>
+
+                  <div className="product-grid">
+                    {products.map((product) => (
+                      <article className="product" key={product.id}>
+                        <div className="product-image">
+                          {productImageSource(product.imagen_url) ? (
+                            <img src={productImageSource(product.imagen_url)} alt={product.nombre} />
+                          ) : (
+                            <Package size={30} />
+                          )}
+                        </div>
+                        <div className="product-meta">
+                          {product.categoria?.nombre ? (
+                            <span className="product-category-badge" title={product.categoria.nombre}>
+                              {product.categoria.nombre}
+                            </span>
+                          ) : (
+                            <span />
+                          )}
+                          <small className="product-code">{product.codigo}</small>
+                        </div>
+                        <h2>{product.nombre}</h2>
+                        <strong className="mt-auto">{money.format(product.precio_cliente ?? product.precio)}</strong>
+                        <button className="btn btn-outline-primary mt-3" onClick={() => add(product)}>
+                          <Plus size={17} />
+                          Agregar
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+
+                  {totalProducts > PAGE_SIZE && (
+                    <nav className="product-pagination customer-product-pagination mt-4" aria-label="Paginación del catálogo">
+                      <small>
+                        Página {page} de {Math.ceil(totalProducts / PAGE_SIZE)} · {totalProducts} productos
+                      </small>
+                      <button
+                        className="btn btn-outline-primary btn-sm"
+                        type="button"
+                        disabled={page === 1}
+                        onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      >
+                        Anterior
                       </button>
-                    </article>
-                  ))}
-                </div>
-                {!products.length && <p className="text-secondary mt-4">No se encontraron productos.</p>}
-              </section>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        type="button"
+                        disabled={page === Math.ceil(totalProducts / PAGE_SIZE)}
+                        onClick={() => setPage((current) => Math.min(Math.ceil(totalProducts / PAGE_SIZE), current + 1))}
+                      >
+                        Siguiente
+                      </button>
+                    </nav>
+                  )}
+
+                  {!products.length && <p className="text-secondary mt-4">No se encontraron productos.</p>}
+                </section>
               <aside className="col-xl-4">
                 <div className="cart">
                   <div className="cart-title">
@@ -2086,54 +2126,6 @@ function App() {
 
   const isPublicCatalogRoute = window.location.pathname.replace(/\/$/, "").toLowerCase() === "/public/catalogo";
 
-  useEffect(() => {
-    if (isPublicCatalogRoute) return undefined;
-    const timers = new Map();
-    const alertSelector = ".alert.alert-success, .alert.alert-danger";
-    const prepareChartTooltips = () => {
-      document.querySelectorAll(".dashboard-ranking .ranking-list li").forEach((item) => {
-        const name = item.querySelector(".ranking-main strong")?.textContent?.trim();
-        const valueElement = item.querySelector(".ranking-value");
-        const value = valueElement?.textContent?.trim();
-        const bar = item.querySelector(".ranking-main i");
-        if (!name || !value || !valueElement || !bar) return;
-        bar.title = `${name}: ${value}`;
-        bar.setAttribute("aria-label", `${name}: ${value}`);
-      });
-    };
-    const prepareAlert = (alert) => {
-      if (alert.dataset.autoDismissPrepared) return;
-      alert.dataset.autoDismissPrepared = "true";
-      let dismiss = alert.querySelector(".btn-close");
-      if (!dismiss) {
-        dismiss = document.createElement("button");
-        dismiss.className = "btn-close";
-        dismiss.type = "button";
-        dismiss.setAttribute("aria-label", "Cerrar mensaje");
-        dismiss.addEventListener("click", () => alert.remove(), { once: true });
-        alert.append(dismiss);
-      }
-      timers.set(alert, window.setTimeout(() => {
-        if (alert.isConnected) dismiss.click();
-      }, 5000));
-    };
-    const observer = new MutationObserver((records) => {
-      records.forEach((record) => record.addedNodes.forEach((node) => {
-        if (!(node instanceof Element)) return;
-        if (node.matches(alertSelector)) prepareAlert(node);
-        node.querySelectorAll?.(alertSelector).forEach(prepareAlert);
-      }));
-      prepareChartTooltips();
-    });
-    document.querySelectorAll(alertSelector).forEach(prepareAlert);
-    prepareChartTooltips();
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      timers.forEach((timer) => window.clearTimeout(timer));
-    };
-  }, []);
-
   if (isPublicCatalogRoute) return <PublicCatalog />;
   if (customer) return <Shop customer={customer} onProfileUpdated={setCustomer} onLogout={() => { clearSessionStorage(); setCustomerToken(null); setCustomer(null); }} />;
   if (view === "admin-dashboard") return <AdminDashboard onLogout={() => { clearSessionStorage(); setAdminToken(null); setView("customer-access"); }} />;
@@ -2141,4 +2133,42 @@ function App() {
   return <Access onCustomerLogin={setCustomer} onAdminLogin={() => setView("admin-dashboard")} />;
 }
 
-createRoot(document.getElementById("root")).render(<StrictMode><App /></StrictMode>);
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="d-flex flex-column align-items-center justify-content-center min-vh-100 p-4 text-center">
+          <h2 className="mb-2 text-danger fw-bold">Ocurrió un problema inesperado</h2>
+          <p className="text-secondary mb-4">
+            {this.state.error?.message || "La aplicación encontró un error al procesar la vista."}
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={() => window.location.reload()}
+          >
+            Recargar aplicación
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </StrictMode>
+);

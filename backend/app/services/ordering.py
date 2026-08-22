@@ -101,8 +101,15 @@ class OrderService:
         next_state = self.database.get(Estado, next_state_id)
         if not next_state or not next_state.activo:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Estado no disponible")
-        transitions = {"Pedido": {"Despachado", "Cancelado"}, "Despachado": {"Entregado", "Cancelado"}}
-        if next_state.nombre not in transitions.get(order.estado.nombre, set()):
+        transitions = {
+            "Pedido": {"Despachado", "Cancelado"},
+            "Pendiente": {"Despachado", "Cancelado"},
+            "Nuevo": {"Despachado", "Cancelado"},
+            "Despachado": {"Entregado", "Cancelado"},
+        }
+        current_state_name = order.estado.nombre if order.estado else "Pedido"
+        allowed = transitions.get(current_state_name, set())
+        if next_state.nombre not in allowed:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Transicion de estado no permitida")
         if next_state.nombre == "Entregado":
             if pagado is None:
@@ -125,6 +132,7 @@ class OrderService:
                 )
             )
         self.database.commit()
+        self.database.expire_all()
         return self.get(order.id)
 
 

@@ -201,8 +201,8 @@ export default function PromoBannerCarousel({
             </div>
           </div>
 
-          <div className="promo-banner-right" onClick={handleBannerAction}>
-            <div className="promo-card">
+          <div className="promo-banner-right">
+            <div className="promo-card" onClick={handleBannerAction}>
               <div className="promo-badge-red">
                 {redBadge}
               </div>
@@ -223,85 +223,85 @@ export default function PromoBannerCarousel({
                 )}
               </div>
             </div>
+
+            {displayBanners.length > 1 && !isPreview && (
+              <div
+                className="promo-control-bar"
+                style={{
+                  borderColor: theme.tagBorder || "rgba(255, 255, 255, 0.18)",
+                  boxShadow: `0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px ${theme.glowColor || "transparent"}`,
+                }}
+              >
+                <button
+                  type="button"
+                  className="promo-nav-btn"
+                  onClick={handlePrev}
+                  aria-label="Banner anterior"
+                  style={{
+                    "--btn-hover-bg": theme.tagBg || "rgba(255, 255, 255, 0.25)",
+                    "--btn-hover-border": theme.tagBorder || "rgba(255, 255, 255, 0.35)",
+                  }}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+
+                {/* Botón Pausa / Reproducir */}
+                <button
+                  type="button"
+                  className="promo-play-btn"
+                  onClick={togglePlayPause}
+                  aria-label={isPlaying ? "Pausar carrusel" : "Reproducir carrusel"}
+                  style={{
+                    "--btn-hover-bg": theme.tagBg || "rgba(255, 255, 255, 0.25)",
+                    "--btn-hover-border": theme.tagBorder || "rgba(255, 255, 255, 0.35)",
+                  }}
+                >
+                  {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+                </button>
+
+                {/* Indicadores de Slide y Barra de Progreso */}
+                <div className="promo-indicators">
+                  {displayBanners.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`promo-indicator-dot ${
+                        idx === currentIndex ? "active" : ""
+                      }`}
+                      onClick={(e) => handleDotClick(idx, e)}
+                      style={
+                        idx === currentIndex
+                          ? {
+                              background: theme.btnBackground || theme.tagColor || "#10b981",
+                              boxShadow: `0 0 8px ${theme.glowColor || "rgba(255, 255, 255, 0.4)"}`,
+                            }
+                          : {}
+                      }
+                      aria-label={`Ir al banner ${idx + 1}`}
+                    />
+                  ))}
+                  <span className="promo-slide-counter">
+                    {currentIndex + 1} / {displayBanners.length}
+                  </span>
+                </div>
+
+                {/* Flecha Siguiente */}
+                <button
+                  type="button"
+                  className="promo-nav-btn"
+                  onClick={handleNext}
+                  aria-label="Banner siguiente"
+                  style={{
+                    "--btn-hover-bg": theme.tagBg || "rgba(255, 255, 255, 0.25)",
+                    "--btn-hover-border": theme.tagBorder || "rgba(255, 255, 255, 0.35)",
+                  }}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
-
-        {displayBanners.length > 1 && !isPreview && (
-          <div
-            className="promo-control-bar"
-            style={{
-              borderColor: theme.tagBorder || "rgba(255, 255, 255, 0.18)",
-              boxShadow: `0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px ${theme.glowColor || "transparent"}`,
-            }}
-          >
-            <button
-              type="button"
-              className="promo-nav-btn"
-              onClick={handlePrev}
-              aria-label="Banner anterior"
-              style={{
-                "--btn-hover-bg": theme.tagBg || "rgba(255, 255, 255, 0.25)",
-                "--btn-hover-border": theme.tagBorder || "rgba(255, 255, 255, 0.35)",
-              }}
-            >
-              <ChevronLeft size={18} />
-            </button>
-
-            {/* Botón Pausa / Reproducir */}
-            <button
-              type="button"
-              className="promo-play-btn"
-              onClick={togglePlayPause}
-              aria-label={isPlaying ? "Pausar carrusel" : "Reproducir carrusel"}
-              style={{
-                "--btn-hover-bg": theme.tagBg || "rgba(255, 255, 255, 0.25)",
-                "--btn-hover-border": theme.tagBorder || "rgba(255, 255, 255, 0.35)",
-              }}
-            >
-              {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-            </button>
-
-            {/* Indicadores de Slide y Barra de Progreso */}
-            <div className="promo-indicators">
-              {displayBanners.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className={`promo-indicator-dot ${
-                    idx === currentIndex ? "active" : ""
-                  }`}
-                  onClick={(e) => handleDotClick(idx, e)}
-                  style={
-                    idx === currentIndex
-                      ? {
-                          background: theme.btnBackground || theme.tagColor || "#10b981",
-                          boxShadow: `0 0 8px ${theme.glowColor || "rgba(255, 255, 255, 0.4)"}`,
-                        }
-                      : {}
-                  }
-                  aria-label={`Ir al banner ${idx + 1}`}
-                />
-              ))}
-              <span className="promo-slide-counter">
-                {currentIndex + 1} / {displayBanners.length}
-              </span>
-            </div>
-
-            {/* Flecha Siguiente */}
-            <button
-              type="button"
-              className="promo-nav-btn"
-              onClick={handleNext}
-              aria-label="Banner siguiente"
-              style={{
-                "--btn-hover-bg": theme.tagBg || "rgba(255, 255, 255, 0.25)",
-                "--btn-hover-border": theme.tagBorder || "rgba(255, 255, 255, 0.35)",
-              }}
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
 
         {/* Barra de progreso continua animada en el borde inferior */}
         {displayBanners.length > 1 && !isPreview && isPlaying && (

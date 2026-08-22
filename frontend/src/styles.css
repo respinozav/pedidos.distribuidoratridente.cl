@@ -306,15 +306,137 @@ button, input { font: inherit; }
 .customer-heading p:last-child { color: var(--muted); margin: 0; }
 .search-field { align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); display: flex; padding-left: .85rem; }
 .search-field .form-control { border: 0; box-shadow: none; }
-.product-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); }
+.product-grid {
+  display: grid;
+  gap: 1.15rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 991px) {
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+}
+
+@media (max-width: 575px) {
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+
+  .product {
+    padding: 0.65rem !important;
+    border-radius: 8px !important;
+  }
+
+  .product-image {
+    height: 105px !important;
+    margin-bottom: 0.45rem !important;
+  }
+
+  .product h2 {
+    font-size: 0.82rem !important;
+    min-height: 2.3em !important;
+    margin: 0.2rem 0 0.35rem 0 !important;
+  }
+
+  .product-category-badge {
+    font-size: 0.62rem !important;
+    padding: 0.1rem 0.35rem !important;
+  }
+
+  .product small.product-code {
+    font-size: 0.65rem !important;
+  }
+
+  .product strong {
+    font-size: 0.92rem !important;
+  }
+
+  .product .btn {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.5rem !important;
+    margin-top: 0.5rem !important;
+  }
+}
+
 .product-pagination { align-items: center; display: flex; gap: .65rem; justify-content: flex-end; margin-top: 1rem; }
 .product-pagination small { color: var(--muted); margin-right: auto; }
 .customer-product-pagination { margin-bottom: 1rem; }
-.product { background: #fff; border: 1px solid var(--line); border-radius: 7px; display: flex; flex-direction: column; padding: 1rem; }
-.product h2 { font-size: 1rem; font-weight: 700; margin: .4rem 0; }
-.product-image { align-items: center; background: var(--sky); border-radius: 5px; color: var(--blue); display: flex; height: 140px; justify-content: center; margin-bottom: 1rem; overflow: hidden; }
-.product-image img { height: 100%; object-fit: cover; width: 100%; }
-.product small { color: var(--muted); font-size: .72rem; }
+.product {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.95rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.product:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(16, 42, 67, 0.08);
+  border-color: #cbd5e1;
+}
+.product-meta {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+.product-category-badge {
+  background: #edf2f7;
+  border-radius: 4px;
+  color: #334e68;
+  font-size: 0.7rem;
+  font-weight: 600;
+  max-width: 65%;
+  overflow: hidden;
+  padding: 0.15rem 0.45rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product h2 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin: 0.25rem 0 0.5rem 0;
+  line-height: 1.35;
+  color: var(--dark);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.5em;
+}
+.product-image {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 6px;
+  color: var(--blue);
+  display: flex;
+  height: 130px;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  padding: 4px;
+}
+.product-image img {
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  width: auto;
+}
+.product small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.product strong {
+  font-size: 1.05rem;
+  color: var(--navy);
+  font-weight: 750;
+}
 .cart {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -666,8 +788,11 @@ button, input { font: inherit; }
 
 /* LADO DERECHO: TARJETA PROMO */
 .promo-banner-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
   flex-shrink: 0;
-  cursor: pointer;
 }
 
 .promo-card {
@@ -680,6 +805,7 @@ button, input { font: inherit; }
   width: 220px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
 }
 
 .promo-card:hover {
@@ -733,30 +859,22 @@ button, input { font: inherit; }
   font-weight: 600;
 }
 
-/* BARRA DE CONTROL INFERIOR */
+/* BARRA DE CONTROL INFERIOR CENTRADA Y CUADRADA CON LA TARJETA */
 .promo-control-bar {
-  position: absolute;
-  bottom: 1.1rem;
-  right: 1.8rem;
+  position: static;
+  margin: 0 auto;
   z-index: 5;
-  background: rgba(6, 26, 21, 0.82);
+  background: rgba(6, 26, 21, 0.85);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
-  padding: 0.32rem 0.65rem;
+  padding: 0.3rem 0.6rem;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-}
-
-@media (max-width: 991px) {
-  .promo-control-bar {
-    position: static;
-    margin: 0 1.5rem 1.2rem auto;
-    display: flex;
-    width: fit-content;
-  }
+  max-width: 100%;
 }
 
 .promo-nav-btn,

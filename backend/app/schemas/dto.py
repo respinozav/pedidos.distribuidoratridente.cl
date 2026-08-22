@@ -67,6 +67,7 @@ class ProductInput(BaseModel):
 class ProductOutput(ProductInput, ORMModel):
     id: UUID
     precio_cliente: Decimal | None = None
+    categoria: CategoryOutput | None = None
 
 
 class ProductPage(BaseModel):

@@ -297,16 +297,29 @@ def list_products(
     search: str | None = Query(default=None, max_length=180),
     customer_id: UUID | None = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=10, ge=1, le=500),
+    page_size: int = Query(default=15, ge=1, le=500),
 ) -> ProductPage:
-    statement = select(Producto).options(selectinload(Producto.categoria)).where(Producto.eliminado_at.is_(None), Producto.activo.is_(True))
+    statement = (
+        select(Producto)
+        .outerjoin(Producto.categoria)
+        .options(selectinload(Producto.categoria))
+        .where(Producto.eliminado_at.is_(None), Producto.activo.is_(True))
+    )
     if category_id:
         statement = statement.where(Producto.categoria_id == category_id)
     if search:
         statement = statement.where(Producto.nombre.ilike(f"%{search}%"))
     customer = database.get(Cliente, customer_id) if customer_id else None
     total = database.scalar(select(func.count()).select_from(statement.subquery())) or 0
-    products = database.scalars(statement.order_by(Producto.nombre).offset((page - 1) * page_size).limit(page_size))
+    products = database.scalars(
+        statement.order_by(
+            Categoria.orden.asc().nulls_last(),
+            func.lower(Categoria.nombre).asc().nulls_last(),
+            func.lower(Producto.nombre).asc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     return ProductPage(
         items=[ProductOutput.model_validate(product, from_attributes=True).model_copy(update={"precio_cliente": customer_product_price(product, customer) if customer else None}) for product in products],
         total=total,
@@ -325,7 +338,12 @@ def list_admin_products(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=500),
 ) -> ProductPage:
-    statement = select(Producto).where(Producto.eliminado_at.is_(None))
+    statement = (
+        select(Producto)
+        .outerjoin(Producto.categoria)
+        .options(selectinload(Producto.categoria))
+        .where(Producto.eliminado_at.is_(None))
+    )
     if category_id:
         statement = statement.where(Producto.categoria_id == category_id)
     if search:
@@ -333,7 +351,15 @@ def list_admin_products(
     if stock_lt is not None:
         statement = statement.where(Producto.cantidad < stock_lt)
     total = database.scalar(select(func.count()).select_from(statement.subquery())) or 0
-    products = database.scalars(statement.order_by(Producto.nombre).offset((page - 1) * page_size).limit(page_size))
+    products = database.scalars(
+        statement.order_by(
+            Categoria.orden.asc().nulls_last(),
+            Categoria.nombre.asc().nulls_last(),
+            Producto.nombre.asc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     return ProductPage(items=list(products), total=total, page=page, page_size=page_size)
 
 
@@ -495,6 +521,21 @@ def pay_credit(credit_id: UUID, payload: CreditPaymentInput, database: DatabaseS
 
 @router.get("/estados", response_model=list[OrderStateOutput], tags=["Pedidos"])
 def list_order_states(database: DatabaseSession, _: AdminUser) -> list[Estado]:
+    import uuid
+    standard_states = ("Pedido", "Despachado", "Entregado", "Cancelado")
+    all_states = list(database.scalars(select(Estado)).all())
+    existing = {s.nombre.strip().lower(): s for s in all_states if s.nombre}
+    created_any = False
+    for state_name in standard_states:
+        key = state_name.strip().lower()
+        if key not in existing:
+            database.add(Estado(id=uuid.uuid4(), nombre=state_name, activo=True))
+            created_any = True
+        elif not existing[key].activo:
+            existing[key].activo = True
+            created_any = True
+    if created_any:
+        database.commit()
     return list(database.scalars(select(Estado).where(Estado.activo.is_(True)).order_by(Estado.nombre)))
 
 
