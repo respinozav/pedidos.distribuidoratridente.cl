@@ -37,6 +37,7 @@ class ProductInput(BaseModel):
     cantidad: int
     imagen_url: str | None = Field(default=None, max_length=7_000_000)
     activo: bool = True
+    afecto: bool = False
 
     @field_validator("nombre")
     @classmethod
@@ -208,6 +209,7 @@ class OrderLineOutput(ORMModel):
     precio_unitario: Decimal
     cantidad: int
     subtotal: Decimal
+    afecto: bool = False
 
 
 class OrderStateOutput(ORMModel):

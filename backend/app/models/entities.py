@@ -77,6 +77,7 @@ class Producto(AuditMixin, Base):
     cantidad: Mapped[int] = mapped_column(default=0)
     imagen_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    afecto: Mapped[bool] = mapped_column(Boolean, default=False)
     eliminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     categoria: Mapped[Categoria] = relationship(back_populates="productos")
 
@@ -158,6 +159,11 @@ class DetallePedido(AuditMixin, Base):
     cantidad: Mapped[int] = mapped_column()
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     pedido: Mapped[Pedido] = relationship(back_populates="detalles")
+    producto: Mapped["Producto | None"] = relationship()
+
+    @property
+    def afecto(self) -> bool:
+        return bool(self.producto.afecto) if self.producto is not None else False
 
 
 class PedidoNotificacionLog(AuditMixin, Base):

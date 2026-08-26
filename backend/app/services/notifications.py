@@ -164,7 +164,7 @@ def _order_pdf(order: Pedido) -> bytes:
     story = []
     brand = Image(str(LOGO_PATH), width=45 * mm, height=30 * mm, kind="proportional") if LOGO_PATH.is_file() else Paragraph("Distribuidora Tridente", styles["Brand"])
     header = Table([[brand, Paragraph(f"PEDIDO #{order_code}", styles["OrderCode"])]], colWidths=[95 * mm, 79 * mm])
-    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LINEBELOW", (0, 0), (-1, -1), 1.2, colors.HexColor("#D44B58")), ("BOTTOMPADDING", (0, 0), (-1, -1), 10)]))
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LINEBELOW", (0, 0), (-1, -1), 1.2, colors.HexColor("#146CCE")), ("BOTTOMPADDING", (0, 0), (-1, -1), 10)]))
     story.extend([header, Spacer(1, 8 * mm)])
     customer_details = "<br/>".join((
         f"<b>Cliente:</b> {html.escape(customer_name)}",
@@ -175,26 +175,58 @@ def _order_pdf(order: Pedido) -> bytes:
         f"<b>Dirección de despacho:</b> {html.escape(address or 'Sin dirección registrada')}",
     ))
     story.extend([Paragraph(customer_details, styles["Details"]), Spacer(1, 7 * mm)])
-    rows = [["Producto", "Cantidad", "Precio", "Subtotal"]]
-    for detail in order.detalles:
-        product = Paragraph(_product_detail_label(detail), styles["ProductCell"])
-        rows.append([product, str(detail.cantidad), _currency(detail.precio_unitario), _currency(detail.subtotal)])
-    details = Table(rows, colWidths=[87 * mm, 24 * mm, 31 * mm, 32 * mm], repeatRows=1)
-    details.setStyle(TableStyle([
+
+    def _is_afecto(detail: object) -> bool:
+        if getattr(detail, "afecto", None) is not None:
+            return bool(detail.afecto)
+        product_obj = getattr(detail, "producto", None)
+        if product_obj is not None and getattr(product_obj, "afecto", None) is not None:
+            return bool(product_obj.afecto)
+        return False
+
+    sorted_detalles = sorted(order.detalles or [], key=lambda d: 0 if _is_afecto(d) else 1)
+
+    rows = [["Producto", "Cantidad", "IVA", "Precio", "Subtotal"]]
+    table_styles = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF4FF")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#334E68")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"),
+        ("ALIGN", (2, 0), (2, -1), "CENTER"),
+        ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#D9E2EC")),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    ]
+
+    for row_idx, detail in enumerate(sorted_detalles, start=1):
+        afecto = _is_afecto(detail)
+        iva_text = "Afecto" if afecto else "Exento"
+        if afecto:
+            table_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#F0F2F5")))
+        product = Paragraph(_product_detail_label(detail), styles["ProductCell"])
+        rows.append([
+            product,
+            str(detail.cantidad),
+            iva_text,
+            _currency(detail.precio_unitario),
+            _currency(detail.subtotal),
+        ])
+
+    details = Table(rows, colWidths=[74 * mm, 18 * mm, 22 * mm, 28 * mm, 32 * mm], repeatRows=1)
+    details.setStyle(TableStyle(table_styles))
     total = Table([["TOTAL", _currency(order.total)]], colWidths=[135 * mm, 39 * mm], hAlign="RIGHT")
-    total.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 10), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 13), ("ALIGN", (1, 0), (1, 0), "RIGHT"), ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#172B4D"))]))
+    total.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 13),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#172B4D")),
+    ]))
     story.extend([details, total])
     document.build(story)
     return output.getvalue()
@@ -219,9 +251,20 @@ def _build_order_message(
     customer_email = order.cliente.correo or "Sin correo"
     customer_phone = order.cliente.celular or "Sin teléfono"
     address = ", ".join(part for part in (order.direccion.direccion, order.direccion.comuna) if part) or "Sin dirección"
+
+    def _is_afecto(detail: object) -> bool:
+        if getattr(detail, "afecto", None) is not None:
+            return bool(detail.afecto)
+        product_obj = getattr(detail, "producto", None)
+        if product_obj is not None and getattr(product_obj, "afecto", None) is not None:
+            return bool(product_obj.afecto)
+        return False
+
+    sorted_details = sorted(order.detalles or [], key=lambda d: 0 if _is_afecto(d) else 1)
+
     detail_rows = "".join(
-        f"<tr><td style='padding:8px 10px;border-top:1px solid #d9e2ec'><strong>{html.escape(detail.nombre_producto)}</strong> <span style='color:#667085;font-size:12px'>[{html.escape(detail.codigo_producto)}]</span></td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{detail.cantidad}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.precio_unitario)}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.subtotal)}</td></tr>"
-        for detail in order.detalles
+        f"<tr style='{'background:#f0f2f5;' if _is_afecto(detail) else ''}'><td style='padding:8px 10px;border-top:1px solid #d9e2ec'><strong>{html.escape(detail.nombre_producto)}</strong> <span style='color:#667085;font-size:12px'>[{html.escape(detail.codigo_producto)}]</span></td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{detail.cantidad}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{'Afecto' if _is_afecto(detail) else 'Exento'}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.precio_unitario)}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.subtotal)}</td></tr>"
+        for detail in sorted_details
     )
     message = EmailMessage()
     message["Subject"] = subject
@@ -239,7 +282,7 @@ def _build_order_message(
 <div style='padding:28px 32px;background:#102a43;color:#ffffff'><div style='font-size:22px;font-weight:700'>Distribuidora Tridente</div><div style='margin-top:8px;color:#9bceff;font-size:12px;font-weight:700;letter-spacing:1px'>{heading}</div><div style='margin-top:6px;font-size:25px;font-weight:700'>Pedido #{order_code}</div></div>
 <div style='padding:28px 32px'><p style='margin-top:0'>{introduction}</p>
 {customer_block}
-<table style='width:100%;border-collapse:collapse;margin-top:22px'><thead><tr style='background:#f8fafc;color:#667085;font-size:12px;text-align:left'><th style='padding:10px'>Producto</th><th style='padding:10px;text-align:center'>Cant.</th><th style='padding:10px;text-align:right'>Unitario</th><th style='padding:10px;text-align:right'>Subtotal</th></tr></thead><tbody>{detail_rows}</tbody></table>
+<table style='width:100%;border-collapse:collapse;margin-top:22px'><thead><tr style='background:#f8fafc;color:#667085;font-size:12px;text-align:left'><th style='padding:10px'>Producto</th><th style='padding:10px;text-align:center'>Cant.</th><th style='padding:10px;text-align:center'>IVA</th><th style='padding:10px;text-align:right'>Unitario</th><th style='padding:10px;text-align:right'>Subtotal</th></tr></thead><tbody>{detail_rows}</tbody></table>
 <div style='margin-top:20px;padding-top:16px;border-top:1px solid #d9e2ec;text-align:right;font-size:19px;font-weight:700'>Total: {_currency(order.total)}</div>
 <p style='margin:24px 0 0;color:#667085;font-size:12px'>Se adjunta el comprobante PDF con el detalle del pedido.</p></div></div></body></html>""",
         subtype="html",
@@ -568,11 +611,13 @@ def _background_notification_runner(order_id: UUID, tipo: str = "NUEVO_PEDIDO") 
     try:
         from app.core.database import SessionLocal
 
+        from app.models.entities import DetallePedido
+
         with SessionLocal() as session:
             order = session.scalar(
                 select(Pedido)
                 .options(
-                    selectinload(Pedido.detalles),
+                    selectinload(Pedido.detalles).selectinload(DetallePedido.producto),
                     selectinload(Pedido.estado),
                     selectinload(Pedido.cliente),
                     selectinload(Pedido.direccion),

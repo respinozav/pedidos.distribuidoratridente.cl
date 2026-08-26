@@ -23,9 +23,10 @@ def main():
     to.test_create_creates_default_state_when_none_exists(mp)
     tn.test_product_detail_label_compacts_code_on_same_line()
     tn.test_order_pdf_contains_valid_header()
+    tn.test_order_pdf_with_mixed_afecto_and_exento()
     tn.test_notify_administrators_only_sends_to_recibe_pedido_users(mp)
     tp.test_publicidad_crud_cycle()
-    print(">>> ALL 7 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    print(">>> ALL 8 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

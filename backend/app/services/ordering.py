@@ -72,7 +72,7 @@ class OrderService:
 
 
     def get(self, order_id: UUID) -> Pedido:
-        order = self.database.scalar(select(Pedido).options(selectinload(Pedido.detalles), selectinload(Pedido.estado), selectinload(Pedido.cliente), selectinload(Pedido.direccion)).where(Pedido.id == order_id))
+        order = self.database.scalar(select(Pedido).options(selectinload(Pedido.detalles).selectinload(DetallePedido.producto), selectinload(Pedido.estado), selectinload(Pedido.cliente), selectinload(Pedido.direccion)).where(Pedido.id == order_id))
         if not order:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido no encontrado")
         return order
@@ -81,13 +81,13 @@ class OrderService:
         return _order_pdf(self.get(order_id))
 
     def list_for_customer(self, customer_id: UUID, state_id: UUID | None = None) -> list[Pedido]:
-        statement = select(Pedido).options(selectinload(Pedido.detalles), selectinload(Pedido.estado), selectinload(Pedido.cliente), selectinload(Pedido.direccion)).where(Pedido.cliente_id == customer_id)
+        statement = select(Pedido).options(selectinload(Pedido.detalles).selectinload(DetallePedido.producto), selectinload(Pedido.estado), selectinload(Pedido.cliente), selectinload(Pedido.direccion)).where(Pedido.cliente_id == customer_id)
         if state_id:
             statement = statement.where(Pedido.estado_id == state_id)
         return list(self.database.scalars(statement.order_by(Pedido.created_at.desc())))
 
     def list_all(self) -> list[Pedido]:
-        statement = select(Pedido).options(selectinload(Pedido.detalles), selectinload(Pedido.estado), selectinload(Pedido.cliente), selectinload(Pedido.direccion))
+        statement = select(Pedido).options(selectinload(Pedido.detalles).selectinload(DetallePedido.producto), selectinload(Pedido.estado), selectinload(Pedido.cliente), selectinload(Pedido.direccion))
         return list(self.database.scalars(statement.order_by(Pedido.created_at.desc())))
 
     def change_status(

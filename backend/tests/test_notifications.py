@@ -28,6 +28,8 @@ def test_order_pdf_contains_valid_header() -> None:
                 nombre_producto="Producto de prueba",
                 precio_unitario=Decimal("1000"),
                 subtotal=Decimal("2000"),
+                afecto=True,
+                producto=SimpleNamespace(afecto=True),
             )
         ],
         total=Decimal("2000"),
@@ -35,6 +37,38 @@ def test_order_pdf_contains_valid_header() -> None:
 
     pdf = _order_pdf(order)
 
+    assert pdf.startswith(b"%PDF-1.4")
+    assert len(pdf) > 500
+
+
+def test_order_pdf_with_mixed_afecto_and_exento() -> None:
+    order = SimpleNamespace(
+        id="87654321-4321-4321-4321-abcdef123456",
+        cliente=SimpleNamespace(nombre="Juan Perez", rut="12.345.678-9", correo="juan@example.com", celular="+56999999999"),
+        direccion=SimpleNamespace(direccion="Av. Los Aromos 456", comuna="La Serena"),
+        created_at=datetime.now(UTC),
+        detalles=[
+            SimpleNamespace(
+                codigo_producto="EX-001",
+                cantidad=1,
+                nombre_producto="Producto Exento Primero",
+                precio_unitario=Decimal("3000"),
+                subtotal=Decimal("3000"),
+                producto=SimpleNamespace(afecto=False),
+            ),
+            SimpleNamespace(
+                codigo_producto="AF-001",
+                cantidad=3,
+                nombre_producto="Producto Afecto Segundo",
+                precio_unitario=Decimal("1500"),
+                subtotal=Decimal("4500"),
+                producto=SimpleNamespace(afecto=True),
+            ),
+        ],
+        total=Decimal("7500"),
+    )
+
+    pdf = _order_pdf(order)
     assert pdf.startswith(b"%PDF-1.4")
     assert len(pdf) > 500
 
