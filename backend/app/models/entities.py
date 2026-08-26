@@ -86,7 +86,7 @@ class Cliente(AuditMixin, Base):
     __table_args__ = (Index("ix_clientes_nombre_activo", "nombre", "activo"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    rut: Mapped[str | None] = mapped_column(String(20), unique=True, index=True, nullable=True)
+    rut: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
     nombre: Mapped[str | None] = mapped_column(String(180), nullable=True)
     celular: Mapped[str | None] = mapped_column(String(30), unique=True, index=True, nullable=True)
     correo: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
