@@ -61,16 +61,110 @@ function Access({ onCustomerLogin, onAdminLogin }) {
     }
   }
 
-  return <main className="access-shell"><section className="access-brand"><div className="access-brand-content"><h1>Pedidos simples.<br />Despachos claros.</h1><p>Haz tu pedido y revisa su estado desde un solo lugar.</p></div><div className="access-brand-footer"><small>Aplicación desarrollada por <strong>RAEV Soluciones Informática SpA</strong> | Roderick Espinoza</small></div></section><form className="access-form" onSubmit={submit}>
-    <div className="access-form-heading"><BrandMark /><p className="eyebrow">{customerAccess ? "PORTAL DE CLIENTES" : "ADMINISTRACION"}</p><h2>{customerAccess ? "Realiza tu pedido" : "Bienvenido"}</h2><p>Ingresa con tu correo electrónico y contraseña.</p></div>
-    <label className="form-check mb-3"><input className="form-check-input" type="checkbox" checked={customerAccess} onChange={(event) => setCustomerAccess(event.target.checked)} /><span className="ms-2">Acceder como cliente</span></label>
-    <label htmlFor="access-email" className="form-label">Correo electrónico</label>
-    <input id="access-email" className="form-control form-control-lg" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-    <label htmlFor="access-password" className="form-label mt-3">Contraseña</label>
-    <input id="access-password" className="form-control form-control-lg" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-    {error && <p className="text-danger mt-3 mb-0">{error}</p>}
-    <button className="btn btn-primary btn-lg w-100 mt-4" disabled={loading}>{loading ? "Ingresando..." : "Ingresar"}</button>
-  </form></main>;
+  return (
+    <main className="access-shell">
+      <section className="access-brand">
+        <div className="access-brand-content">
+          <h1>
+            {customerAccess ? (
+              <>Pedidos simples.<br />Despachos claros.</>
+            ) : (
+              <>Gestiona cada pedido<br />con control.</>
+            )}
+          </h1>
+          <p>
+            {customerAccess
+              ? "Haz tu pedido y revisa su estado desde un solo lugar."
+              : "Catálogo, clientes y despachos en una vista operativa."}
+          </p>
+        </div>
+        <div className="access-brand-footer">
+          <small>
+            Aplicación desarrollada por{" "}
+            <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+              <strong>RAEV Soluciones Informática SpA</strong>
+            </a>{" "}
+            | Roderick Espinoza
+          </small>
+        </div>
+      </section>
+
+      <div className="access-form-container">
+        <form className="access-form" onSubmit={submit}>
+          <div className="access-form-heading">
+            <BrandMark />
+
+            <div className="access-tabs" role="tablist" aria-label="Modo de acceso">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={customerAccess}
+                className={`access-tab ${customerAccess ? "active" : ""}`}
+                onClick={() => { setCustomerAccess(true); setError(""); }}
+              >
+                <Users size={16} />
+                <span>Acceso Cliente</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!customerAccess}
+                className={`access-tab ${!customerAccess ? "active" : ""}`}
+                onClick={() => { setCustomerAccess(false); setError(""); }}
+              >
+                <Settings size={16} />
+                <span>Administración</span>
+              </button>
+            </div>
+
+            <p className="eyebrow">{customerAccess ? "PORTAL DE CLIENTES" : "ADMINISTRACIÓN"}</p>
+            <h2>{customerAccess ? "Realiza tu pedido" : "Panel Administrativo"}</h2>
+            <p>
+              {customerAccess
+                ? "Ingresa con tu correo electrónico y contraseña."
+                : "Ingresa con tus credenciales de administración."}
+            </p>
+          </div>
+
+          <label htmlFor="access-email" className="form-label">Correo electrónico</label>
+          <input
+            id="access-email"
+            className="form-control"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="Correo Electrónico"
+            required
+          />
+
+          <label htmlFor="access-password" className="form-label mt-3">Contraseña</label>
+          <input
+            id="access-password"
+            className="form-control"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+
+          {error && <p className="text-danger mt-3 mb-0">{error}</p>}
+          <button className="btn btn-primary btn-lg w-100 mt-4" disabled={loading}>
+            {loading ? "Ingresando..." : "Ingresar"}
+          </button>
+        </form>
+
+        <footer className="access-mobile-footer">
+          <small>
+            Aplicación desarrollada por{" "}
+            <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+              <strong>RAEV Soluciones Informática SpA</strong>
+            </a>{" "}
+            | Roderick Espinoza
+          </small>
+        </footer>
+      </div>
+    </main>
+  );
 }
 
 function AdminAccess({ onLogin, onCustomerAccess }) {
@@ -95,16 +189,98 @@ function AdminAccess({ onLogin, onCustomerAccess }) {
     }
   }
 
-  return <main className="access-shell"><section className="access-brand"><div className="access-brand-content"><h1>Gestiona cada pedido con control.</h1><p>Catálogo, clientes y despachos en una vista operativa.</p></div><div className="access-brand-footer"><small>Aplicación desarrollada por <strong>RAEV Soluciones Informática SpA</strong> | Roderick Espinoza</small></div></section><form className="access-form" onSubmit={submit}>
-    <div className="access-form-heading"><BrandMark /><p className="eyebrow">ADMINISTRACION</p><h2>Bienvenido</h2><p>Ingresa con tus credenciales para continuar.</p></div>
-    <label htmlFor="admin-email" className="form-label">Correo</label>
-    <input id="admin-email" className="form-control form-control-lg" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-    <label htmlFor="admin-password" className="form-label mt-3">Contraseña</label>
-    <input id="admin-password" className="form-control form-control-lg" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-    {error && <p className="text-danger mt-3 mb-0">{error}</p>}
-    <button className="btn btn-primary btn-lg w-100 mt-4" disabled={loading}>{loading ? "Ingresando..." : "Ingresar"}</button>
-    <button className="btn btn-link w-100 mt-3" type="button" onClick={onCustomerAccess}>Volver a pedidos</button>
-  </form></main>;
+  return (
+    <main className="access-shell">
+      <section className="access-brand">
+        <div className="access-brand-content">
+          <h1>Gestiona cada pedido<br />con control.</h1>
+          <p>Catálogo, clientes y despachos en una vista operativa.</p>
+        </div>
+        <div className="access-brand-footer">
+          <small>
+            Aplicación desarrollada por{" "}
+            <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+              <strong>RAEV Soluciones Informática SpA</strong>
+            </a>{" "}
+            | Roderick Espinoza
+          </small>
+        </div>
+      </section>
+
+      <div className="access-form-container">
+        <form className="access-form" onSubmit={submit}>
+          <div className="access-form-heading">
+            <BrandMark />
+
+            <div className="access-tabs" role="tablist" aria-label="Modo de acceso">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={false}
+                className="access-tab"
+                onClick={onCustomerAccess}
+              >
+                <Users size={16} />
+                <span>Acceso Cliente</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={true}
+                className="access-tab active"
+              >
+                <Settings size={16} />
+                <span>Administración</span>
+              </button>
+            </div>
+
+            <p className="eyebrow">ADMINISTRACIÓN</p>
+            <h2>Panel Administrativo</h2>
+            <p>Ingresa con tus credenciales para continuar.</p>
+          </div>
+
+          <label htmlFor="admin-email" className="form-label">Correo electrónico</label>
+          <input
+            id="admin-email"
+            className="form-control"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="Correo Electrónico"
+            required
+          />
+
+          <label htmlFor="admin-password" className="form-label mt-3">Contraseña</label>
+          <input
+            id="admin-password"
+            className="form-control"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+
+          {error && <p className="text-danger mt-3 mb-0">{error}</p>}
+          <button className="btn btn-primary btn-lg w-100 mt-4" disabled={loading}>
+            {loading ? "Ingresando..." : "Ingresar"}
+          </button>
+          <button className="btn btn-link w-100 mt-3 text-decoration-none" type="button" onClick={onCustomerAccess}>
+            Volver a pedidos
+          </button>
+        </form>
+
+        <footer className="access-mobile-footer">
+          <small>
+            Aplicación desarrollada por{" "}
+            <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+              <strong>RAEV Soluciones Informática SpA</strong>
+            </a>{" "}
+            | Roderick Espinoza
+          </small>
+        </footer>
+      </div>
+    </main>
+  );
 }
 
 function ProductManagerLegacy({ categories }) {
