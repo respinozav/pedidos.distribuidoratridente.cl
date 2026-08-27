@@ -2,6 +2,7 @@ import tests.test_catalog as tc
 import tests.test_ordering as to
 import tests.test_notifications as tn
 import tests.test_publicidad as tp
+import tests.test_sesion_logs as ts
 
 
 class MonkeyPatch:
@@ -26,7 +27,8 @@ def main():
     tn.test_order_pdf_with_mixed_afecto_and_exento()
     tn.test_notify_administrators_only_sends_to_recibe_pedido_users(mp)
     tp.test_publicidad_crud_cycle()
-    print(">>> ALL 8 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    ts.test_session_logs_recording_and_queries()
+    print(">>> ALL 9 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

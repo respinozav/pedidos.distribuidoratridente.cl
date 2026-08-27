@@ -210,3 +210,29 @@ class Publicidad(AuditMixin, Base):
     producto: Mapped[Producto | None] = relationship("Producto")
 
 
+class SesionLog(Base):
+    __tablename__ = "sesion_logs"
+    __table_args__ = (
+        Index("ix_sesion_logs_tipo_usuario_estado", "tipo_usuario", "estado"),
+        Index("ix_sesion_logs_correo", "correo"),
+        Index("ix_sesion_logs_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tipo_usuario: Mapped[str] = mapped_column(String(30))  # "ADMINISTRADOR", "CLIENTE"
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    cliente_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    correo: Mapped[str] = mapped_column(String(255), index=True)
+    nombre: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    estado: Mapped[str] = mapped_column(String(30))  # "EXITOSO", "FALLIDO"
+    mensaje: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    usuario: Mapped[Usuario | None] = relationship("Usuario")
+    cliente: Mapped[Cliente | None] = relationship("Cliente")

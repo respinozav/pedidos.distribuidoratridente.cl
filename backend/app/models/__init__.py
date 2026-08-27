@@ -9,6 +9,7 @@ from app.models.entities import (
     Producto,
     Publicidad,
     Rol,
+    SesionLog,
     Usuario,
 )
 from app.models.system_settings import SystemSettings
@@ -24,6 +25,7 @@ __all__ = [
     "Producto",
     "Publicidad",
     "Rol",
+    "SesionLog",
     "SystemSettings",
     "Usuario",
 ]

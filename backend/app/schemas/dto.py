@@ -130,8 +130,8 @@ class CustomerUpdate(CustomerInput):
 
 
 class CustomerLogin(BaseModel):
-    correo: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    correo: str
+    password: str
 
 
 class CustomerProfileUpdate(BaseModel):
@@ -150,8 +150,8 @@ class CustomerPasswordUpdate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    correo: EmailStr
-    password: str = Field(min_length=8)
+    correo: str
+    password: str
 
 
 class RoleOutput(ORMModel):
@@ -335,5 +335,34 @@ class PublicidadOutput(PublicidadInput, ORMModel):
     producto: PublicidadProductoOutput | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class SesionLogOutput(ORMModel):
+    id: UUID
+    tipo_usuario: str
+    usuario_id: UUID | None = None
+    cliente_id: UUID | None = None
+    correo: str
+    nombre: str | None = None
+    estado: str
+    mensaje: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    created_at: datetime
+
+
+class SesionLogPage(BaseModel):
+    items: list[SesionLogOutput]
+    total: int
+    page: int
+    page_size: int
+
+
+class SesionLogStats(BaseModel):
+    total: int
+    exitosos: int
+    fallidos: int
+    admin_total: int
+    cliente_total: int
 
 

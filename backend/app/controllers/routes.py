@@ -1,13 +1,14 @@
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession
 from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
-from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Publicidad, Rol, Usuario
+from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Publicidad, Rol, SesionLog, Usuario
 from app.repositories.base import Repository
 from app.repositories.system_settings_repository import SystemSettingsRepository
 from app.schemas.dto import (
@@ -38,6 +39,9 @@ from app.schemas.dto import (
     PublicidadOutput,
     PublicidadProductoOutput,
     RoleOutput,
+    SesionLogOutput,
+    SesionLogPage,
+    SesionLogStats,
     TokenOutput,
     UserCreate,
     UserLogin,
@@ -57,11 +61,102 @@ router.include_router(system_settings_router)
 router.include_router(whatsapp_router)
 
 
+def extract_client_info(request: Request) -> tuple[str | None, str | None]:
+    """Extrae la IP real del cliente (soportando proxies) y el User-Agent."""
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        ip = forwarded_for.split(",")[0].strip()
+    else:
+        ip = request.headers.get("x-real-ip") or (request.client.host if request.client else None)
+    user_agent = request.headers.get("user-agent")
+    return ip, user_agent
+
+
+def record_session_log(
+    database: DatabaseSession,
+    tipo_usuario: str,
+    correo: str,
+    estado: str,
+    mensaje: str | None = None,
+    nombre: str | None = None,
+    usuario_id: UUID | None = None,
+    cliente_id: UUID | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> SesionLog:
+    """Registra y persiste inmediatamente un intento de inicio de sesión."""
+    log_entry = SesionLog(
+        tipo_usuario=tipo_usuario,
+        correo=correo,
+        estado=estado,
+        mensaje=mensaje,
+        nombre=nombre,
+        usuario_id=usuario_id,
+        cliente_id=cliente_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    database.add(log_entry)
+    database.commit()
+    return log_entry
+
+
 @router.post("/login", response_model=TokenOutput, tags=["Autenticacion"])
-def login(payload: UserLogin, database: DatabaseSession) -> TokenOutput:
-    user = database.scalar(select(Usuario).where(Usuario.correo == payload.correo, Usuario.activo.is_(True)))
-    if not user or not verify_password(payload.password, user.password_hash):
+def login(payload: UserLogin, request: Request, database: DatabaseSession) -> TokenOutput:
+    ip, user_agent = extract_client_info(request)
+    correo_clean = payload.correo.strip()
+    user = database.scalar(select(Usuario).where(func.lower(Usuario.correo) == correo_clean.lower()))
+    if not user:
+        record_session_log(
+            database=database,
+            tipo_usuario="ADMINISTRADOR",
+            correo=correo_clean,
+            estado="FALLIDO",
+            mensaje="Usuario no encontrado",
+            ip_address=ip,
+            user_agent=user_agent,
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
+
+    if not user.activo:
+        record_session_log(
+            database=database,
+            tipo_usuario="ADMINISTRADOR",
+            usuario_id=user.id,
+            nombre=user.nombre,
+            correo=user.correo,
+            estado="FALLIDO",
+            mensaje="Cuenta inactiva",
+            ip_address=ip,
+            user_agent=user_agent,
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
+
+    if not verify_password(payload.password, user.password_hash):
+        record_session_log(
+            database=database,
+            tipo_usuario="ADMINISTRADOR",
+            usuario_id=user.id,
+            nombre=user.nombre,
+            correo=user.correo,
+            estado="FALLIDO",
+            mensaje="Contraseña incorrecta",
+            ip_address=ip,
+            user_agent=user_agent,
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
+
+    record_session_log(
+        database=database,
+        tipo_usuario="ADMINISTRADOR",
+        usuario_id=user.id,
+        nombre=user.nombre,
+        correo=user.correo,
+        estado="EXITOSO",
+        mensaje="Inicio de sesión exitoso",
+        ip_address=ip,
+        user_agent=user_agent,
+    )
     expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
     return TokenOutput(access_token=create_access_token(user.id, user.rol.nombre, expires_minutes=expire_minutes))
 
@@ -122,12 +217,61 @@ def customer_login_options() -> None:
 
 
 @router.post("/clientes/login", response_model=TokenOutput, tags=["Acceso cliente"])
-def customer_login(payload: CustomerLogin, database: DatabaseSession) -> TokenOutput:
-    customer = database.scalar(
-        select(Cliente).where(Cliente.correo == payload.correo, Cliente.activo.is_(True))
-    )
-    if not customer or not customer.password_hash or not verify_password(payload.password, customer.password_hash):
+def customer_login(payload: CustomerLogin, request: Request, database: DatabaseSession) -> TokenOutput:
+    ip, user_agent = extract_client_info(request)
+    correo_clean = payload.correo.strip()
+    customer = database.scalar(select(Cliente).where(func.lower(Cliente.correo) == correo_clean.lower()))
+    if not customer:
+        record_session_log(
+            database=database,
+            tipo_usuario="CLIENTE",
+            correo=correo_clean,
+            estado="FALLIDO",
+            mensaje="Cliente no encontrado",
+            ip_address=ip,
+            user_agent=user_agent,
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
+
+    if not customer.activo:
+        record_session_log(
+            database=database,
+            tipo_usuario="CLIENTE",
+            cliente_id=customer.id,
+            nombre=customer.nombre,
+            correo=customer.correo,
+            estado="FALLIDO",
+            mensaje="Cuenta inactiva",
+            ip_address=ip,
+            user_agent=user_agent,
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
+
+    if not customer.password_hash or not verify_password(payload.password, customer.password_hash):
+        record_session_log(
+            database=database,
+            tipo_usuario="CLIENTE",
+            cliente_id=customer.id,
+            nombre=customer.nombre,
+            correo=customer.correo,
+            estado="FALLIDO",
+            mensaje="Contraseña incorrecta",
+            ip_address=ip,
+            user_agent=user_agent,
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
+
+    record_session_log(
+        database=database,
+        tipo_usuario="CLIENTE",
+        cliente_id=customer.id,
+        nombre=customer.nombre,
+        correo=customer.correo,
+        estado="EXITOSO",
+        mensaje="Inicio de sesión exitoso",
+        ip_address=ip,
+        user_agent=user_agent,
+    )
     expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
     return TokenOutput(access_token=create_customer_access_token(customer.id, expires_minutes=expire_minutes))
 
@@ -846,4 +990,78 @@ def delete_publicidad(
     database.delete(entity)
     database.commit()
     return {"message": "Publicidad eliminada correctamente"}
+
+
+@router.get("/admin/sesiones/logs", response_model=SesionLogPage, tags=["Logs Sesiones"])
+def list_session_logs(
+    database: DatabaseSession,
+    _: AdminUser,
+    tipo_usuario: str | None = None,
+    estado: str | None = None,
+    search: str | None = Query(default=None, max_length=150),
+    desde: str | None = None,
+    hasta: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> SesionLogPage:
+    """Lista los logs de auditoría de sesiones con filtros avanzados y paginación."""
+    statement = select(SesionLog)
+    if tipo_usuario and tipo_usuario.upper() != "TODOS":
+        statement = statement.where(SesionLog.tipo_usuario == tipo_usuario.upper())
+    if estado and estado.upper() != "TODOS":
+        statement = statement.where(SesionLog.estado == estado.upper())
+    if search:
+        search_pattern = f"%{search.strip()}%"
+        statement = statement.where(
+            (SesionLog.correo.ilike(search_pattern))
+            | (SesionLog.nombre.ilike(search_pattern))
+            | (SesionLog.ip_address.ilike(search_pattern))
+            | (SesionLog.mensaje.ilike(search_pattern))
+        )
+    CHILE_TZ = ZoneInfo("America/Santiago")
+    if desde:
+        try:
+            from_dt = datetime.strptime(f"{desde} 00:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(SesionLog.created_at >= from_dt)
+        except ValueError:
+            pass
+    if hasta:
+        try:
+            to_dt = datetime.strptime(f"{hasta} 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(SesionLog.created_at <= to_dt)
+        except ValueError:
+            pass
+
+    total = database.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    logs = list(
+        database.scalars(
+            statement.order_by(SesionLog.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    )
+    return SesionLogPage(
+        items=[SesionLogOutput.model_validate(log, from_attributes=True) for log in logs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/admin/sesiones/logs/stats", response_model=SesionLogStats, tags=["Logs Sesiones"])
+def session_logs_stats(database: DatabaseSession, _: AdminUser) -> SesionLogStats:
+    """Obtiene métricas rápidas de los logs de auditoría de sesiones."""
+    total = database.scalar(select(func.count(SesionLog.id))) or 0
+    exitosos = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.estado == "EXITOSO")) or 0
+    fallidos = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.estado == "FALLIDO")) or 0
+    admin_total = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.tipo_usuario == "ADMINISTRADOR")) or 0
+    cliente_total = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.tipo_usuario == "CLIENTE")) or 0
+
+    return SesionLogStats(
+        total=total,
+        exitosos=exitosos,
+        fallidos=fallidos,
+        admin_total=admin_total,
+        cliente_total=cliente_total,
+    )
 
