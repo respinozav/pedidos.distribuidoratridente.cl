@@ -53,8 +53,9 @@ from app.api.endpoints.whatsapp import router as whatsapp_router
 from app.services.notifications import dispatch_order_notifications_in_background, notify_customer_password_changed
 
 from app.services.ordering import OrderService
-from app.services.pricing import customer_product_price
+from app.services.pricing import customer_product_box_price, customer_product_price
 from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
+
 
 router = APIRouter(prefix="/api")
 router.include_router(system_settings_router)
@@ -465,11 +466,20 @@ def list_products(
         .limit(page_size)
     )
     return ProductPage(
-        items=[ProductOutput.model_validate(product, from_attributes=True).model_copy(update={"precio_cliente": customer_product_price(product, customer) if customer else None}) for product in products],
+        items=[
+            ProductOutput.model_validate(product, from_attributes=True).model_copy(
+                update={
+                    "precio_cliente": customer_product_price(product, customer) if customer else None,
+                    "precio_caja_cliente": customer_product_box_price(product, customer) if customer else None,
+                }
+            )
+            for product in products
+        ],
         total=total,
         page=page,
         page_size=page_size,
     )
+
 
 
 @router.get("/admin/productos", response_model=ProductPage, tags=["Productos"])

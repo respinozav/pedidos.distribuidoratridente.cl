@@ -38,6 +38,9 @@ class ProductInput(BaseModel):
     imagen_url: str | None = Field(default=None, max_length=7_000_000)
     activo: bool = True
     afecto: bool = False
+    tiene_caja: bool = False
+    cantidad_caja: int | None = Field(default=None, ge=1)
+    precio_caja: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
 
     @field_validator("nombre")
     @classmethod
@@ -48,6 +51,20 @@ class ProductInput(BaseModel):
     @classmethod
     def normalize_code(cls, value: str) -> str:
         return value.strip().upper()
+
+    @field_validator("cantidad_caja")
+    @classmethod
+    def validate_cantidad_caja(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("La cantidad por caja debe ser mayor a 0")
+        return value
+
+    @field_validator("precio_caja")
+    @classmethod
+    def validate_precio_caja(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and value <= 0:
+            raise ValueError("El precio por caja debe ser mayor a 0")
+        return value
 
     @field_validator("imagen_url")
     @classmethod
@@ -68,6 +85,7 @@ class ProductInput(BaseModel):
 class ProductOutput(ProductInput, ORMModel):
     id: UUID
     precio_cliente: Decimal | None = None
+    precio_caja_cliente: Decimal | None = None
     categoria: CategoryOutput | None = None
 
 
@@ -195,6 +213,15 @@ class TokenOutput(BaseModel):
 class OrderLineInput(BaseModel):
     producto_id: UUID
     cantidad: int = Field(gt=0)
+    tipo_empaque: str = Field(default="unidad")
+
+    @field_validator("tipo_empaque")
+    @classmethod
+    def validate_tipo_empaque(cls, value: str) -> str:
+        val = value.strip().lower()
+        if val not in ("unidad", "caja"):
+            raise ValueError("El tipo de empaque debe ser 'unidad' o 'caja'")
+        return val
 
 
 class OrderCreate(BaseModel):
@@ -208,6 +235,8 @@ class OrderLineOutput(ORMModel):
     nombre_producto: str
     precio_unitario: Decimal
     cantidad: int
+    tipo_empaque: str = "unidad"
+    cantidad_caja: int | None = None
     subtotal: Decimal
     afecto: bool = False
 

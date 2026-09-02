@@ -282,7 +282,7 @@ function AdminAccess({ onLogin, onCustomerAccess }) {
 }
 
 function ProductManagerLegacy({ categories }) {
-  const emptyProduct = { categoria_id: "", codigo: "", nombre: "", precio: "", cantidad: "0", imagen_url: "", activo: true, afecto: false };
+  const emptyProduct = { categoria_id: "", codigo: "", nombre: "", precio: "", cantidad: "0", imagen_url: "", activo: true, afecto: false, tiene_caja: false, cantidad_caja: "", precio_caja: "" };
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(emptyProduct);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -337,7 +337,7 @@ function ProductManagerLegacy({ categories }) {
 
   function openEdit(product) {
     setEditingProduct(product);
-    setForm({ ...product, precio: String(product.precio), cantidad: String(product.cantidad), imagen_url: product.imagen_url ?? "", afecto: product.afecto ?? false });
+    setForm({ ...product, precio: String(product.precio), cantidad: String(product.cantidad), imagen_url: product.imagen_url ?? "", afecto: product.afecto ?? false, tiene_caja: product.tiene_caja ?? false, cantidad_caja: product.cantidad_caja != null ? String(product.cantidad_caja) : "", precio_caja: product.precio_caja != null ? String(product.precio_caja) : "" });
     setError("");
   }
 
@@ -347,8 +347,16 @@ function ProductManagerLegacy({ categories }) {
       setError("Selecciona una categoría para el producto.");
       return;
     }
+    if (form.tiene_caja && (!form.cantidad_caja || Number(form.cantidad_caja) <= 0)) {
+      setError("Indica una cantidad válida de unidades por caja (mayor a 0).");
+      return;
+    }
+    if (form.tiene_caja && form.precio_caja && Number(form.precio_caja) <= 0) {
+      setError("Indica un precio por caja válido (mayor a 0).");
+      return;
+    }
     setSaving(true);
-    const payload = { ...form, nombre: form.nombre.trim().toUpperCase(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto) };
+    const payload = { ...form, nombre: form.nombre.trim().toUpperCase(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto), tiene_caja: Boolean(form.tiene_caja), cantidad_caja: form.tiene_caja && form.cantidad_caja ? Number(form.cantidad_caja) : null, precio_caja: form.tiene_caja && form.precio_caja ? Number(form.precio_caja) : null };
     try {
       if (editingProduct) {
         await api.put(`/productos/${editingProduct.id}`, payload);
@@ -369,11 +377,11 @@ function ProductManagerLegacy({ categories }) {
   }
 
   const categoryName = (id) => categories.find((category) => category.id === id)?.nombre ?? "Sin categoría";
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CATALOGO</p><h1>Productos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de inventario</span><button className="btn btn-primary" onClick={openCreate}><Plus size={18} />Nuevo producto</button></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">INVENTARIO</p><h2>Controla tu Productos</h2><p>Gestiona precios, disponibilidad y stock para los pedidos de clientes.</p></div><div className="summary-metric"><span>{products.length}</span><small>Productos registrados</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de productos</h2><p>Productos activos e inactivos del catálogo.</p></div><span className="panel-count">{products.length} registros</span></div>{notice && <div className="alert alert-success alert-dismissible fade show mt-3 mb-0 category-notice" role="alert"><CheckCircle2 size={18} /><span className="ms-2">{notice}</span><button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando productos...</p> : <div className="product-table mt-4"><div className="product-table-head"><span>Producto</span><span className="d-none d-md-block">Categoría</span><span>Precio</span><span>Stock</span><span>IVA</span><span>Estado</span><span>Acciones</span></div>{products.length ? products.map((product) => <div className="product-row" key={product.id}><div className="product-name"><span className="product-thumb">{product.imagen_url ? <img src={product.imagen_url} alt="" /> : <Package size={18} />}</span><div><strong>{product.nombre}</strong><small>{product.codigo}</small></div></div><span className="d-none d-md-block product-category">{categoryName(product.categoria_id)}</span><strong>{money.format(product.precio)}</strong><span>{product.cantidad}</span><span className={product.afecto ? "status-active" : "status-inactive"}>{product.afecto ? "Afecto" : "Exento"}</span><span className={product.activo ? "status-active" : "status-inactive"}>{product.activo ? "Activo" : "Inactivo"}</span><button className="icon-button category-edit" onClick={() => openEdit(product)} aria-label={`Editar ${product.nombre}`}><Pencil size={16} /></button></div>) : <p className="text-secondary p-4 mb-0">Aún no hay productos. Agrega el primero para comenzar.</p>}</div>}</section></div>{(editingProduct || form.categoria_id) && <div className="modal-backdrop-custom" role="presentation"><form className="category-modal product-modal" onSubmit={saveProduct} role="dialog" aria-modal="true" aria-labelledby="product-form-title"><header><div><p className="eyebrow">CATALOGO</p><h2 id="product-form-title">{editingProduct ? "Editar producto" : "Nuevo producto"}</h2></div><button type="button" className="icon-button" onClick={() => { setEditingProduct(null); setForm(emptyProduct); }} aria-label="Cerrar formulario"><X size={19} /></button></header><div className="modal-body-custom"><div className="product-form-grid"><div className="product-form-wide"><label htmlFor="product-category" className="form-label">Categoría</label><select id="product-category" className="form-select" value={form.categoria_id} onChange={(event) => setField("categoria_id", event.target.value)} required><option value="">Selecciona una categoría</option>{categories.filter((category) => category.activo || category.id === form.categoria_id).map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></div><div><label htmlFor="product-code" className="form-label">Código</label><input id="product-code" className="form-control" value={form.codigo} onChange={(event) => setField("codigo", event.target.value)} maxLength="50" required /></div><div><label htmlFor="product-stock" className="form-label">Stock</label><input id="product-stock" className="form-control" type="number" min="0" value={form.cantidad} onChange={(event) => setField("cantidad", event.target.value)} required /></div><div className="product-form-wide"><label htmlFor="product-name" className="form-label">Nombre</label><input id="product-name" className="form-control" value={form.nombre} onChange={(event) => setField("nombre", event.target.value)} maxLength="180" required autoFocus /></div><div><label htmlFor="product-price" className="form-label">Precio base</label><input id="product-price" className="form-control" type="number" min="1" step="1" value={form.precio} onChange={(event) => setField("precio", event.target.value)} required /></div><div><label htmlFor="product-image" className="form-label">URL imagen</label><input id="product-image" className="form-control" type="url" placeholder="https://..." value={form.imagen_url} onChange={(event) => setField("imagen_url", event.target.value)} /></div></div><div className="status-toggle"><div><strong>Producto disponible</strong><small>Los productos inactivos no aparecen a los clientes.</small></div><label className="switch"><input type="checkbox" checked={form.activo} onChange={(event) => setField("activo", event.target.checked)} /><span /></label></div><div className="status-toggle"><div><strong>{form.afecto ? "Producto Afecto a IVA" : "Producto Exento de IVA"}</strong><small>{form.afecto ? "Marcado como afecto a impuestos (afecto = true)." : "Marcado como exento de impuestos (afecto = false)."}</small></div><label className="switch"><input type="checkbox" checked={form.afecto} onChange={(event) => setField("afecto", event.target.checked)} /><span /></label></div></div><footer><button type="button" className="btn btn-light" onClick={() => { setEditingProduct(null); setForm(emptyProduct); }}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar producto</>}</button></footer></form></div>}</>;
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CATALOGO</p><h1>Productos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de inventario</span><button className="btn btn-primary" onClick={openCreate}><Plus size={18} />Nuevo producto</button></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">INVENTARIO</p><h2>Controla tu Productos</h2><p>Gestiona precios, disponibilidad y stock para los pedidos de clientes.</p></div><div className="summary-metric"><span>{products.length}</span><small>Productos registrados</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de productos</h2><p>Productos activos e inactivos del catálogo.</p></div><span className="panel-count">{products.length} registros</span></div>{notice && <div className="alert alert-success alert-dismissible fade show mt-3 mb-0 category-notice" role="alert"><CheckCircle2 size={18} /><span className="ms-2">{notice}</span><button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando productos...</p> : <div className="product-table mt-4"><div className="product-table-head"><span>Producto</span><span className="d-none d-md-block">Categoría</span><span>Precio</span><span>Stock</span><span>IVA</span><span>Estado</span><span>Acciones</span></div>{products.length ? products.map((product) => <div className="product-row" key={product.id}><div className="product-name"><span className="product-thumb">{product.imagen_url ? <img src={product.imagen_url} alt="" /> : <Package size={18} />}</span><div><strong>{product.nombre}</strong><small>{product.codigo}{product.tiene_caja && product.cantidad_caja ? ` · Caja x${product.cantidad_caja}` : ""}</small></div></div><span className="d-none d-md-block product-category">{categoryName(product.categoria_id)}</span><strong>{money.format(product.precio)}</strong><span>{product.cantidad}</span><span className={product.afecto ? "status-active" : "status-inactive"}>{product.afecto ? "Afecto" : "Exento"}</span><span className={product.activo ? "status-active" : "status-inactive"}>{product.activo ? "Activo" : "Inactivo"}</span><button className="icon-button category-edit" onClick={() => openEdit(product)} aria-label={`Editar ${product.nombre}`}><Pencil size={16} /></button></div>) : <p className="text-secondary p-4 mb-0">Aún no hay productos. Agrega el primero para comenzar.</p>}</div>}</section></div>{(editingProduct || form.categoria_id) && <div className="modal-backdrop-custom" role="presentation"><form className="category-modal product-modal" onSubmit={saveProduct} role="dialog" aria-modal="true" aria-labelledby="product-form-title"><header><div><p className="eyebrow">CATALOGO</p><h2 id="product-form-title">{editingProduct ? "Editar producto" : "Nuevo producto"}</h2></div><button type="button" className="icon-button" onClick={() => { setEditingProduct(null); setForm(emptyProduct); }} aria-label="Cerrar formulario"><X size={19} /></button></header><div className="modal-body-custom"><div className="product-form-grid"><div className="product-form-wide"><label htmlFor="product-category" className="form-label">Categoría</label><select id="product-category" className="form-select" value={form.categoria_id} onChange={(event) => setField("categoria_id", event.target.value)} required><option value="">Selecciona una categoría</option>{categories.filter((category) => category.activo || category.id === form.categoria_id).map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></div><div><label htmlFor="product-code" className="form-label">Código</label><input id="product-code" className="form-control" value={form.codigo} onChange={(event) => setField("codigo", event.target.value)} maxLength="50" required /></div><div><label htmlFor="product-stock" className="form-label">Stock</label><input id="product-stock" className="form-control" type="number" min="0" value={form.cantidad} onChange={(event) => setField("cantidad", event.target.value)} required /></div><div className="product-form-wide"><label htmlFor="product-name" className="form-label">Nombre</label><input id="product-name" className="form-control" value={form.nombre} onChange={(event) => setField("nombre", event.target.value)} maxLength="180" required autoFocus /></div><div><label htmlFor="product-price" className="form-label">Precio base</label><input id="product-price" className="form-control" type="number" min="1" step="1" value={form.precio} onChange={(event) => setField("precio", event.target.value)} required /></div><div><label htmlFor="product-image" className="form-label">URL imagen</label><input id="product-image" className="form-control" type="url" placeholder="https://..." value={form.imagen_url} onChange={(event) => setField("imagen_url", event.target.value)} /></div></div><div className="status-toggle"><div><strong>¿Tiene caja?</strong><small>{form.tiene_caja ? "El producto se comercializa o empaqueta por caja." : "El producto se comercializa por unidad individual."}</small></div><label className="switch"><input type="checkbox" checked={form.tiene_caja} onChange={(event) => setField("tiene_caja", event.target.checked)} /><span /></label></div>{form.tiene_caja && <div className="product-form-grid mt-2"><div><label htmlFor="product-box-qty" className="form-label">Cantidad por caja (unidades)</label><input id="product-box-qty" className="form-control" type="number" min="1" placeholder="Ej: 12, 24, 50..." value={form.cantidad_caja} onChange={(event) => setField("cantidad_caja", event.target.value)} required={form.tiene_caja} /></div><div><label htmlFor="product-box-price" className="form-label">Precio por caja</label><input id="product-box-price" className="form-control" type="number" min="1" step="1" placeholder="Ej: 15000" value={form.precio_caja} onChange={(event) => setField("precio_caja", event.target.value)} /></div></div>}<div className="status-toggle"><div><strong>Producto disponible</strong><small>Los productos inactivos no aparecen a los clientes.</small></div><label className="switch"><input type="checkbox" checked={form.activo} onChange={(event) => setField("activo", event.target.checked)} /><span /></label></div><div className="status-toggle"><div><strong>{form.afecto ? "Producto Afecto a IVA" : "Producto Exento de IVA"}</strong><small>{form.afecto ? "Marcado como afecto a impuestos (afecto = true)." : "Marcado como exento de impuestos (afecto = false)."}</small></div><label className="switch"><input type="checkbox" checked={form.afecto} onChange={(event) => setField("afecto", event.target.checked)} /><span /></label></div></div><footer><button type="button" className="btn btn-light" onClick={() => { setEditingProduct(null); setForm(emptyProduct); }}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar producto</>}</button></footer></form></div>}</>;
 }
 
 function ProductManager({ categories }) {
-  const blankProduct = { categoria_id: "", codigo: "", nombre: "", precio: "", cantidad: "0", imagen_url: "", activo: true, afecto: false };
+  const blankProduct = { categoria_id: "", codigo: "", nombre: "", precio: "", cantidad: "0", imagen_url: "", activo: true, afecto: false, tiene_caja: false, cantidad_caja: "", precio_caja: "" };
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -542,7 +550,7 @@ function ProductManager({ categories }) {
 
   function openProduct(current = null) {
     setProduct(current);
-    setForm(current ? { ...current, precio: String(current.precio), cantidad: String(current.cantidad), imagen_url: current.imagen_url ?? "", afecto: current.afecto ?? false } : { ...blankProduct, categoria_id: categories.find((category) => category.activo)?.id ?? "" });
+    setForm(current ? { ...current, precio: String(current.precio), cantidad: String(current.cantidad), imagen_url: current.imagen_url ?? "", afecto: current.afecto ?? false, tiene_caja: current.tiene_caja ?? false, cantidad_caja: current.cantidad_caja != null ? String(current.cantidad_caja) : "", precio_caja: current.precio_caja != null ? String(current.precio_caja) : "" } : { ...blankProduct, categoria_id: categories.find((category) => category.activo)?.id ?? "" });
     setError("");
   }
 
@@ -566,11 +574,19 @@ function ProductManager({ categories }) {
 
   async function saveProduct(event) {
     event.preventDefault();
-    const payload = { ...form, nombre: form.nombre.trim().toUpperCase(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto) };
-    if (!payload.categoria_id) {
+    if (!form.categoria_id) {
       setError("Selecciona una categoría.");
       return;
     }
+    if (form.tiene_caja && (!form.cantidad_caja || Number(form.cantidad_caja) <= 0)) {
+      setError("Indica una cantidad válida de unidades por caja (mayor a 0).");
+      return;
+    }
+    if (form.tiene_caja && form.precio_caja && Number(form.precio_caja) <= 0) {
+      setError("Indica un precio por caja válido (mayor a 0).");
+      return;
+    }
+    const payload = { ...form, nombre: form.nombre.trim().toUpperCase(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto), tiene_caja: Boolean(form.tiene_caja), cantidad_caja: form.tiene_caja && form.cantidad_caja ? Number(form.cantidad_caja) : null, precio_caja: form.tiene_caja && form.precio_caja ? Number(form.precio_caja) : null };
     setSaving(true);
     try {
       if (product) {
@@ -591,7 +607,18 @@ function ProductManager({ categories }) {
     }
   }
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CATALOGO</p><h1>Productos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de Productos</span><button className="btn btn-primary" onClick={() => openProduct()}><Plus size={18} />Nuevo producto</button></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">INVENTARIO</p><h2>Controla tus Productos</h2><p>Gestiona precios, disponibilidad y stock para los pedidos de clientes.</p></div><div className="summary-metric"><span>{products.length}</span><small>Productos registrados</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de productos</h2><p>Productos activos e inactivos del catálogo.</p></div><span className="panel-count">{products.length} registros</span></div>{notice && <div className="alert alert-success alert-dismissible fade show mt-3 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando productos...</p> : <div className="product-table mt-4"><div className="product-table-head"><span>Producto</span><span>Categoría</span><span>Precio</span><span>Stock</span><span>IVA</span><span>Estado</span><span>Acciones</span></div>{products.map((item) => <div className="product-row" key={item.id}><div className="product-name"><span className="product-thumb">{imageSource(item.imagen_url) ? <img src={imageSource(item.imagen_url)} alt="" /> : <Package size={18} />}</span><div><strong>{item.nombre}</strong><small>{item.codigo}</small></div></div><span className="product-category">{categoryName(item.categoria_id)}</span><strong>{money.format(item.precio)}</strong><span>{item.cantidad}</span><span className={item.afecto ? "status-active" : "status-inactive"}>{item.afecto ? "Afecto" : "Exento"}</span><span className={item.activo ? "status-active" : "status-inactive"}>{item.activo ? "Activo" : "Inactivo"}</span><button className="icon-button category-edit" onClick={() => openProduct(item)} aria-label={`Editar ${item.nombre}`}><Pencil size={16} /></button></div>)}</div>}</section></div>{(product || form.categoria_id) && <div className="modal-backdrop-custom"><form className="category-modal product-modal" onSubmit={saveProduct}><header><div><p className="eyebrow">CATALOGO</p><h2>{product ? "Editar producto" : "Nuevo producto"}</h2></div><button type="button" className="icon-button" onClick={() => { setProduct(null); setForm(blankProduct); }}><X size={19} /></button></header><div className="modal-body-custom"><div className="product-form-grid"><div className="product-form-wide"><label className="form-label" htmlFor="product-category-base64">Categoría</label><select id="product-category-base64" className="form-select" value={form.categoria_id} onChange={(event) => setField("categoria_id", event.target.value)} required><option value="">Selecciona una categoría</option>{categories.filter((category) => category.activo || category.id === form.categoria_id).map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></div><div><label className="form-label" htmlFor="product-code-base64">Código</label><input id="product-code-base64" className="form-control" value={form.codigo} onChange={(event) => setField("codigo", event.target.value)} required /></div><div><label className="form-label" htmlFor="product-stock-base64">Stock</label><input id="product-stock-base64" className="form-control" type="number" min="0" value={form.cantidad} onChange={(event) => setField("cantidad", event.target.value)} required /></div><div className="product-form-wide"><label className="form-label" htmlFor="product-name-base64">Nombre</label><input id="product-name-base64" className="form-control" value={form.nombre} onChange={(event) => setField("nombre", event.target.value.toUpperCase())} required /></div><div><label className="form-label" htmlFor="product-price-base64">Precio base</label><input id="product-price-base64" className="form-control" type="number" min="1" value={form.precio} onChange={(event) => setField("precio", event.target.value)} required /></div><div><label className="form-label" htmlFor="product-image-base64">Imagen JPG</label><input id="product-image-base64" className="form-control" type="file" accept=".jpg,.jpeg,image/jpeg" onChange={attachImage} /><small className="form-text">Solo JPG, máximo 5 MB. Se guarda en Base64.</small></div></div>{imageSource(form.imagen_url) && <div className="image-preview"><img src={imageSource(form.imagen_url)} alt="Vista previa" /><button className="btn btn-link btn-sm" type="button" onClick={() => setField("imagen_url", "")}>Quitar imagen</button></div>}<div className="status-toggle"><div><strong>Producto disponible</strong><small>Los productos inactivos no aparecen a los clientes.</small></div><label className="switch"><input type="checkbox" checked={form.activo} onChange={(event) => setField("activo", event.target.checked)} /><span /></label></div><div className="status-toggle"><div><strong>{form.afecto ? "Producto Afecto a IVA" : "Producto Exento de IVA"}</strong><small>{form.afecto ? "Marcado como afecto a impuestos (afecto = true)." : "Marcado como exento de impuestos (afecto = false)."}</small></div><label className="switch"><input type="checkbox" checked={form.afecto} onChange={(event) => setField("afecto", event.target.checked)} /><span /></label></div></div><footer><button className="btn btn-light" type="button" onClick={() => { setProduct(null); setForm(blankProduct); }}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar producto</>}</button></footer></form></div>}</>;
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CATALOGO</p><h1>Productos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de Productos</span><button className="btn btn-primary" onClick={() => openProduct()}><Plus size={18} />Nuevo producto</button></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">INVENTARIO</p><h2>Controla tus Productos</h2><p>Gestiona precios, disponibilidad y stock para los pedidos de clientes.</p></div><div className="summary-metric"><span>{products.length}</span><small>Productos registrados</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de productos</h2><p>Productos activos e inactivos del catálogo.</p></div><span className="panel-count">{products.length} registros</span></div>{notice && <div className="alert alert-success alert-dismissible fade show mt-3 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando productos...</p> : <div className="product-table mt-4"><div className="product-table-head"><span>Producto</span><span>Categoría</span><span>Precio</span><span>Stock</span><span>IVA</span><span>Estado</span><span>Acciones</span></div>{products.map((item) => <div className="product-row" key={item.id}>        <div className="product-name">
+          <span className="product-thumb">
+            {imageSource(item.imagen_url) ? <img src={imageSource(item.imagen_url)} alt="" /> : <Package size={18} />}
+          </span>
+          <div>
+            <strong>{item.nombre}</strong>
+            <small>
+              {item.codigo}
+              {item.tiene_caja && item.cantidad_caja ? ` · Caja x${item.cantidad_caja}${item.precio_caja ? ` (${money.format(item.precio_caja)})` : ""}` : ""}
+            </small>
+          </div>
+        </div><span className="product-category">{categoryName(item.categoria_id)}</span><strong>{money.format(item.precio)}</strong><span>{item.cantidad}</span><span className={item.afecto ? "status-active" : "status-inactive"}>{item.afecto ? "Afecto" : "Exento"}</span><span className={item.activo ? "status-active" : "status-inactive"}>{item.activo ? "Activo" : "Inactivo"}</span><button className="icon-button category-edit" onClick={() => openProduct(item)} aria-label={`Editar ${item.nombre}`}><Pencil size={16} /></button></div>)}</div>}</section></div>{(product || form.categoria_id) && <div className="modal-backdrop-custom"><form className="category-modal product-modal" onSubmit={saveProduct}><header><div><p className="eyebrow">CATALOGO</p><h2>{product ? "Editar producto" : "Nuevo producto"}</h2></div><button type="button" className="icon-button" onClick={() => { setProduct(null); setForm(blankProduct); }}><X size={19} /></button></header><div className="modal-body-custom"><div className="product-form-grid"><div className="product-form-wide"><label className="form-label" htmlFor="product-category-base64">Categoría</label><select id="product-category-base64" className="form-select" value={form.categoria_id} onChange={(event) => setField("categoria_id", event.target.value)} required><option value="">Selecciona una categoría</option>{categories.filter((category) => category.activo || category.id === form.categoria_id).map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></div><div><label className="form-label" htmlFor="product-code-base64">Código</label><input id="product-code-base64" className="form-control" value={form.codigo} onChange={(event) => setField("codigo", event.target.value)} required /></div><div><label className="form-label" htmlFor="product-stock-base64">Stock</label><input id="product-stock-base64" className="form-control" type="number" min="0" value={form.cantidad} onChange={(event) => setField("cantidad", event.target.value)} required /></div><div className="product-form-wide"><label className="form-label" htmlFor="product-name-base64">Nombre</label><input id="product-name-base64" className="form-control" value={form.nombre} onChange={(event) => setField("nombre", event.target.value.toUpperCase())} required /></div><div><label className="form-label" htmlFor="product-price-base64">Precio base</label><input id="product-price-base64" className="form-control" type="number" min="1" value={form.precio} onChange={(event) => setField("precio", event.target.value)} required /></div><div><label className="form-label" htmlFor="product-image-base64">Imagen JPG</label><input id="product-image-base64" className="form-control" type="file" accept=".jpg,.jpeg,image/jpeg" onChange={attachImage} /><small className="form-text">Solo JPG, máximo 5 MB. Se guarda en Base64.</small></div></div>{imageSource(form.imagen_url) && <div className="image-preview"><img src={imageSource(form.imagen_url)} alt="Vista previa" /><button className="btn btn-link btn-sm" type="button" onClick={() => setField("imagen_url", "")}>Quitar imagen</button></div>}<div className="status-toggle"><div><strong>¿Tiene caja?</strong><small>{form.tiene_caja ? "El producto se comercializa o empaqueta por caja." : "El producto se comercializa por unidad individual."}</small></div><label className="switch"><input type="checkbox" checked={form.tiene_caja} onChange={(event) => setField("tiene_caja", event.target.checked)} /><span /></label></div>{form.tiene_caja && <div className="product-form-grid mt-2"><div><label className="form-label" htmlFor="product-box-qty-base64">Cantidad por caja (unidades)</label><input id="product-box-qty-base64" className="form-control" type="number" min="1" placeholder="Ej: 12, 24, 50..." value={form.cantidad_caja} onChange={(event) => setField("cantidad_caja", event.target.value)} required={form.tiene_caja} /></div><div><label className="form-label" htmlFor="product-box-price-base64">Precio por caja</label><input id="product-box-price-base64" className="form-control" type="number" min="1" step="1" placeholder="Ej: 15000" value={form.precio_caja} onChange={(event) => setField("precio_caja", event.target.value)} /></div></div>}<div className="status-toggle"><div><strong>Producto disponible</strong><small>Los productos inactivos no aparecen a los clientes.</small></div><label className="switch"><input type="checkbox" checked={form.activo} onChange={(event) => setField("activo", event.target.checked)} /><span /></label></div><div className="status-toggle"><div><strong>{form.afecto ? "Producto Afecto a IVA" : "Producto Exento de IVA"}</strong><small>{form.afecto ? "Marcado como afecto a impuestos (afecto = true)." : "Marcado como exento de impuestos (afecto = false)."}</small></div><label className="switch"><input type="checkbox" checked={form.afecto} onChange={(event) => setField("afecto", event.target.checked)} /><span /></label></div></div><footer><button className="btn btn-light" type="button" onClick={() => { setProduct(null); setForm(blankProduct); }}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar producto</>}</button></footer></form></div>}</>;
 }
 
 function UserManager() {
@@ -1130,7 +1157,7 @@ function AdminOrderManager() {
     const customerName = order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     const customerSub = order.cliente?.rut || order.cliente?.celular || "Sin identificador";
     return <article className="admin-order-row" key={order.id}><div><strong>Pedido {order.id?.slice(0, 8).toUpperCase()}</strong><small>{order.detalles?.length ?? 0} productos</small></div><div><strong>{customerName}</strong><small>{customerSub}</small></div><span>{order.created_at ? dateFormatter.format(new Date(order.created_at)) : "-"}</span><span className={`order-status order-${stateName.toLowerCase()}`}>{stateName || "-"}</span><strong>{money.format(order.total ?? 0)}</strong><button className="icon-button category-edit" type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver detalle del pedido ${order.id?.slice(0, 8).toUpperCase()}`}><Eye size={16} /></button></article>;
-  })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{selectedOrder.created_at ? dateFormatter.format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}</span><span>{line.cantidad}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
+  })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{selectedOrder.created_at ? dateFormatter.format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
 
 <div className="order-notifications-section mt-4 pt-3 border-top">
   <div className="d-flex justify-content-between align-items-center mb-2">
@@ -1658,7 +1685,6 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
   const [orders, setOrders] = useState([]);
   const [historyFilters, setHistoryFilters] = useState({ estado: "Pedido", codigo: "", desde: "", hasta: "" });
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -1805,7 +1831,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
-    root.render(<div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.created_at ? new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{selectedOrder.detalles.map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}</span><span>{line.cantidad}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario)}</span><strong>{money.format(line.subtotal)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total)}</strong></div></div><footer><button className="btn btn-light" type="button" onClick={() => setSelectedOrder(null)}>Cerrar</button></footer></section></div>);
+    root.render(<div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.created_at ? new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedOrder.created_at)) : ""}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario)}</span><strong>{money.format(line.subtotal)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total)}</strong></div></div><footer><button className="btn btn-light" type="button" onClick={() => setSelectedOrder(null)}>Cerrar</button></footer></section></div>);
     return () => { root.unmount(); container.remove(); };
   }, [selectedOrder]);
 
@@ -1816,29 +1842,236 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     loadHistory();
   }
 
-  function add(product) {
-    setCart((current) => {
-      const line = current.find((item) => item.id === product.id);
-      return line ? current.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { ...product, quantity: 1 }];
+  async function promptProductPackaging(product) {
+    const hasBox = Boolean(product.tiene_caja && Number(product.cantidad_caja) >= 1);
+    const unitPrice = Number(product.precio_cliente ?? product.precio);
+    const boxPrice = hasBox
+      ? Number(product.precio_caja_cliente ?? product.precio_caja ?? (unitPrice * Number(product.cantidad_caja)))
+      : null;
+
+    let selectedType = "unidad";
+
+    // Paso 1: Si tiene opción de caja, preguntar primero si desea Unidad o Caja
+    if (hasBox) {
+      let resolveChoice;
+      const choicePromise = new Promise((resolve) => {
+        resolveChoice = resolve;
+      });
+
+      const choiceModal = await Swal.fire({
+        title: `<span style="font-size: 1.25rem;">Agregar al Pedido</span>`,
+        html: `
+          <div style="text-align: center; font-family: inherit;">
+            <p style="margin-bottom: 16px; color: #475569; font-size: 1rem;">
+              ¿Quieres agregar <strong>${product.nombre}</strong> por <strong>Caja</strong> o por <strong>Unidad</strong>?
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+              <button type="button" id="btn-choose-unidad" style="border: 2px solid #0d6efd; background: #f0f7ff; border-radius: 10px; padding: 16px 8px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                <div style="font-weight: 700; color: #0d6efd; font-size: 1.05rem; margin-bottom: 4px;">Por Unidad</div>
+                <div style="font-size: 1.2rem; color: #1e293b; font-weight: 700;">${money.format(unitPrice)}</div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px;">c/u individual</div>
+              </button>
+
+              <button type="button" id="btn-choose-caja" style="border: 2px solid #198754; background: #f0fdf4; border-radius: 10px; padding: 16px 8px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                <div style="font-weight: 700; color: #198754; font-size: 1.05rem; margin-bottom: 4px;">Por Caja</div>
+                <div style="font-size: 1.2rem; color: #1e293b; font-weight: 700;">${money.format(boxPrice)}</div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px;">Caja x${product.cantidad_caja} un.</div>
+              </button>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        showConfirmButton: false,
+        cancelButtonText: "Cancelar",
+        cancelButtonColor: "#6c757d",
+        didOpen: () => {
+          document.getElementById("btn-choose-unidad")?.addEventListener("click", () => {
+            resolveChoice("unidad");
+            Swal.close();
+          });
+          document.getElementById("btn-choose-caja")?.addEventListener("click", () => {
+            resolveChoice("caja");
+            Swal.close();
+          });
+        },
+      });
+
+      const choice = await Promise.race([
+        choicePromise,
+        Promise.resolve(choiceModal.isDismissed ? null : null),
+      ]);
+
+      if (!choice) {
+        return null;
+      }
+      selectedType = choice;
+    }
+
+    // Paso 2: Preguntar la cantidad según el tipo seleccionado (Unidad o Caja)
+    const isCaja = selectedType === "caja";
+    const appliedPrice = isCaja ? boxPrice : unitPrice;
+
+    const htmlContent = isCaja
+      ? `
+        <div style="text-align: left; font-family: inherit;">
+          <p style="margin-bottom: 12px; color: #475569; font-size: 0.95rem;">
+            Ingresa la cantidad de <strong>cajas</strong> para <strong>${product.nombre}</strong>:
+          </p>
+
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span style="font-weight: 600; color: #166534; font-size: 0.9rem; display: block;">Precio por caja:</span>
+              <span style="font-size: 0.75rem; color: #4ade80;">(Contiene ${product.cantidad_caja} un. c/u)</span>
+            </div>
+            <span style="font-size: 1.2rem; font-weight: 700; color: #15803d;">${money.format(boxPrice)}</span>
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+            <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #334155; margin-bottom: 6px; text-align: center;">
+              Cantidad de cajas:
+            </label>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <button type="button" id="swal-qty-minus" style="width: 38px; height: 38px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;">-</button>
+              <input id="swal-qty-input" type="number" min="1" max="999" value="1" style="width: 70px; height: 38px; text-align: center; font-size: 1.1rem; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 6px;" />
+              <button type="button" id="swal-qty-plus" style="width: 38px; height: 38px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;">+</button>
+            </div>
+          </div>
+
+          <div id="swal-subtotal-preview" style="text-align: right; font-weight: 700; color: #1e293b; font-size: 1.05rem; margin-top: 8px;">
+            Subtotal: ${money.format(boxPrice)}
+          </div>
+        </div>
+      `
+      : `
+        <div style="text-align: left; font-family: inherit;">
+          <p style="margin-bottom: 12px; color: #475569; font-size: 0.95rem;">
+            Ingresa la cantidad de <strong>unidades</strong> para <strong>${product.nombre}</strong>:
+          </p>
+
+          <div style="background: #f0f7ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; color: #0369a1; font-size: 0.9rem;">Precio por unidad:</span>
+            <span style="font-size: 1.2rem; font-weight: 700; color: #0284c7;">${money.format(unitPrice)}</span>
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+            <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #334155; margin-bottom: 6px; text-align: center;">
+              Cantidad de unidades:
+            </label>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <button type="button" id="swal-qty-minus" style="width: 38px; height: 38px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;">-</button>
+              <input id="swal-qty-input" type="number" min="1" max="999" value="1" style="width: 70px; height: 38px; text-align: center; font-size: 1.1rem; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 6px;" />
+              <button type="button" id="swal-qty-plus" style="width: 38px; height: 38px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;">+</button>
+            </div>
+          </div>
+
+          <div id="swal-subtotal-preview" style="text-align: right; font-weight: 700; color: #1e293b; font-size: 1.05rem; margin-top: 8px;">
+            Subtotal: ${money.format(unitPrice)}
+          </div>
+        </div>
+      `;
+
+    const qtyResult = await Swal.fire({
+      title: `<span style="font-size: 1.2rem;">${isCaja ? "Agregar Cajas" : "Agregar Unidades"}</span>`,
+      html: htmlContent,
+      showCancelButton: true,
+      confirmButtonText: "Agregar al pedido",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: isCaja ? "#198754" : "#0d6efd",
+      cancelButtonColor: "#6c757d",
+      focusConfirm: false,
+      didOpen: () => {
+        const qtyInput = document.getElementById("swal-qty-input");
+        const minusBtn = document.getElementById("swal-qty-minus");
+        const plusBtn = document.getElementById("swal-qty-plus");
+        const preview = document.getElementById("swal-subtotal-preview");
+
+        const updateUI = () => {
+          const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+          qtyInput.value = qty;
+          const subtotal = appliedPrice * qty;
+          preview.textContent = `Subtotal: ${money.format(subtotal)}`;
+        };
+
+        minusBtn?.addEventListener("click", () => {
+          qtyInput.value = Math.max(1, (parseInt(qtyInput.value, 10) || 1) - 1);
+          updateUI();
+        });
+
+        plusBtn?.addEventListener("click", () => {
+          qtyInput.value = (parseInt(qtyInput.value, 10) || 1) + 1;
+          updateUI();
+        });
+
+        qtyInput?.addEventListener("input", updateUI);
+      },
+      preConfirm: () => {
+        const qty = Math.max(1, parseInt(document.getElementById("swal-qty-input")?.value, 10) || 1);
+        return {
+          tipo_empaque: selectedType,
+          cantidad: qty,
+          applied_price: appliedPrice,
+        };
+      },
     });
-    setNotice(`${product.nombre} agregado al pedido.`);
+
+    if (!qtyResult.isConfirmed || !qtyResult.value) {
+      return null;
+    }
+
+    return qtyResult.value;
   }
 
-  function handleAddFromBanner(product, qty = 1) {
-    const quantity = Math.max(1, parseInt(qty) || 1);
+  async function add(product) {
+    const selection = await promptProductPackaging(product);
+    if (!selection) return;
+
+    const { tipo_empaque, cantidad, applied_price } = selection;
+    const isCaja = tipo_empaque === "caja";
+    const cartKey = `${product.id}_${tipo_empaque}`;
+
     setCart((current) => {
-      const line = current.find((item) => item.id === product.id);
+      const line = current.find((item) => (item.cart_key || item.id) === cartKey);
       return line
         ? current.map((item) =>
-            item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+            (item.cart_key || item.id) === cartKey ? { ...item, quantity: item.quantity + cantidad } : item
           )
-        : [...current, { ...product, quantity }];
+        : [
+            ...current,
+            {
+              ...product,
+              cart_key: cartKey,
+              tipo_empaque,
+              cantidad_caja: isCaja ? product.cantidad_caja : null,
+              unit_price: applied_price,
+              quantity: cantidad,
+            },
+          ];
     });
-    setNotice(`${quantity} un. de ${product.nombre} agregadas al pedido.`);
+
+    const msg = `${cantidad} ${isCaja ? (cantidad === 1 ? "caja" : "cajas") : (cantidad === 1 ? "unidad" : "unidades")} de ${product.nombre} agregada(s) al pedido.`;
+
+    Swal.fire({
+      icon: "success",
+      title: "¡Agregado al pedido!",
+      text: msg,
+      timer: 1800,
+      showConfirmButton: false,
+      position: "center",
+    });
   }
 
-  function updateQuantity(productId, quantity) {
-    setCart((current) => quantity < 1 ? current.filter((item) => item.id !== productId) : current.map((item) => item.id === productId ? { ...item, quantity } : item));
+  async function handleAddFromBanner(product, qty = 1) {
+    await add(product);
+  }
+
+  function updateQuantity(cartKey, quantity) {
+    setCart((current) =>
+      quantity < 1
+        ? current.filter((item) => (item.cart_key || item.id) !== cartKey)
+        : current.map((item) =>
+            (item.cart_key || item.id) === cartKey ? { ...item, quantity } : item
+          )
+    );
   }
 
   async function createOrder() {
@@ -1874,10 +2107,17 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
       didOpen: () => Swal.showLoading(),
     });
     try {
-      const response = await api.post(`/clientes/${customer.id}/pedidos`, { direccion_id: selectedAddress, productos: cart.map((item) => ({ producto_id: item.id, cantidad: item.quantity })) });
+      const response = await api.post(`/clientes/${customer.id}/pedidos`, {
+        direccion_id: selectedAddress,
+        productos: cart.map((item) => ({
+          producto_id: item.id,
+          cantidad: item.quantity,
+          tipo_empaque: item.tipo_empaque || "unidad",
+          cantidad_caja: item.tipo_empaque === "caja" ? item.cantidad_caja : null,
+        })),
+      });
       const orderCode = response?.data?.id?.slice(0, 8).toUpperCase() ?? "N/D";
       setCart([]);
-      setNotice("");
       setError("");
       setSection("history");
       await Promise.all([loadHistory(), loadProducts()]);
@@ -1926,7 +2166,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     return <CustomerProfile customer={customer} onProfileUpdated={onProfileUpdated} onBack={() => setSection("create")} onOrders={() => setSection("history")} onLogout={onLogout} />;
   }
 
-  const total = cart.reduce((sum, item) => sum + Number(item.precio_cliente ?? item.precio) * item.quantity, 0);
+  const total = cart.reduce((sum, item) => sum + Number(item.unit_price ?? item.precio_cliente ?? item.precio) * item.quantity, 0);
   const activeAddresses = customer.direcciones?.filter((address) => address.activo) ?? [];
   return (
     <main className="customer-portal">
@@ -1977,13 +2217,6 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
           <span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span>
         </header>
         <div className="customer-content">
-          {notice && (
-            <div className="alert alert-success alert-dismissible fade show">
-              <CheckCircle2 size={18} />
-              {notice}
-              <button className="btn-close" type="button" onClick={() => setNotice("")} />
-            </div>
-          )}
           {error && <div className="alert alert-danger">{error}</div>}
           {section === "create" ? (
             <>
@@ -2057,10 +2290,20 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
                           ) : (
                             <span />
                           )}
-                          <small className="product-code">{product.codigo}</small>
+                          <small className="product-code">
+                            {product.codigo}
+                            {product.tiene_caja && product.cantidad_caja ? ` · Caja x${product.cantidad_caja}` : ""}
+                          </small>
                         </div>
                         <h2>{product.nombre}</h2>
-                        <strong className="mt-auto">{money.format(product.precio_cliente ?? product.precio)}</strong>
+                        <div className="mt-auto d-flex flex-column">
+                          <strong>{money.format(product.precio_cliente ?? product.precio)} <span style={{ fontSize: "0.8rem", fontWeight: "normal", color: "#64748b" }}>/ un.</span></strong>
+                          {product.tiene_caja && product.cantidad_caja ? (
+                            <small style={{ color: "#0d6efd", fontWeight: 600, marginTop: "2px" }}>
+                              Caja x{product.cantidad_caja}: {money.format(product.precio_caja_cliente ?? product.precio_caja ?? ((product.precio_cliente ?? product.precio) * product.cantidad_caja))}
+                            </small>
+                          ) : null}
+                        </div>
                         <button className="btn btn-outline-primary mt-3" onClick={() => add(product)}>
                           <Plus size={17} />
                           Agregar
@@ -2126,21 +2369,30 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
                     <>
                       <div className="cart-items">
                         {cart.map((item) => {
-                          const itemPrice = Number(item.precio_cliente ?? item.precio);
+                          const itemPrice = Number(item.unit_price ?? item.precio_cliente ?? item.precio);
                           const itemSubtotal = itemPrice * item.quantity;
+                          const key = item.cart_key || item.id;
+                          const isCaja = item.tipo_empaque === "caja";
                           return (
-                            <div className="cart-line" key={item.id}>
+                            <div className="cart-line" key={key}>
                               <div className="cart-item-info">
-                                <span className="cart-item-name" title={item.nombre}>{item.nombre}</span>
+                                <span className="cart-item-name" title={item.nombre}>
+                                  {item.nombre}
+                                  {isCaja ? (
+                                    <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>
+                                      Caja{item.cantidad_caja ? ` x${item.cantidad_caja}` : ""}
+                                    </span>
+                                  ) : null}
+                                </span>
                                 <small className="cart-item-price">
-                                  {money.format(itemPrice)} c/u · <strong className="text-primary">{money.format(itemSubtotal)}</strong>
+                                  {money.format(itemPrice)} {isCaja ? "c/caja" : "c/u"} · <strong className="text-primary">{money.format(itemSubtotal)}</strong>
                                 </small>
                               </div>
                               <div className="cart-stepper">
                                 <button
                                   type="button"
                                   className={`cart-stepper-btn minus ${item.quantity === 1 ? "is-trash" : ""}`}
-                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  onClick={() => updateQuantity(key, item.quantity - 1)}
                                   title={item.quantity === 1 ? "Eliminar del pedido" : "Restar 1"}
                                   aria-label="Quitar unidad"
                                 >
@@ -2150,13 +2402,12 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
                                 <button
                                   type="button"
                                   className="cart-stepper-btn plus"
-                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  onClick={() => updateQuantity(key, item.quantity + 1)}
                                   title="Sumar 1"
                                   aria-label="Agregar unidad"
                                 >
                                   <Plus size={14} strokeWidth={2.5} />
                                 </button>
-
                               </div>
                             </div>
                           );

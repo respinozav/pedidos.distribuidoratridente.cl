@@ -10,7 +10,7 @@ from app.models.entities import Cliente, Credito, DetallePedido, Direccion, Esta
 from app.repositories.base import Repository
 from app.schemas.dto import OrderCreate
 from app.services.notifications import _order_pdf, dispatch_order_notifications_in_background, notify_administrators_of_order
-from app.services.pricing import customer_product_price
+from app.services.pricing import customer_product_box_price, customer_product_price
 
 
 class OrderService:
@@ -39,11 +39,40 @@ class OrderService:
             product = products[line.producto_id]
             if not product.activo:
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Producto inactivo: {product.codigo}")
-            applied_price = customer_product_price(product, customer)
+            
+            tipo_empaque = (line.tipo_empaque or "unidad").strip().lower()
+            if tipo_empaque == "caja":
+                applied_price = customer_product_box_price(product, customer)
+                if applied_price is None:
+                    applied_price = customer_product_price(product, customer)
+                    tipo_empaque = "unidad"
+                    cantidad_caja = None
+                    unidades_descontar = line.cantidad
+                else:
+                    cantidad_caja = product.cantidad_caja or 1
+                    unidades_descontar = line.cantidad * cantidad_caja
+            else:
+                applied_price = customer_product_price(product, customer)
+                tipo_empaque = "unidad"
+                cantidad_caja = None
+                unidades_descontar = line.cantidad
+
             line_total = applied_price * line.cantidad
-            product.cantidad -= line.cantidad
+            product.cantidad -= unidades_descontar
             subtotal += line_total
-            details.append(DetallePedido(producto_id=product.id, codigo_producto=product.codigo, nombre_producto=product.nombre, precio_unitario=applied_price, cantidad=line.cantidad, subtotal=line_total))
+            details.append(
+                DetallePedido(
+                    producto_id=product.id,
+                    codigo_producto=product.codigo,
+                    nombre_producto=product.nombre,
+                    precio_unitario=applied_price,
+                    cantidad=line.cantidad,
+                    tipo_empaque=tipo_empaque,
+                    cantidad_caja=cantidad_caja,
+                    subtotal=line_total,
+                )
+            )
+
 
         initial_state = self.database.scalar(select(Estado).where(Estado.activo.is_(True)).order_by(Estado.created_at.asc()))
         if not initial_state:

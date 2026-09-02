@@ -34,9 +34,13 @@ def _currency(value: Decimal) -> str:
 def _product_detail_label(detail: object) -> str:
     name = html.escape(getattr(detail, "nombre_producto", ""))
     code = html.escape(getattr(detail, "codigo_producto", ""))
+    tipo_empaque = getattr(detail, "tipo_empaque", "unidad")
+    cant_caja = getattr(detail, "cantidad_caja", None)
+    empaque_badge = f" <font color='#146CCE'><b>(Caja x{cant_caja})</b></font>" if tipo_empaque == "caja" and cant_caja else (" <font color='#146CCE'><b>(Caja)</b></font>" if tipo_empaque == "caja" else "")
     if code:
-        return f"<b>{name}</b> <font color='#667085'>[{code}]</font>"
-    return f"<b>{name}</b>"
+        return f"<b>{name}</b>{empaque_badge} <font color='#667085'>[{code}]</font>"
+    return f"<b>{name}</b>{empaque_badge}"
+
 
 
 def _create_notification_log(
@@ -209,9 +213,11 @@ def _order_pdf(order: Pedido) -> bytes:
         if afecto:
             table_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#F0F2F5")))
         product = Paragraph(_product_detail_label(detail), styles["ProductCell"])
+        tipo_empaque = getattr(detail, "tipo_empaque", "unidad")
+        cant_str = f"{detail.cantidad} cj." if tipo_empaque == "caja" else str(detail.cantidad)
         rows.append([
             product,
-            str(detail.cantidad),
+            cant_str,
             iva_text,
             _currency(detail.precio_unitario),
             _currency(detail.subtotal),
@@ -262,10 +268,23 @@ def _build_order_message(
 
     sorted_details = sorted(order.detalles or [], key=lambda d: 0 if _is_afecto(d) else 1)
 
-    detail_rows = "".join(
-        f"<tr style='{'background:#f0f2f5;' if _is_afecto(detail) else ''}'><td style='padding:8px 10px;border-top:1px solid #d9e2ec'><strong>{html.escape(detail.nombre_producto)}</strong> <span style='color:#667085;font-size:12px'>[{html.escape(detail.codigo_producto)}]</span></td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{detail.cantidad}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{'Afecto' if _is_afecto(detail) else 'Exento'}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.precio_unitario)}</td><td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.subtotal)}</td></tr>"
-        for detail in sorted_details
-    )
+    def _format_detail_row(detail: object) -> str:
+        bg = "background:#f0f2f5;" if _is_afecto(detail) else ""
+        tipo_emp = getattr(detail, "tipo_empaque", "unidad")
+        cant_caja = getattr(detail, "cantidad_caja", None)
+        emp_badge = f" <span style='color:#146CCE;font-weight:600'>(Caja x{cant_caja})</span>" if tipo_emp == "caja" and cant_caja else (" <span style='color:#146CCE;font-weight:600'>(Caja)</span>" if tipo_emp == "caja" else "")
+        cant_str = f"{detail.cantidad} cj." if tipo_emp == "caja" else str(detail.cantidad)
+        return (
+            f"<tr style='{bg}'>"
+            f"<td style='padding:8px 10px;border-top:1px solid #d9e2ec'><strong>{html.escape(detail.nombre_producto)}</strong>{emp_badge} <span style='color:#667085;font-size:12px'>[{html.escape(detail.codigo_producto)}]</span></td>"
+            f"<td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{cant_str}</td>"
+            f"<td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:center'>{'Afecto' if _is_afecto(detail) else 'Exento'}</td>"
+            f"<td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.precio_unitario)}</td>"
+            f"<td style='padding:8px 10px;border-top:1px solid #d9e2ec;text-align:right'>{_currency(detail.subtotal)}</td>"
+            f"</tr>"
+        )
+
+    detail_rows = "".join(_format_detail_row(detail) for detail in sorted_details)
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = f"{sender_name} <{sender_email}>"
@@ -347,13 +366,21 @@ def notify_administrators_via_whatsapp(
         customer_phone = order.cliente.celular or "Sin teléfono"
         address = ", ".join(part for part in (order.direccion.direccion, order.direccion.comuna) if part) or "Sin dirección registrada"
 
+        def _format_wa_item(d: object) -> str:
+            tipo = getattr(d, "tipo_empaque", "unidad")
+            cc = getattr(d, "cantidad_caja", None)
+            emp = f" [Caja x{cc}]" if tipo == "caja" and cc else (" [Caja]" if tipo == "caja" else "")
+            cant_txt = f"{d.cantidad} cj." if tipo == "caja" else f"{d.cantidad} un."
+            return f"• {cant_txt} {d.nombre_producto}{emp} ({_currency(d.subtotal)})"
+
         items_lines = [
-            f"• {d.cantidad}x {d.nombre_producto} ({_currency(d.subtotal)})"
+            _format_wa_item(d)
             for d in order.detalles[:8]
         ]
         if len(order.detalles) > 8:
             items_lines.append(f"• ... y {len(order.detalles) - 8} producto(s) más")
         items_summary = "\n".join(items_lines)
+
 
         caption = (
             f"🔔 *NUEVO PEDIDO REGISTRADO*\n"

@@ -34,9 +34,17 @@ def run_migrations_online() -> None:
         connect_args={"options": f"-csearch_path={settings.database_schema}", "sslmode": "require"},
     )
     with connectable.connect() as connection:
-        connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.database_schema}"'))
-        connection.commit()
-        context.configure(connection=connection, target_metadata=target_metadata, include_schemas=True)
+        try:
+            connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.database_schema}"'))
+            connection.commit()
+        except Exception:
+            connection.rollback()
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_schemas=True,
+            version_table_schema=settings.database_schema,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
