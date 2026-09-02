@@ -20,6 +20,7 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Tabl
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from fastapi import HTTPException
 from app.core.config import get_settings
 from app.models.entities import Cliente, Pedido, PedidoNotificacionLog, Rol, Usuario
 
@@ -115,6 +116,234 @@ def _get_smtp_settings(database: Session | None = None) -> dict[str, object]:
     }
 
 
+def send_test_email(
+    recipient: str,
+    database: Session | None = None,
+    subject: str | None = None,
+    body_text: str | None = None,
+    body_html: str | None = None,
+    smtp_overrides: dict | None = None,
+) -> dict:
+    """Envía un correo de prueba usando las credenciales SMTP configuradas o provistas."""
+    if not recipient or not recipient.strip():
+        raise HTTPException(status_code=400, detail="Debes especificar un correo electrónico de destinatario.")
+
+    clean_recipient = recipient.strip()
+
+    # 1. Resolver configuración SMTP
+    smtp_config = _get_smtp_settings(database)
+    if smtp_overrides:
+        if smtp_overrides.get("smtp_host"):
+            smtp_config["host"] = smtp_overrides["smtp_host"]
+        if smtp_overrides.get("smtp_port"):
+            try:
+                smtp_config["port"] = int(smtp_overrides["smtp_port"])
+            except (ValueError, TypeError):
+                pass
+        if smtp_overrides.get("smtp_username"):
+            smtp_config["username"] = smtp_overrides["smtp_username"]
+        if smtp_overrides.get("smtp_password"):
+            smtp_config["password"] = smtp_overrides["smtp_password"]
+        if smtp_overrides.get("smtp_from_email"):
+            smtp_config["from_email"] = smtp_overrides["smtp_from_email"]
+        if smtp_overrides.get("smtp_from_name"):
+            smtp_config["from_name"] = smtp_overrides["smtp_from_name"]
+        if (
+            smtp_config.get("host")
+            and smtp_config.get("username")
+            and smtp_config.get("password")
+            and smtp_config.get("from_email")
+        ):
+            smtp_config["configured"] = True
+
+    if not smtp_config.get("configured") or not smtp_config.get("host"):
+        raise HTTPException(
+            status_code=400,
+            detail="El servidor SMTP no está configurado. Completa y guarda los datos de conexión antes de realizar la prueba.",
+        )
+
+    mail_subject = subject or "Prueba de Configuración de Correo | Distribuidora Tridente"
+    from_name = smtp_config.get("from_name") or "Distribuidora Tridente"
+    from_email = smtp_config.get("from_email") or smtp_config.get("username")
+    host = smtp_config.get("host")
+    port = int(smtp_config.get("port") or 465)
+    username = smtp_config.get("username")
+    password = smtp_config.get("password")
+
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+    message = EmailMessage()
+    message["Subject"] = mail_subject
+    message["From"] = f"{from_name} <{from_email}>"
+    message["To"] = clean_recipient
+
+    plain_content = body_text or (
+        f"Correo de prueba exitoso.\n\n"
+        f"Este mensaje confirma que el servidor SMTP está configurado y funcionando correctamente.\n"
+        f"Host: {host}:{port}\n"
+        f"Remitente: {from_name} <{from_email}>\n"
+        f"Destinatario: {clean_recipient}\n"
+        f"Fecha y hora: {now_str}\n\n"
+        f"Distribuidora Tridente"
+    )
+    message.set_content(plain_content)
+
+    html_content = body_html or f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{html.escape(mail_subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -2px rgba(0,0,0,0.1);border:1px solid #e2e8f0;">
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#102a43;padding:28px 32px;text-align:left;">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td width="48" style="vertical-align:middle;padding-right:14px;">
+                    <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="42" height="42" style="display:block;border:0;outline:none;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Distribuidora Tridente</div>
+                    <div style="color:#62b0e8;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-top:4px;">Sistema de Pedidos y Notificaciones</div>
+                  </td>
+                  <td align="right" style="vertical-align:middle;">
+                    <span style="background-color:rgba(14,165,233,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;text-transform:uppercase;">Prueba SMTP</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px;">
+              <div style="display:inline-block;padding:8px 16px;background-color:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;margin-bottom:20px;">
+                <span style="color:#059669;font-weight:700;font-size:14px;">✓ ¡Conexión SMTP exitosa!</span>
+              </div>
+              <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 12px 0;">Correo de prueba de configuración</h1>
+              <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 24px 0;">
+                Este correo fue enviado satisfactoriamente para verificar que las credenciales y parámetros de conexión de tu servidor de correo están operando de forma correcta.
+              </p>
+              
+              <!-- Connection details box -->
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:6px 0;font-size:12px;color:#64748b;font-weight:600;width:140px;">Servidor Host:</td>
+                  <td style="padding:6px 0;font-size:13px;color:#1e293b;font-family:monospace;">{html.escape(host)}:{port}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;font-size:12px;color:#64748b;font-weight:600;">Remitente:</td>
+                  <td style="padding:6px 0;font-size:13px;color:#1e293b;">{html.escape(from_name)} &lt;{html.escape(from_email)}&gt;</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;font-size:12px;color:#64748b;font-weight:600;">Destinatario de prueba:</td>
+                  <td style="padding:6px 0;font-size:13px;color:#1e293b;font-weight:600;">{html.escape(clean_recipient)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;font-size:12px;color:#64748b;font-weight:600;">Fecha y hora de envío:</td>
+                  <td style="padding:6px 0;font-size:13px;color:#1e293b;">{now_str}</td>
+                </tr>
+              </table>
+
+              <p style="font-size:12px;color:#94a3b8;margin:0;line-height:1.5;">
+                Si recibiste este mensaje, los clientes y administradores recibirán sin inconvenientes los correos de confirmación de pedidos, cambios de clave y avisos de cobranza.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f8fafc;padding:20px 32px;border-top:1px solid #e2e8f0;text-align:center;">
+              <p style="font-size:11px;color:#94a3b8;margin:0;">
+                © 2026 Distribuidora Tridente. Todos los derechos reservados.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+    message.add_alternative(html_content, subtype="html")
+
+    start_time = time.perf_counter()
+    try:
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=15) as smtp:
+                smtp.login(username, password)
+                smtp.send_message(message)
+        else:
+            with smtplib.SMTP(host, port, timeout=15) as smtp:
+                smtp.ehlo()
+                smtp.login(username, password)
+                smtp.send_message(message)
+
+        dur_ms = int((time.perf_counter() - start_time) * 1000)
+        logger.info("Correo de prueba enviado exitosamente a %s en %sms", clean_recipient, dur_ms)
+
+        # Guardar en log_correos si hay sesión de BD
+        if database is not None:
+            try:
+                from app.models.entities import LogCorreo
+                tipo_log = "PRUEBA_RECORDATORIO" if "recordatorio" in mail_subject.lower() else (
+                    "PRUEBA_AVISO" if "aviso" in mail_subject.lower() else "PRUEBA_SMTP"
+                )
+                log_entry = LogCorreo(
+                    destinatario=clean_recipient,
+                    tipo=tipo_log,
+                    asunto=mail_subject,
+                    cuerpo_enviado=plain_content,
+                    estado="ENVIADO",
+                )
+                database.add(log_entry)
+                database.commit()
+            except Exception as log_err:
+                logger.warning("No se pudo guardar el log del correo de prueba: %s", log_err)
+                try:
+                    database.rollback()
+                except Exception:
+                    pass
+
+        return {
+            "success": True,
+            "message": f"Correo de prueba enviado exitosamente a {clean_recipient}",
+            "recipient": clean_recipient,
+            "duration_ms": dur_ms,
+        }
+    except smtplib.SMTPAuthenticationError as e:
+        dur_ms = int((time.perf_counter() - start_time) * 1000)
+        logger.warning("Fallo de autenticación SMTP al probar correo: %s", e)
+        err_detail = e.smtp_error.decode(errors='ignore') if hasattr(e, 'smtp_error') and isinstance(e.smtp_error, bytes) else str(e)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error de autenticación SMTP: Usuario o contraseña incorrectos. {err_detail}",
+        )
+    except smtplib.SMTPConnectError as e:
+        dur_ms = int((time.perf_counter() - start_time) * 1000)
+        logger.warning("Fallo de conexión SMTP al probar correo: %s", e)
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pudo conectar al servidor SMTP en {host}:{port}. Verifica el host, puerto y estado de red.",
+        )
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.warning("Destinatario rechazado por el servidor SMTP: %s", e)
+        raise HTTPException(
+            status_code=400,
+            detail=f"El servidor SMTP rechazó el destinatario '{clean_recipient}'.",
+        )
+    except Exception as e:
+        logger.exception("Error al enviar correo de prueba a %s", clean_recipient)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error al enviar correo de prueba: {str(e)}",
+        )
+
+
 def notify_customer_password_changed(customer: Cliente, database: Session | None = None) -> None:
     if database is None:
         try:
@@ -137,8 +366,20 @@ def notify_customer_password_changed(customer: Cliente, database: Session | None
     message.set_content("Tu contraseña fue actualizada correctamente. Si no realizaste este cambio, comunícate con Distribuidora Tridente.")
     message.add_alternative(
         """<html><body style='margin:0;background:#f4f7fb;font-family:Segoe UI,Arial,sans-serif;color:#172b4d'>
-<div style='max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #d9e2ec'>
-<div style='padding:28px 32px;background:#102a43;color:#ffffff'><div style='font-size:22px;font-weight:700'>Distribuidora Tridente</div><div style='margin-top:8px;color:#9bceff;font-size:12px;font-weight:700;letter-spacing:1px'>SEGURIDAD DE TU CUENTA</div></div>
+<div style='max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #d9e2ec;border-radius:8px;overflow:hidden;'>
+<div style='padding:24px 32px;background:#102a43;color:#ffffff'>
+  <table width="100%" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td width="48" style="vertical-align:middle;padding-right:14px;">
+        <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="42" height="42" style="display:block;border:0;outline:none;" />
+      </td>
+      <td style="vertical-align:middle;">
+        <div style="font-size:22px;font-weight:700;color:#ffffff;line-height:1.2;">Distribuidora Tridente</div>
+        <div style="margin-top:4px;color:#9bceff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SEGURIDAD DE TU CUENTA</div>
+      </td>
+    </tr>
+  </table>
+</div>
 <div style='padding:28px 32px'><h1 style='font-size:21px;margin-top:0'>Tu contraseña fue actualizada</h1><p>Confirmamos que la contraseña de tu cuenta fue cambiada correctamente.</p><p style='color:#667085'>Si no realizaste este cambio, comunícate con Distribuidora Tridente de inmediato.</p></div></div></body></html>""",
         subtype="html",
     )
@@ -297,8 +538,23 @@ def _build_order_message(
     )
     message.add_alternative(
         f"""<html><body style='margin:0;background:#f4f7fb;font-family:Segoe UI,Arial,sans-serif;color:#172b4d'>
-<div style='max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #d9e2ec'>
-<div style='padding:28px 32px;background:#102a43;color:#ffffff'><div style='font-size:22px;font-weight:700'>Distribuidora Tridente</div><div style='margin-top:8px;color:#9bceff;font-size:12px;font-weight:700;letter-spacing:1px'>{heading}</div><div style='margin-top:6px;font-size:25px;font-weight:700'>Pedido #{order_code}</div></div>
+<div style='max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #d9e2ec;border-radius:8px;overflow:hidden;'>
+<div style='padding:24px 32px;background:#102a43;color:#ffffff'>
+  <table width="100%" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td width="48" style="vertical-align:middle;padding-right:14px;">
+        <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="42" height="42" style="display:block;border:0;outline:none;" />
+      </td>
+      <td style="vertical-align:middle;">
+        <div style="font-size:22px;font-weight:700;color:#ffffff;line-height:1.2;">Distribuidora Tridente</div>
+        <div style="margin-top:4px;color:#9bceff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">{heading}</div>
+      </td>
+      <td align="right" style="vertical-align:middle;">
+        <div style="font-size:20px;font-weight:700;color:#ffffff;">Pedido #{order_code}</div>
+      </td>
+    </tr>
+  </table>
+</div>
 <div style='padding:28px 32px'><p style='margin-top:0'>{introduction}</p>
 {customer_block}
 <table style='width:100%;border-collapse:collapse;margin-top:22px'><thead><tr style='background:#f8fafc;color:#667085;font-size:12px;text-align:left'><th style='padding:10px'>Producto</th><th style='padding:10px;text-align:center'>Cant.</th><th style='padding:10px;text-align:center'>IVA</th><th style='padding:10px;text-align:right'>Unitario</th><th style='padding:10px;text-align:right'>Subtotal</th></tr></thead><tbody>{detail_rows}</tbody></table>

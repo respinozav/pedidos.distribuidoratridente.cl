@@ -50,6 +50,7 @@ from app.schemas.dto import (
 )
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
+from app.api.endpoints.configuracion_avisos import router as configuracion_avisos_router
 from app.services.notifications import dispatch_order_notifications_in_background, notify_customer_password_changed
 
 from app.services.ordering import OrderService
@@ -60,6 +61,7 @@ from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pd
 router = APIRouter(prefix="/api")
 router.include_router(system_settings_router)
 router.include_router(whatsapp_router)
+router.include_router(configuracion_avisos_router)
 
 
 def extract_client_info(request: Request) -> tuple[str | None, str | None]:

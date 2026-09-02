@@ -15,13 +15,17 @@ import {
   LogOut,
   Phone,
   Check,
+  Bell,
 } from "lucide-react";
+import NotificacionesTab from "./NotificacionesTab";
+import { api } from "../../services/api";
 import {
   getSettings,
   updateSettings,
   getWhatsAppStatus,
   getWhatsAppQR,
   disconnectWhatsApp,
+  sendTestEmail,
 } from "../../services/settingsService";
 
 function WhatsAppConnector({ onStatusUpdate }) {
@@ -327,6 +331,7 @@ export default function SystemSettings() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [whatsappInfo, setWhatsappInfo] = useState(null);
+  const [totalNotificacionesEnviadas, setTotalNotificacionesEnviadas] = useState(0);
   const [settings, setSettings] = useState({
     smtp_host: "",
     smtp_port: "",
@@ -342,7 +347,22 @@ export default function SystemSettings() {
 
   useEffect(() => {
     loadSettings();
+    loadTotalNotificaciones();
   }, []);
+
+  const loadTotalNotificaciones = async () => {
+    try {
+      const response = await api.get("/log_correos?limit=1");
+      const totalHeader = response.headers?.["x-total-count"];
+      if (totalHeader !== undefined) {
+        setTotalNotificacionesEnviadas(parseInt(totalHeader, 10) || 0);
+      } else if (Array.isArray(response.data)) {
+        setTotalNotificacionesEnviadas(response.data.length);
+      }
+    } catch {
+      // Si falla, se mantiene en 0 o valor previo
+    }
+  };
 
   const loadSettings = async () => {
     setFetching(true);
@@ -400,6 +420,86 @@ export default function SystemSettings() {
     }
   };
 
+  const [testingEmail, setTestingEmail] = useState(false);
+
+  const handleTestEmail = async () => {
+    if (!settings.smtp_host || !settings.smtp_username || !settings.smtp_password || !settings.smtp_from_email) {
+      await Swal.fire({
+        title: "Campos incompletos",
+        text: "Para probar el envío, completa al menos Servidor, Usuario, Contraseña y Correo Remitente.",
+        icon: "warning",
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
+
+    const { value: email } = await Swal.fire({
+      title: "Probar Envío de Correo",
+      text: "Ingresa el correo del destinatario que recibirá el mensaje de prueba:",
+      input: "email",
+      inputPlaceholder: "ejemplo@correo.com",
+      inputValue: settings.smtp_from_email || "",
+      showCancelButton: true,
+      confirmButtonText: "Enviar Prueba",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#0284c7",
+      cancelButtonColor: "#64748b",
+      inputValidator: (val) => {
+        if (!val || !val.trim()) {
+          return "Por favor ingresa un correo electrónico.";
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) {
+          return "El formato de correo no es válido.";
+        }
+      },
+    });
+
+    if (!email) return;
+
+    setTestingEmail(true);
+    Swal.fire({
+      title: "Enviando correo de prueba...",
+      html: `Conectando con el servidor SMTP <b>${settings.smtp_host}</b> y enviando a <b>${email}</b>.`,
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    try {
+      const payload = {
+        recipient: email.trim(),
+        smtp_host: settings.smtp_host,
+        smtp_port: settings.smtp_port ? parseInt(settings.smtp_port, 10) : null,
+        smtp_username: settings.smtp_username,
+        smtp_password: settings.smtp_password,
+        smtp_from_email: settings.smtp_from_email,
+        smtp_from_name: settings.smtp_from_name || "Distribuidora Tridente",
+      };
+      await sendTestEmail(payload);
+      Swal.fire({
+        icon: "success",
+        title: "¡Correo enviado con éxito!",
+        html: `<p>El mensaje de prueba se envió correctamente a <b>${email}</b>.</p><p class="text-muted small mb-0">Revisa tu bandeja de entrada (y la carpeta de spam o correo no deseado).</p>`,
+        confirmButtonText: "Aceptar",
+        confirmButtonColor: "#16a34a",
+      });
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.detail ||
+        err.message ||
+        "No fue posible enviar el correo de prueba. Verifica la configuración.";
+      Swal.fire({
+        icon: "error",
+        title: "Error en la prueba SMTP",
+        text: typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg),
+        confirmButtonText: "Cerrar",
+      });
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
   const isSmtpConfigured = Boolean(
     settings.smtp_host &&
     settings.smtp_username &&
@@ -424,7 +524,7 @@ export default function SystemSettings() {
           <div>
             <p className="eyebrow">PARAMETROS</p>
             <h2>Configuración del Sistema</h2>
-            <p>Gestiona credenciales de correo SMTP, canales de comunicación y expiración de sesiones.</p>
+            <p>Configuración de notificaciones de cobranza.</p>
           </div>
           <div className="summary-metric">
             {activeTab === "smtp" ? (
@@ -445,6 +545,11 @@ export default function SystemSettings() {
                     : "Estado WhatsApp"}
                 </small>
               </>
+            ) : activeTab === "notificaciones" ? (
+              <>
+                <span className="fs-4 fw-bold">{totalNotificacionesEnviadas}</span>
+                <small>Notificaciones Enviadas</small>
+              </>
             ) : (
               <>
                 <span className="fs-4 fw-bold">{settings.jwt_access_token_expire_minutes || 60} min</span>
@@ -461,7 +566,13 @@ export default function SystemSettings() {
               <p>Configura los servidores, canales de notificación y duración de sesiones.</p>
             </div>
             <span className="panel-count">
-              {activeTab === "smtp" ? "SMTP" : activeTab === "whatsapp" ? "WhatsApp" : "Sesión"}
+              {activeTab === "smtp"
+                ? "SMTP"
+                : activeTab === "whatsapp"
+                ? "WhatsApp"
+                : activeTab === "notificaciones"
+                ? "Cobranza"
+                : "Sesión"}
             </span>
           </div>
 
@@ -481,6 +592,14 @@ export default function SystemSettings() {
             >
               <MessageCircle size={17} />
               <span>WhatsApp (QR)</span>
+            </button>
+            <button
+              type="button"
+              className={`settings-tab-btn ${activeTab === "notificaciones" ? "active" : ""}`}
+              onClick={() => setActiveTab("notificaciones")}
+            >
+              <Bell size={17} />
+              <span>Notificaciones</span>
             </button>
             <button
               type="button"
@@ -608,8 +727,17 @@ export default function SystemSettings() {
                     </div>
                   </div>
 
-                  <div className="d-flex justify-content-end mt-4 pt-2">
-                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                  <div className="d-flex justify-content-between align-items-center mt-4 pt-2">
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary d-inline-flex align-items-center gap-2"
+                      onClick={handleTestEmail}
+                      disabled={loading || testingEmail}
+                    >
+                      <Send size={16} />
+                      <span>{testingEmail ? "Probando..." : "Probar Envío de Correo"}</span>
+                    </button>
+                    <button type="submit" className="btn btn-primary d-inline-flex align-items-center gap-2" disabled={loading}>
                       {loading ? (
                         <>
                           <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -639,6 +767,10 @@ export default function SystemSettings() {
                     <WhatsAppConnector onStatusUpdate={setWhatsappInfo} />
                   </div>
                 </div>
+              )}
+
+              {activeTab === "notificaciones" && (
+                <NotificacionesTab onUpdateCount={loadTotalNotificaciones} />
               )}
 
               {activeTab === "session" && (

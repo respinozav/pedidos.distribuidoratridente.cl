@@ -23,3 +23,23 @@ class SystemSettingsResponse(SystemSettingsBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TestEmailRequest(BaseModel):
+    recipient: str
+    subject: Optional[str] = None
+    body_text: Optional[str] = None
+    body_html: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from_email: Optional[str] = None
+    smtp_from_name: Optional[str] = None
+
+
+class TestEmailResponse(BaseModel):
+    success: bool
+    message: str
+    recipient: str
+

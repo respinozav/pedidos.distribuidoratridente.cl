@@ -1,9 +1,9 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, Time, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -243,3 +243,37 @@ class SesionLog(Base):
 
     usuario: Mapped[Usuario | None] = relationship("Usuario")
     cliente: Mapped[Cliente | None] = relationship("Cliente")
+
+
+class ConfiguracionAvisos(Base):
+    __tablename__ = "configuracion_avisos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    hora_envio: Mapped[time] = mapped_column(Time, default=time(9, 0, 0))
+    asunto_recordatorio: Mapped[str] = mapped_column(String(255))
+    plantilla_recordatorio: Mapped[str] = mapped_column(Text)
+    asunto_aviso: Mapped[str] = mapped_column(String(255))
+    plantilla_aviso: Mapped[str] = mapped_column(Text)
+    asunto_vencido: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    plantilla_vencido: Mapped[str | None] = mapped_column(Text, nullable=True)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    actualizado_el: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LogCorreo(Base):
+    __tablename__ = "log_correos"
+    __table_args__ = (
+        Index("ix_log_correos_enviado_el", "enviado_el"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    credito_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    cliente_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    destinatario: Mapped[str] = mapped_column(String(255))
+    tipo: Mapped[str] = mapped_column(String(50))
+    asunto: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cuerpo_enviado: Mapped[str] = mapped_column(Text)
+    estado: Mapped[str] = mapped_column(String(50), default="ENVIADO")
+    net_request_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    enviado_el: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+

@@ -27,3 +27,9 @@ export const disconnectWhatsApp = async () => {
   return response.data;
 };
 
+export const sendTestEmail = async (data) => {
+  const response = await api.post(`${API_URL}/test-email`, data);
+  return response.data;
+};
+
+
