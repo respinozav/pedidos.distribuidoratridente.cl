@@ -96,6 +96,7 @@ class Cliente(AuditMixin, Base):
     correo: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0)
+    dias_credito: Mapped[int] = mapped_column(Integer, default=0)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     eliminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     direcciones: Mapped[list["Direccion"]] = relationship(back_populates="cliente")

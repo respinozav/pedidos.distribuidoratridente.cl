@@ -227,7 +227,7 @@ button, input { font: inherit; }
 .customer-row:hover { background: #f8fafc; }
 .customer-table, .address-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .customer-table-head, .address-table-head, .address-row { align-items: center; display: grid; gap: .75rem; }
-.customer-table-head, .customer-row { grid-template-columns: minmax(140px, 1fr) minmax(160px, 1.2fr) minmax(130px, 1fr) minmax(180px, 1.4fr) 50px 76px 78px; min-width: 780px; }
+.customer-table-head, .customer-row { grid-template-columns: minmax(130px, 1fr) minmax(150px, 1.2fr) minmax(120px, 1fr) minmax(170px, 1.3fr) 50px 85px 76px 78px; min-width: 860px; }
 .customer-row { align-items: center; border-top: 1px solid var(--line); display: grid; gap: .75rem; padding: .75rem 1rem; }
 .customer-actions { display: flex; gap: .35rem; }
 .address-table-head, .address-row { grid-template-columns: minmax(0, 1.5fr) minmax(0, .8fr) 62px 52px; }

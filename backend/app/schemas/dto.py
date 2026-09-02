@@ -114,6 +114,7 @@ class CustomerInput(BaseModel):
     celular: str | None = Field(default=None, max_length=30)
     correo: EmailStr | None = None
     porcentaje: Decimal = Field(default=0, ge=0, le=100, max_digits=5, decimal_places=2)
+    dias_credito: int = Field(default=0, ge=0, le=365)
     activo: bool = True
 
     @field_validator("rut", "nombre", "celular", mode="before")
@@ -251,6 +252,7 @@ class OrderCustomerOutput(ORMModel):
     rut: str | None
     nombre: str | None
     celular: str | None
+    dias_credito: int = 0
 
 
 class OrderAddressOutput(ORMModel):

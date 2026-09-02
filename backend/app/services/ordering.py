@@ -144,7 +144,10 @@ class OrderService:
             if pagado is None:
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Indica si el cliente pagó el pedido")
             if not pagado and not dias_credito:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Indica los días de crédito")
+                if order.cliente and order.cliente.dias_credito and order.cliente.dias_credito > 0:
+                    dias_credito = order.cliente.dias_credito
+                else:
+                    raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Indica los días de crédito")
             if not pagado and self.database.scalar(select(Credito.id).where(Credito.pedido_id == order.id)):
                 raise HTTPException(status.HTTP_409_CONFLICT, "El pedido ya tiene un crédito registrado")
         order.estado_id = next_state.id
