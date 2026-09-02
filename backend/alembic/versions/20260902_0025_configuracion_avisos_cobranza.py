@@ -1,4 +1,4 @@
-"""Crea tablas configuracion_avisos, log_correos, funcion procesar_avisos_creditos y cron job.
+"""Crea tablas configuracion_avisos, log_correos y funcion procesar_avisos_creditos.
 
 Revision ID: 20260902_0025
 Revises: 20260902_0024
@@ -19,9 +19,13 @@ def upgrade() -> None:
     
     op.execute(
         f"""
-        CREATE EXTENSION IF NOT EXISTS "pg_net";
-        CREATE EXTENSION IF NOT EXISTS "pg_cron";
-        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+        -- Activar pgcrypto de ser posible (para gen_random_uuid)
+        DO $$
+        BEGIN
+            CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
 
         -- 1. Tabla de Configuración de Avisos
         CREATE TABLE IF NOT EXISTS {schema}.configuracion_avisos (
@@ -31,6 +35,8 @@ def upgrade() -> None:
             plantilla_recordatorio TEXT NOT NULL DEFAULT 'Hola {{nombre}}, le recordamos que su crédito por {{dias_credito}} días vencerá el {{fecha_vencimiento}}. Favor coordinar el pago.',
             asunto_aviso VARCHAR(255) NOT NULL DEFAULT 'Aviso: Tu crédito vence hoy - Distribuidora Tridente',
             plantilla_aviso TEXT NOT NULL DEFAULT 'Estimado/a {{nombre}}, le informamos que su crédito vence hoy {{fecha_vencimiento}}. Favor regularizar a la brevedad.',
+            asunto_vencido VARCHAR(255) NOT NULL DEFAULT 'Urgente: Tu crédito se encuentra VENCIDO - Distribuidora Tridente',
+            plantilla_vencido TEXT NOT NULL DEFAULT 'Estimado/a {{nombre}}, le informamos que su crédito por {{dias_credito}} días se encuentra VENCIDO desde el {{fecha_vencimiento}} ({{dias_mora}} días de mora). Favor regularizar su saldo a la brevedad.',
             activo BOOLEAN NOT NULL DEFAULT true,
             actualizado_el TIMESTAMPTZ NOT NULL DEFAULT now()
         );
@@ -45,7 +51,7 @@ def upgrade() -> None:
             credito_id UUID NOT NULL,
             cliente_id UUID,
             destinatario VARCHAR(255) NOT NULL,
-            tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('RECORDATORIO', 'AVISO_HOY')),
+            tipo VARCHAR(50) NOT NULL,
             asunto VARCHAR(255),
             cuerpo_enviado TEXT NOT NULL,
             estado VARCHAR(50) NOT NULL DEFAULT 'ENVIADO',
@@ -59,7 +65,7 @@ def upgrade() -> None:
         CREATE INDEX IF NOT EXISTS idx_log_correos_enviado_el 
         ON {schema}.log_correos (enviado_el DESC);
 
-        -- 3. Función PL/pgSQL para procesar y despachar avisos
+        -- 3. Función PL/pgSQL segura para procesar y despachar avisos
         CREATE OR REPLACE FUNCTION {schema}.procesar_avisos_creditos()
         RETURNS jsonb
         LANGUAGE plpgsql
@@ -71,12 +77,17 @@ def upgrade() -> None:
             v_cuerpo TEXT;
             v_asunto TEXT;
             v_fecha_venc_str TEXT;
+            v_dias_mora INT;
             v_net_id BIGINT;
             v_enviados_recordatorio INT := 0;
             v_enviados_aviso INT := 0;
+            v_enviados_vencido INT := 0;
             v_webhook_url TEXT := 'https://api.resend.com/emails';
             v_api_key TEXT := 'Bearer re_TU_API_KEY_AQUI';
+            v_has_pg_net BOOLEAN;
         BEGIN
+            SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_net') INTO v_has_pg_net;
+
             SELECT * INTO v_config FROM {schema}.configuracion_avisos WHERE id = 1 LIMIT 1;
             
             IF NOT FOUND OR v_config.activo = false THEN
@@ -86,7 +97,7 @@ def upgrade() -> None:
                 );
             END IF;
 
-            -- A. RECORDATORIO (1 día antes)
+            -- A. RECORDATORIO PREVENTIVO (1 día antes)
             FOR v_credito IN
                 SELECT 
                     c.id AS credito_id,
@@ -119,19 +130,23 @@ def upgrade() -> None:
                 
                 v_asunto := REPLACE(v_config.asunto_recordatorio, '{{nombre}}', COALESCE(v_credito.cliente_nombre, 'Cliente'));
 
-                SELECT net.http_post(
-                    url := v_webhook_url,
-                    headers := jsonb_build_object(
-                        'Content-Type', 'application/json',
-                        'Authorization', v_api_key
-                    ),
-                    body := jsonb_build_object(
-                        'from', 'cobranzas@distribuidoratridente.cl',
-                        'to', jsonb_build_array(v_credito.cliente_correo),
-                        'subject', v_asunto,
-                        'html', REPLACE(v_cuerpo, E'\\n', '<br/>')
-                    )
-                ) INTO v_net_id;
+                v_net_id := NULL;
+                IF v_has_pg_net THEN
+                    BEGIN
+                        EXECUTE 'SELECT net.http_post(
+                            url := $1,
+                            headers := $2,
+                            body := $3
+                        )'
+                        INTO v_net_id
+                        USING 
+                            v_webhook_url,
+                            jsonb_build_object('Content-Type', 'application/json', 'Authorization', v_api_key),
+                            jsonb_build_object('from', 'cobranzas@distribuidoratridente.cl', 'to', jsonb_build_array(v_credito.cliente_correo), 'subject', v_asunto, 'html', REPLACE(v_cuerpo, E'\\n', '<br/>'));
+                    EXCEPTION WHEN OTHERS THEN
+                        v_net_id := NULL;
+                    END;
+                END IF;
 
                 INSERT INTO {schema}.log_correos (
                     credito_id, cliente_id, destinatario, tipo, asunto, cuerpo_enviado, net_request_id
@@ -143,7 +158,7 @@ def upgrade() -> None:
                 v_enviados_recordatorio := v_enviados_recordatorio + 1;
             END LOOP;
 
-            -- B. AVISO (Mismo día)
+            -- B. AVISO (Mismo día del vencimiento)
             FOR v_credito IN
                 SELECT 
                     c.id AS credito_id,
@@ -176,19 +191,23 @@ def upgrade() -> None:
                 
                 v_asunto := REPLACE(v_config.asunto_aviso, '{{nombre}}', COALESCE(v_credito.cliente_nombre, 'Cliente'));
 
-                SELECT net.http_post(
-                    url := v_webhook_url,
-                    headers := jsonb_build_object(
-                        'Content-Type', 'application/json',
-                        'Authorization', v_api_key
-                    ),
-                    body := jsonb_build_object(
-                        'from', 'cobranzas@distribuidoratridente.cl',
-                        'to', jsonb_build_array(v_credito.cliente_correo),
-                        'subject', v_asunto,
-                        'html', REPLACE(v_cuerpo, E'\\n', '<br/>')
-                    )
-                ) INTO v_net_id;
+                v_net_id := NULL;
+                IF v_has_pg_net THEN
+                    BEGIN
+                        EXECUTE 'SELECT net.http_post(
+                            url := $1,
+                            headers := $2,
+                            body := $3
+                        )'
+                        INTO v_net_id
+                        USING 
+                            v_webhook_url,
+                            jsonb_build_object('Content-Type', 'application/json', 'Authorization', v_api_key),
+                            jsonb_build_object('from', 'cobranzas@distribuidoratridente.cl', 'to', jsonb_build_array(v_credito.cliente_correo), 'subject', v_asunto, 'html', REPLACE(v_cuerpo, E'\\n', '<br/>'));
+                    EXCEPTION WHEN OTHERS THEN
+                        v_net_id := NULL;
+                    END;
+                END IF;
 
                 INSERT INTO {schema}.log_correos (
                     credito_id, cliente_id, destinatario, tipo, asunto, cuerpo_enviado, net_request_id
@@ -200,10 +219,76 @@ def upgrade() -> None:
                 v_enviados_aviso := v_enviados_aviso + 1;
             END LOOP;
 
+            -- C. CRÉDITO VENCIDO / EN MORA
+            FOR v_credito IN
+                SELECT 
+                    c.id AS credito_id,
+                    c.dias_credito,
+                    c.fecha_vencimiento,
+                    cli.id AS cliente_id,
+                    cli.nombre AS cliente_nombre,
+                    cli.correo AS cliente_correo
+                FROM {schema}.creditos c
+                INNER JOIN {schema}.clientes cli ON cli.id = c.cliente_id
+                WHERE c.pagado = false
+                  AND DATE(c.fecha_vencimiento) < CURRENT_DATE
+                  AND cli.activo = true
+                  AND cli.correo IS NOT NULL
+                  AND TRIM(cli.correo) <> ''
+                  AND NOT EXISTS (
+                      SELECT 1 
+                      FROM {schema}.log_correos l
+                      WHERE l.credito_id = c.id
+                        AND l.tipo = 'VENCIDO'
+                        AND DATE(l.enviado_el AT TIME ZONE 'America/Santiago') = CURRENT_DATE
+                  )
+            LOOP
+                v_fecha_venc_str := TO_CHAR(v_credito.fecha_vencimiento, 'DD/MM/YYYY');
+                v_dias_mora := CURRENT_DATE - DATE(v_credito.fecha_vencimiento);
+                
+                v_cuerpo := COALESCE(v_config.plantilla_vencido, 'Estimado/a {{nombre}}, le informamos que su crédito por {{dias_credito}} días se encuentra VENCIDO desde el {{fecha_vencimiento}} ({{dias_mora}} días de mora). Favor regularizar su saldo a la brevedad.');
+                v_cuerpo := REPLACE(v_cuerpo, '{{nombre}}', COALESCE(v_credito.cliente_nombre, 'Cliente'));
+                v_cuerpo := REPLACE(v_cuerpo, '{{dias_credito}}', COALESCE(v_credito.dias_credito::TEXT, '0'));
+                v_cuerpo := REPLACE(v_cuerpo, '{{fecha_vencimiento}}', v_fecha_venc_str);
+                v_cuerpo := REPLACE(v_cuerpo, '{{dias_mora}}', v_dias_mora::TEXT);
+                
+                v_asunto := COALESCE(v_config.asunto_vencido, 'Urgente: Tu crédito se encuentra VENCIDO - Distribuidora Tridente');
+                v_asunto := REPLACE(v_asunto, '{{nombre}}', COALESCE(v_credito.cliente_nombre, 'Cliente'));
+                v_asunto := REPLACE(v_asunto, '{{dias_mora}}', v_dias_mora::TEXT);
+
+                v_net_id := NULL;
+                IF v_has_pg_net THEN
+                    BEGIN
+                        EXECUTE 'SELECT net.http_post(
+                            url := $1,
+                            headers := $2,
+                            body := $3
+                        )'
+                        INTO v_net_id
+                        USING 
+                            v_webhook_url,
+                            jsonb_build_object('Content-Type', 'application/json', 'Authorization', v_api_key),
+                            jsonb_build_object('from', 'cobranzas@distribuidoratridente.cl', 'to', jsonb_build_array(v_credito.cliente_correo), 'subject', v_asunto, 'html', REPLACE(v_cuerpo, E'\\n', '<br/>'));
+                    EXCEPTION WHEN OTHERS THEN
+                        v_net_id := NULL;
+                    END;
+                END IF;
+
+                INSERT INTO {schema}.log_correos (
+                    credito_id, cliente_id, destinatario, tipo, asunto, cuerpo_enviado, net_request_id
+                ) VALUES (
+                    v_credito.credito_id, v_credito.cliente_id, v_credito.cliente_correo, 
+                    'VENCIDO', v_asunto, v_cuerpo, v_net_id
+                );
+
+                v_enviados_vencido := v_enviados_vencido + 1;
+            END LOOP;
+
             RETURN jsonb_build_object(
                 'status', 'success',
                 'recordatorios_enviados', v_enviados_recordatorio,
                 'avisos_hoy_enviados', v_enviados_aviso,
+                'vencidos_mora_enviados', v_enviados_vencido,
                 'ejecutado_el', now()
             );
         END;
@@ -221,7 +306,6 @@ def upgrade() -> None:
                 );
             END IF;
         EXCEPTION WHEN OTHERS THEN
-            -- Ignorar si pg_cron no permite scheduling en el contexto actual
             NULL;
         END $$;
         """
