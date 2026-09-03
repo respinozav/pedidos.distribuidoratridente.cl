@@ -19,7 +19,52 @@ export default function NotificacionesTab({ onUpdateCount }) {
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [ejecutandoJob, setEjecutandoJob] = useState(false);
   const [modalState, setModalState] = useState({ open: false, tipo: null });
+
+  const handleEjecutarAhora = async () => {
+    const confirm = await Swal.fire({
+      title: "¿Ejecutar proceso de cobranza ahora?",
+      text: "Se evaluarán todos los créditos pendientes y se despacharán los recordatorios y avisos correspondientes a hoy.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Sí, ejecutar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#0284c7",
+      cancelButtonColor: "#64748b",
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    try {
+      setEjecutandoJob(true);
+      const res = await api.post("/configuracion_avisos/ejecutar");
+      const data = res.data;
+      await cargarLogs();
+      Swal.fire({
+        icon: "success",
+        title: "Proceso completado",
+        html: `
+          <p>Se ejecutó la revisión de cobranzas exitosamente:</p>
+          <ul class="text-start small">
+            <li><b>Recordatorios (1 día antes):</b> ${data.recordatorios_enviados || 0}</li>
+            <li><b>Avisos del día:</b> ${data.avisos_hoy_enviados || 0}</li>
+            <li><b>Créditos en mora / vencidos:</b> ${data.vencidos_mora_enviados || 0}</li>
+          </ul>
+        `,
+        confirmButtonColor: "#16a34a",
+      });
+    } catch (err) {
+      const msg = err.response?.data?.detail || "No fue posible ejecutar el proceso de cobranza.";
+      Swal.fire({
+        icon: "error",
+        title: "Error al ejecutar",
+        text: typeof msg === "string" ? msg : JSON.stringify(msg),
+      });
+    } finally {
+      setEjecutandoJob(false);
+    }
+  };
 
   const cargarConfig = async () => {
     try {
@@ -175,7 +220,7 @@ export default function NotificacionesTab({ onUpdateCount }) {
             <div className="settings-card-header pb-2">
               <div>
                 <div className="d-flex align-items-center gap-2">
-                  <h4 className="fs-6 fw-bold mb-0">Estado del Job Automático (pg_cron)</h4>
+                  <h4 className="fs-6 fw-bold mb-0">Estado del Job Automático</h4>
                   <span
                     className={`badge ${
                       config?.activo
@@ -187,7 +232,7 @@ export default function NotificacionesTab({ onUpdateCount }) {
                   </span>
                 </div>
                 <p className="small text-muted mt-1 mb-0">
-                  Habilita o suspende el despacho automático de recordatorios preventivos y avisos de cobro.
+                  Despacho automático diario de recordatorios preventivos y avisos de cobro por correo SMTP.
                 </p>
               </div>
               <div className="form-check form-switch fs-4 mb-0">
@@ -201,12 +246,21 @@ export default function NotificacionesTab({ onUpdateCount }) {
                 />
               </div>
             </div>
-            <div className="settings-card-body pt-2">
-              <small className="text-muted d-block" style={{ fontSize: "0.78rem" }}>
+            <div className="settings-card-body pt-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
+              <small className="text-muted" style={{ fontSize: "0.78rem" }}>
                 {config?.activo
-                  ? `✓ Los correos se enviarán automáticamente a las ${config?.hora_envio ? config.hora_envio.slice(0, 5) : "09:00"} hrs.`
+                  ? `✓ Los correos se envían automáticamente a las ${config?.hora_envio ? config.hora_envio.slice(0, 5) : "09:00"} hrs (hora de Chile).`
                   : "⚠ Los envíos automáticos se encuentran en pausa."}
               </small>
+              <button
+                type="button"
+                className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1.5"
+                disabled={ejecutandoJob}
+                onClick={handleEjecutarAhora}
+              >
+                <RefreshCw size={14} className={ejecutandoJob ? "spinner-border spinner-border-sm" : ""} />
+                <span>{ejecutandoJob ? "Procesando..." : "Ejecutar Ahora"}</span>
+              </button>
             </div>
           </div>
         </div>

@@ -97,3 +97,14 @@ def get_log_correos(
     logs = list(database.scalars(statement))
     return logs
 
+
+@router.post("/configuracion_avisos/ejecutar")
+def trigger_procesar_avisos(
+    database: DatabaseSession,
+    _: AdminUser,
+):
+    from app.services.cobranzas import procesar_avisos_cobranza_smtp
+
+    resultado = procesar_avisos_cobranza_smtp(database)
+    return resultado
+

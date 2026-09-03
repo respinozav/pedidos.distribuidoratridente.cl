@@ -112,54 +112,84 @@ export default function ModalPlantillaEmail({
         ? "Aviso de Vencimiento de Crédito"
         : "Cobranza de Crédito Vencido / En Mora";
 
-      const htmlBody = `<!DOCTYPE html>
-<html>
+      const htmlBody = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>${asuntoRenderizado}</title>
 </head>
-<body style="margin:0;padding:28px 12px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">
-  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1;box-shadow:0 10px 15px -3px rgba(0,0,0,0.08);">
-    
-    <!-- Encabezado con banda de color superior y Logo de Tridente -->
-    <div style="background:#0f172a;padding:22px 28px;border-top:6px solid ${topBarColor};">
-      <table width="100%" border="0" cellspacing="0" cellpadding="0">
-        <tr>
-          <td width="48" style="vertical-align:middle;padding-right:14px;">
-            <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="42" height="42" style="display:block;border:0;outline:none;object-fit:contain;" />
-          </td>
-          <td style="vertical-align:middle;">
-            <h2 style="margin:0;color:#ffffff;font-size:21px;font-weight:800;letter-spacing:-0.5px;line-height:1.2;">Distribuidora Tridente</h2>
-            <div style="color:#94a3b8;font-size:12px;font-weight:600;margin-top:3px;">Departamento de Finanzas y Cobranzas</div>
-          </td>
-        </tr>
-      </table>
-    </div>
-    
-    <div style="padding:28px;">
-      <!-- Badge de Alerta -->
-      <div style="display:inline-block;padding:6px 14px;border-radius:24px;background-color:${badgeBg};border:1.5px solid ${badgeBorder};color:${badgeText};font-size:12px;font-weight:800;letter-spacing:0.04em;margin-bottom:18px;">
-        ${badgeLabel}
-      </div>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:none;color:#1e293b;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f1f5f9;table-layout:fixed;">
+    <tr>
+      <td align="center" style="padding:28px 12px;">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#ffffff;border:1px solid #cbd5e1;border-top:6px solid ${topBarColor};border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.07);">
+          
+          <!-- FILA 1: Encabezado dentro del contenedor blanco -->
+          <tr>
+            <td style="padding:28px 32px 20px 32px;border-bottom:1px solid #e2e8f0;background-color:#ffffff;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td width="52" style="vertical-align:middle;padding-right:16px;">
+                    <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="46" height="46" style="display:block;border:0;outline:none;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <div style="font-size:22px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;line-height:1.2;">Distribuidora Tridente</div>
+                    <div style="color:#64748b;font-size:13px;font-weight:600;margin-top:4px;">Departamento de Finanzas y Cobranzas</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-      <h3 style="margin:0 0 16px 0;color:#0f172a;font-size:18px;font-weight:700;">${headerTitle}</h3>
-      
-      <!-- CUERPO DEL CORREO DESTACADO CON FONDO Y BORDE -->
-      <div style="font-size:15px;line-height:1.7;color:${bodyTextColor};background-color:${bodyBoxBg};border:2px solid ${bodyBoxBorder};border-left:8px solid ${bodyBoxLeftBorder};padding:20px 24px;border-radius:8px;margin-bottom:24px;white-space:pre-wrap;font-weight:500;">${cuerpoRenderizado}</div>
+          <!-- FILA 2: Contenido principal -->
+          <tr>
+            <td style="padding:28px 32px;background-color:#ffffff;">
+              <!-- Badge de Alerta -->
+              <table border="0" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">
+                <tr>
+                  <td style="background-color:${badgeBg};border:1.5px solid ${badgeBorder};border-radius:24px;padding:6px 14px;color:${badgeText};font-size:12px;font-weight:800;letter-spacing:0.04em;">
+                    ${badgeLabel}
+                  </td>
+                </tr>
+              </table>
 
-      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:20px;">
-        <tr>
-          <td style="font-size:13px;color:#475569;line-height:1.5;">
-            <strong>Información importante:</strong> Si ya realizó su transferencia o pago, por favor remita el comprobante respondiendo a este correo para actualizar su estado de cuenta.
-          </td>
-        </tr>
-      </table>
-    </div>
+              <div style="font-size:19px;font-weight:700;color:#0f172a;margin-bottom:16px;">
+                ${headerTitle}
+              </div>
+              
+              <!-- Recuadro Destacado con el texto -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:${bodyBoxBg};border:2px solid ${bodyBoxBorder};border-left:8px solid ${bodyBoxLeftBorder};border-radius:8px;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:20px 24px;font-size:15px;line-height:1.7;color:${bodyTextColor};font-weight:500;">
+                    ${cuerpoRenderizado.replaceAll("\n", "<br/>")}
+                  </td>
+                </tr>
+              </table>
 
-    <div style="background:#f8fafc;padding:18px 28px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;text-align:center;">
-      Distribuidora Tridente · Mensaje generado automáticamente por el sistema de cobranzas
-    </div>
-  </div>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+                <tr>
+                  <td style="padding:16px;font-size:13px;color:#475569;line-height:1.5;">
+                    <strong style="color:#0f172a;">Información importante:</strong> Si ya realizó su transferencia o pago, por favor remita el comprobante respondiendo a este correo para actualizar su estado de cuenta.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- FILA 3: Pie de página -->
+          <tr>
+            <td style="padding:18px 28px;background-color:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;font-size:12px;color:#94a3b8;">
+              Distribuidora Tridente · Mensaje generado automáticamente por el sistema de cobranzas
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 
