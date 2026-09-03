@@ -56,7 +56,7 @@ class ConfiguracionAvisosResponse(BaseModel):
 
 class LogCorreoResponse(BaseModel):
     id: UUID
-    credito_id: UUID
+    credito_id: Optional[UUID] = None
     cliente_id: Optional[UUID] = None
     destinatario: str
     tipo: str
