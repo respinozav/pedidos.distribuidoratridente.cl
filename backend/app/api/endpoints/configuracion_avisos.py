@@ -85,6 +85,7 @@ def get_log_correos(
     database: DatabaseSession,
     _: AdminUser,
     limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     total = database.scalar(select(func.count(LogCorreo.id))) or 0
     response.headers["X-Total-Count"] = str(total)
@@ -92,10 +93,12 @@ def get_log_correos(
     statement = (
         select(LogCorreo)
         .order_by(desc(LogCorreo.enviado_el))
+        .offset(offset)
         .limit(limit)
     )
     logs = list(database.scalars(statement))
     return logs
+
 
 
 @router.post("/configuracion_avisos/ejecutar")

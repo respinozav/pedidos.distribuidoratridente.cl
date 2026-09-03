@@ -16,6 +16,9 @@ import ModalPlantillaEmail from "../../components/admin/ModalPlantillaEmail";
 export default function NotificacionesTab({ onUpdateCount }) {
   const [config, setConfig] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [pageLogs, setPageLogs] = useState(1);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const PAGE_SIZE_LOGS = 15;
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -148,16 +151,28 @@ export default function NotificacionesTab({ onUpdateCount }) {
     }
   };
 
-  const cargarLogs = async () => {
+  const cargarLogs = async (targetPage = pageLogs) => {
     try {
       setLoadingLogs(true);
-      const response = await api.get("/log_correos?limit=30");
-      setLogs(Array.isArray(response.data) ? response.data : []);
+      const offset = (targetPage - 1) * PAGE_SIZE_LOGS;
+      const response = await api.get(`/log_correos?limit=${PAGE_SIZE_LOGS}&offset=${offset}`);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setLogs(data);
+
+      const totalHeader = response.headers?.["x-total-count"];
+      if (totalHeader !== undefined) {
+        setTotalLogs(parseInt(totalHeader, 10) || 0);
+      } else {
+        setTotalLogs(data.length);
+      }
+      setPageLogs(targetPage);
+
       if (typeof onUpdateCount === "function") {
         onUpdateCount();
       }
     } catch {
       setLogs([]);
+      setTotalLogs(0);
     } finally {
       setLoadingLogs(false);
     }
@@ -165,7 +180,7 @@ export default function NotificacionesTab({ onUpdateCount }) {
 
   useEffect(() => {
     cargarConfig();
-    cargarLogs();
+    cargarLogs(1);
   }, []);
 
   const actualizarConfig = async (patchData) => {
@@ -468,7 +483,7 @@ export default function NotificacionesTab({ onUpdateCount }) {
           <button
             type="button"
             className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1"
-            onClick={cargarLogs}
+            onClick={() => cargarLogs(pageLogs)}
             disabled={loadingLogs}
           >
             <RefreshCw size={14} className={loadingLogs ? "spinner-border spinner-border-sm" : ""} />
@@ -530,6 +545,33 @@ export default function NotificacionesTab({ onUpdateCount }) {
               </tbody>
             </table>
           </div>
+
+          {/* Paginación */}
+          {totalLogs > PAGE_SIZE_LOGS && (
+            <div className="d-flex align-items-center justify-content-between p-3 border-top bg-light-subtle">
+              <small className="text-muted">
+                Página <b>{pageLogs}</b> de <b>{Math.max(1, Math.ceil(totalLogs / PAGE_SIZE_LOGS))}</b> · {totalLogs} registros
+              </small>
+              <div className="d-flex align-items-center gap-2">
+                <button
+                  className="btn btn-outline-secondary btn-sm px-3"
+                  type="button"
+                  disabled={pageLogs <= 1 || loadingLogs}
+                  onClick={() => cargarLogs(pageLogs - 1)}
+                >
+                  Anterior
+                </button>
+                <button
+                  className="btn btn-outline-primary btn-sm px-3"
+                  type="button"
+                  disabled={pageLogs >= Math.ceil(totalLogs / PAGE_SIZE_LOGS) || loadingLogs}
+                  onClick={() => cargarLogs(pageLogs + 1)}
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
