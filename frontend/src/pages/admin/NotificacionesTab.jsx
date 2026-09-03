@@ -25,32 +25,72 @@ export default function NotificacionesTab({ onUpdateCount }) {
   const handleEjecutarAhora = async () => {
     const confirm = await Swal.fire({
       title: "¿Ejecutar proceso de cobranza ahora?",
-      text: "Se evaluarán todos los créditos pendientes y se despacharán los recordatorios y avisos correspondientes a hoy.",
+      html: `
+        <p class="text-muted small mb-3">
+          El sistema evaluará los créditos con vencimiento hoy o mañana. Por seguridad, no vuelve a enviar correos a créditos que ya fueron notificados hoy.
+        </p>
+        <div class="form-check form-switch text-start d-inline-block">
+          <input class="form-check-input" type="checkbox" id="check-forzar-reenvio" />
+          <label class="form-check-label small fw-semibold" for="check-forzar-reenvio">
+            Forzar reenvío (ignorar si ya se enviaron hoy)
+          </label>
+        </div>
+      `,
       icon: "question",
       showCancelButton: true,
-      confirmButtonText: "Sí, ejecutar",
+      confirmButtonText: "Sí, procesar",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#0284c7",
       cancelButtonColor: "#64748b",
+      preConfirm: () => {
+        const checkbox = document.getElementById("check-forzar-reenvio");
+        return { forzar: Boolean(checkbox?.checked) };
+      },
     });
 
     if (!confirm.isConfirmed) return;
 
+    const forzar = confirm.value?.forzar || false;
+
     try {
       setEjecutandoJob(true);
-      const res = await api.post("/configuracion_avisos/ejecutar");
+      const res = await api.post(`/configuracion_avisos/ejecutar?forzar_reenvio=${forzar}`);
       const data = res.data;
       await cargarLogs();
+
+      const totalNuevos =
+        (data.recordatorios_enviados || 0) +
+        (data.avisos_hoy_enviados || 0) +
+        (data.vencidos_mora_enviados || 0);
+
+      const omitidos = data.omitidos_ya_enviados_hoy || 0;
+
       Swal.fire({
-        icon: "success",
-        title: "Proceso completado",
+        icon: totalNuevos > 0 ? "success" : "info",
+        title: totalNuevos > 0 ? "Correos enviados exitosamente" : "Revisión completada",
         html: `
-          <p>Se ejecutó la revisión de cobranzas exitosamente:</p>
-          <ul class="text-start small">
-            <li><b>Recordatorios (1 día antes):</b> ${data.recordatorios_enviados || 0}</li>
-            <li><b>Avisos del día:</b> ${data.avisos_hoy_enviados || 0}</li>
-            <li><b>Créditos en mora / vencidos:</b> ${data.vencidos_mora_enviados || 0}</li>
-          </ul>
+          <div class="text-start small">
+            ${
+              totalNuevos === 0 && omitidos > 0
+                ? `<div class="alert alert-info py-2 px-3 mb-3">
+                     ℹ️ <b>${omitidos} crédito(s)</b> correspondientes a hoy ya habían recibido su correo anteriormente. No se duplicaron envíos.
+                   </div>`
+                : ""
+            }
+            <ul class="mb-2">
+              <li><b>Recordatorios (1 día antes):</b> ${data.recordatorios_enviados || 0}</li>
+              <li><b>Avisos del día:</b> ${data.avisos_hoy_enviados || 0}</li>
+              <li><b>Créditos en mora / vencidos:</b> ${data.vencidos_mora_enviados || 0}</li>
+              ${
+                omitidos > 0
+                  ? `<li class="text-muted"><b>Omitidos (ya notificados hoy):</b> ${omitidos}</li>`
+                  : ""
+              }
+            </ul>
+            <p class="text-muted mb-0" style="font-size: 0.78rem;">
+              Total evaluados: ${data.total_evaluados || 0}
+            </p>
+          </div>
         `,
         confirmButtonColor: "#16a34a",
       });

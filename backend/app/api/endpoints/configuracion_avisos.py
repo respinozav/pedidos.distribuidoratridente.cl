@@ -102,9 +102,10 @@ def get_log_correos(
 def trigger_procesar_avisos(
     database: DatabaseSession,
     _: AdminUser,
+    forzar_reenvio: bool = Query(default=False, description="Reenviar aunque ya se haya despachado hoy"),
 ):
     from app.services.cobranzas import procesar_avisos_cobranza_smtp
 
-    resultado = procesar_avisos_cobranza_smtp(database)
+    resultado = procesar_avisos_cobranza_smtp(database, forzar_reenvio=forzar_reenvio)
     return resultado
 

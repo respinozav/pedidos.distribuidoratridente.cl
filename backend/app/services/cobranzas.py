@@ -178,11 +178,11 @@ def _enviar_email_smtp(
     return True
 
 
-def procesar_avisos_cobranza_smtp(database: Session) -> dict:
+def procesar_avisos_cobranza_smtp(database: Session, forzar_reenvio: bool = False) -> dict:
     """
     Evalúa créditos y envía recordatorios, avisos del día y vencimientos por SMTP.
     Usa la zona horaria America/Santiago para determinar la fecha actual y de vencimiento.
-    Evita envíos duplicados el mismo día.
+    Evita envíos duplicados el mismo día a menos que forzar_reenvio=True.
     """
     config = database.scalar(select(ConfiguracionAvisos).filter(ConfiguracionAvisos.id == 1))
     if not config or not config.activo:
@@ -192,6 +192,8 @@ def procesar_avisos_cobranza_smtp(database: Session) -> dict:
             "recordatorios_enviados": 0,
             "avisos_hoy_enviados": 0,
             "vencidos_mora_enviados": 0,
+            "omitidos_ya_enviados_hoy": 0,
+            "total_evaluados": 0,
         }
 
     smtp_config = _get_smtp_settings(database)
@@ -203,6 +205,8 @@ def procesar_avisos_cobranza_smtp(database: Session) -> dict:
             "recordatorios_enviados": 0,
             "avisos_hoy_enviados": 0,
             "vencidos_mora_enviados": 0,
+            "omitidos_ya_enviados_hoy": 0,
+            "total_evaluados": 0,
         }
 
     ahora_santiago = datetime.now(CHILE_TZ)
@@ -223,6 +227,8 @@ def procesar_avisos_cobranza_smtp(database: Session) -> dict:
     enviados_recordatorio = 0
     enviados_aviso = 0
     enviados_vencido = 0
+    omitidos_ya_enviados = 0
+    total_evaluados = 0
     errores = []
 
     for credito, cliente in rows:
@@ -252,15 +258,19 @@ def procesar_avisos_cobranza_smtp(database: Session) -> dict:
         if not tipo_envio:
             continue
 
-        log_existente = database.scalar(
-            select(LogCorreo.id).filter(
-                LogCorreo.credito_id == credito.id,
-                LogCorreo.tipo == tipo_envio,
-                text("DATE(enviado_el AT TIME ZONE 'America/Santiago') = :hoy").params(hoy=hoy_santiago),
+        total_evaluados += 1
+
+        if not forzar_reenvio:
+            log_existente = database.scalar(
+                select(LogCorreo.id).filter(
+                    LogCorreo.credito_id == credito.id,
+                    LogCorreo.tipo == tipo_envio,
+                    text("DATE(enviado_el AT TIME ZONE 'America/Santiago') = :hoy").params(hoy=hoy_santiago),
+                )
             )
-        )
-        if log_existente:
-            continue
+            if log_existente:
+                omitidos_ya_enviados += 1
+                continue
 
         vars_dict = {
             "nombre": cliente.nombre or "Cliente",
@@ -332,6 +342,8 @@ def procesar_avisos_cobranza_smtp(database: Session) -> dict:
         "recordatorios_enviados": enviados_recordatorio,
         "avisos_hoy_enviados": enviados_aviso,
         "vencidos_mora_enviados": enviados_vencido,
+        "omitidos_ya_enviados_hoy": omitidos_ya_enviados,
+        "total_evaluados": total_evaluados,
         "errores": errores,
         "ejecutado_el": ahora_santiago.isoformat(),
     }
