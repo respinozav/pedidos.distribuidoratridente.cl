@@ -24,3 +24,6 @@ class SystemSettings(Base):
 
     # Session / JWT Settings
     jwt_access_token_expire_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True, default=60)
+
+    # Timezone Settings
+    timezone: Mapped[str | None] = mapped_column(String, nullable=True, default="America/Santiago")

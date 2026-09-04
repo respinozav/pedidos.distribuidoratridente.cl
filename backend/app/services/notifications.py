@@ -10,6 +10,7 @@ from email.message import EmailMessage
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
@@ -114,6 +115,33 @@ def _get_smtp_settings(database: Session | None = None) -> dict[str, object]:
         "from_name": env_settings.smtp_from_name,
         "from_email": env_settings.smtp_from_email,
     }
+
+
+def _get_system_timezone(database: Session | None = None) -> ZoneInfo:
+    default_tz = "America/Santiago"
+    if database is not None and hasattr(database, "query"):
+        try:
+            from app.repositories.system_settings_repository import SystemSettingsRepository
+
+            repo = SystemSettingsRepository()
+            db_settings = repo.get_settings(database)
+            tz_str = getattr(db_settings, "timezone", None) or default_tz
+            return ZoneInfo(tz_str)
+        except Exception:
+            pass
+    else:
+        try:
+            from app.core.database import SessionLocal
+            from app.repositories.system_settings_repository import SystemSettingsRepository
+
+            with SessionLocal() as db_session:
+                repo = SystemSettingsRepository()
+                db_settings = repo.get_settings(db_session)
+                tz_str = getattr(db_settings, "timezone", None) or default_tz
+                return ZoneInfo(tz_str)
+        except Exception:
+            pass
+    return ZoneInfo(default_tz)
 
 
 def send_test_email(
@@ -398,7 +426,8 @@ def _order_pdf(order: Pedido) -> bytes:
     customer_phone = order.cliente.celular or "Sin teléfono"
     address = ", ".join(part for part in (order.direccion.direccion, order.direccion.comuna) if part)
     order_code = str(order.id).split("-")[0].upper()
-    created_at = order.created_at.astimezone().strftime("%d-%m-%Y %H:%M") if order.created_at else "-"
+    system_tz = _get_system_timezone()
+    created_at = order.created_at.astimezone(system_tz).strftime("%d-%m-%Y %H:%M") if order.created_at else "-"
     output = BytesIO()
     document = SimpleDocTemplate(output, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm)
     styles = getSampleStyleSheet()

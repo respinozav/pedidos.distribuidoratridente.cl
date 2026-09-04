@@ -20,15 +20,23 @@ class SystemSettingsRepository:
                 smtp_from_name=env_config.smtp_from_name or "Distribuidora Tridente",
                 whatsapp_enabled=False,
                 jwt_access_token_expire_minutes=env_config.jwt_access_token_expire_minutes or 60,
+                timezone="America/Santiago",
             )
             db.add(settings)
             db.commit()
             db.refresh(settings)
-        elif settings.jwt_access_token_expire_minutes is None:
-            env_config = get_settings()
-            settings.jwt_access_token_expire_minutes = env_config.jwt_access_token_expire_minutes or 60
-            db.commit()
-            db.refresh(settings)
+        else:
+            updated = False
+            if settings.jwt_access_token_expire_minutes is None:
+                env_config = get_settings()
+                settings.jwt_access_token_expire_minutes = env_config.jwt_access_token_expire_minutes or 60
+                updated = True
+            if not getattr(settings, "timezone", None):
+                settings.timezone = "America/Santiago"
+                updated = True
+            if updated:
+                db.commit()
+                db.refresh(settings)
         return settings
 
     def update_settings(self, db: Session, settings_data: SystemSettingsUpdate) -> SystemSettings:

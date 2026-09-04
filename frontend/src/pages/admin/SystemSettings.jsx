@@ -16,6 +16,8 @@ import {
   Phone,
   Check,
   Bell,
+  Globe,
+  MapPin,
 } from "lucide-react";
 import NotificacionesTab from "./NotificacionesTab";
 import { api } from "../../services/api";
@@ -343,12 +345,41 @@ export default function SystemSettings() {
     whatsapp_api_key: "",
     whatsapp_phone_number: "",
     jwt_access_token_expire_minutes: 60,
+    timezone: "America/Santiago",
   });
+
+  const [currentTimeDisplay, setCurrentTimeDisplay] = useState("");
 
   useEffect(() => {
     loadSettings();
     loadTotalNotificaciones();
   }, []);
+
+  useEffect(() => {
+    const updateLiveClock = () => {
+      try {
+        const tz = settings.timezone || "America/Santiago";
+        const now = new Date();
+        const formatted = new Intl.DateTimeFormat("es-CL", {
+          timeZone: tz,
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(now);
+        setCurrentTimeDisplay(formatted);
+      } catch {
+        setCurrentTimeDisplay(new Date().toLocaleTimeString());
+      }
+    };
+    updateLiveClock();
+    const interval = setInterval(updateLiveClock, 1000);
+    return () => clearInterval(interval);
+  }, [settings.timezone]);
 
   const loadTotalNotificaciones = async () => {
     try {
@@ -373,6 +404,7 @@ export default function SystemSettings() {
         ...data,
         smtp_port: data.smtp_port ? String(data.smtp_port) : "",
         jwt_access_token_expire_minutes: data.jwt_access_token_expire_minutes || 60,
+        timezone: data.timezone || "America/Santiago",
       }));
     } catch {
       setError("No fue posible cargar los ajustes del sistema.");
@@ -550,10 +582,17 @@ export default function SystemSettings() {
                 <span className="fs-4 fw-bold">{totalNotificacionesEnviadas}</span>
                 <small>Notificaciones Enviadas</small>
               </>
-            ) : (
+            ) : activeTab === "session" ? (
               <>
                 <span className="fs-4 fw-bold">{settings.jwt_access_token_expire_minutes || 60} min</span>
                 <small>Expiración de Sesión</small>
+              </>
+            ) : (
+              <>
+                <span className="fs-5 fw-bold text-truncate" style={{ maxWidth: "220px", display: "inline-block" }}>
+                  {settings.timezone || "America/Santiago"}
+                </span>
+                <small>Zona Horaria del Sistema</small>
               </>
             )}
           </div>
@@ -563,7 +602,7 @@ export default function SystemSettings() {
           <div className="panel-heading mb-3">
             <div>
               <h2>Parámetros y Servicios</h2>
-              <p>Configura los servidores, canales de notificación y duración de sesiones.</p>
+              <p>Configura los servidores, canales de notificación, geolocalización y duración de sesiones.</p>
             </div>
             <span className="panel-count">
               {activeTab === "smtp"
@@ -572,7 +611,9 @@ export default function SystemSettings() {
                 ? "WhatsApp"
                 : activeTab === "notificaciones"
                 ? "Cobranza"
-                : "Sesión"}
+                : activeTab === "session"
+                ? "Sesión"
+                : "Zona Horaria"}
             </span>
           </div>
 
@@ -608,6 +649,14 @@ export default function SystemSettings() {
             >
               <Clock size={17} />
               <span>Ajuste de Sesión</span>
+            </button>
+            <button
+              type="button"
+              className={`settings-tab-btn ${activeTab === "timezone" ? "active" : ""}`}
+              onClick={() => setActiveTab("timezone")}
+            >
+              <Globe size={17} />
+              <span>Zona Horaria</span>
             </button>
           </div>
 
@@ -823,6 +872,124 @@ export default function SystemSettings() {
                         <>
                           <Save size={17} />
                           <span>Guardar Ajuste de Sesión</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {activeTab === "timezone" && (
+                <form onSubmit={handleSubmit}>
+                  <div className="settings-section">
+                    <div className="settings-section-header">
+                      <Globe size={18} />
+                      <div>
+                        <h3>Geolocalización y Zona Horaria</h3>
+                        <p>
+                          Define la zona horaria del sistema para el registro de pedidos, comprobantes PDF y
+                          notificaciones de correo y WhatsApp. Esto previene desajustes de horario respecto a la hora oficial de tu negocio.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="settings-section-body">
+                      {/* Live Clock Card */}
+                      <div className="p-3 mb-4 rounded-3 border bg-light d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div className="d-flex align-items-center gap-3">
+                          <div
+                            className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+                            style={{ width: "44px", height: "44px", flexShrink: 0 }}
+                          >
+                            <Clock size={22} />
+                          </div>
+                          <div>
+                            <span className="text-muted d-block small text-uppercase fw-semibold">
+                              Hora Actual del Sistema ({settings.timezone || "America/Santiago"})
+                            </span>
+                            <strong className="fs-5 text-dark font-monospace">
+                              {currentTimeDisplay || "Calculando..."}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2"
+                          onClick={() => {
+                            try {
+                              const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                              if (detected) {
+                                setSettings((prev) => ({ ...prev, timezone: detected }));
+                                Swal.fire({
+                                  icon: "info",
+                                  title: "Zona horaria detectada",
+                                  text: `Se detectó la zona horaria de tu dispositivo: ${detected}. Haz clic en Guardar para aplicar.`,
+                                  timer: 3000,
+                                });
+                              }
+                            } catch {
+                              Swal.fire("Error", "No fue posible detectar la zona horaria del dispositivo.", "error");
+                            }
+                          }}
+                        >
+                          <MapPin size={15} />
+                          <span>Detectar mi ubicación actual</span>
+                        </button>
+                      </div>
+
+                      <div className="row g-3">
+                        <div className="col-12 col-md-8">
+                          <label htmlFor="timezone" className="form-label fw-bold">
+                            Seleccionar Zona Horaria
+                          </label>
+                          <select
+                            id="timezone"
+                            className="form-select"
+                            name="timezone"
+                            value={settings.timezone || "America/Santiago"}
+                            onChange={handleInputChange}
+                            required
+                          >
+                            <optgroup label="Chile">
+                              <option value="America/Santiago">Chile Continental (Santiago, UTC-4 / UTC-3 Verano)</option>
+                              <option value="America/Punta_Arenas">Región de Magallanes (Punta Arenas, UTC-3 Fijo)</option>
+                              <option value="Pacific/Easter">Rapa Nui / Isla de Pascua (UTC-6 / UTC-5 Verano)</option>
+                            </optgroup>
+                            <optgroup label="Sudamérica">
+                              <option value="America/Buenos_Aires">Argentina (Buenos Aires, UTC-3)</option>
+                              <option value="America/Lima">Perú (Lima, UTC-5)</option>
+                              <option value="America/Bogota">Colombia (Bogotá, UTC-5)</option>
+                              <option value="America/La_Paz">Bolivia (La Paz, UTC-4)</option>
+                              <option value="America/Asuncion">Paraguay (Asunción, UTC-4 / UTC-3)</option>
+                              <option value="America/Montevideo">Uruguay (Montevideo, UTC-3)</option>
+                            </optgroup>
+                            <optgroup label="Otras Regiones">
+                              <option value="America/Mexico_City">México (Ciudad de México, UTC-6)</option>
+                              <option value="America/New_York">Estados Unidos (New York, UTC-5 / UTC-4)</option>
+                              <option value="UTC">UTC (Tiempo Universal Coordinado)</option>
+                            </optgroup>
+                          </select>
+                          <small className="form-text text-muted mt-2 d-block">
+                            Al seleccionar la zona horaria adecuada (por ejemplo, <strong>Chile Continental</strong>),
+                            los pedidos generados no tendrán el desfase de 4 horas y los comprobantes mostrarán exactamente la hora local.
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="d-flex justify-content-end mt-4 pt-2">
+                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save size={17} />
+                          <span>Guardar Zona Horaria</span>
                         </>
                       )}
                     </button>
