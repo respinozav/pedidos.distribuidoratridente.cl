@@ -272,6 +272,9 @@ class OrderOutput(ORMModel):
     direccion: OrderAddressOutput
     subtotal: Decimal
     total: Decimal
+    folio_defontana: int | None = None
+    defontana_sincronizado: bool = False
+    defontana_error: str | None = None
     detalles: list[OrderLineOutput] = []
 
 

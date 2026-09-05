@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.entities import Cliente, Credito, DetallePedido, Direccion, Estado, Pedido, Producto
 from app.repositories.base import Repository
 from app.schemas.dto import OrderCreate
+from app.services.defontana_service import dispatch_defontana_order_sync_in_background
 from app.services.notifications import _order_pdf, dispatch_order_notifications_in_background, notify_administrators_of_order
 from app.services.pricing import customer_product_box_price, customer_product_price
 
@@ -97,6 +98,7 @@ class OrderService:
         self.database.commit()
         created_order = self.get(order.id)
         dispatch_order_notifications_in_background(created_order.id, tipo="NUEVO_PEDIDO")
+        dispatch_defontana_order_sync_in_background(created_order.id)
         return created_order
 
 

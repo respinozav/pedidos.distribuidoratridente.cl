@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, Boxes, CheckCircle2, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, Trash2, Users, X } from "lucide-react";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
@@ -959,6 +959,7 @@ function AdminOrderManager() {
   const [orderPage, setOrderPage] = useState(1);
   const pageSize = 10;
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [expandedOrders, setExpandedOrders] = useState({});
   const [orderLogs, setOrderLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [retryingLogs, setRetryingLogs] = useState(false);
@@ -1175,11 +1176,87 @@ function AdminOrderManager() {
   const totalPages = Math.ceil(visibleOrders.length / pageSize) || 1;
   const paginatedOrders = visibleOrders.slice((orderPage - 1) * pageSize, orderPage * pageSize);
 
+  function toggleOrderExpand(orderId) {
+    setExpandedOrders((prev) => ({
+      ...prev,
+      [orderId]: !prev[orderId],
+    }));
+  }
+
   return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="order-history-filters"><label>Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label>Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label>Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
     const stateName = getOrderStateName(order);
     const customerName = order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     const customerSub = order.cliente?.rut || order.cliente?.celular || "Sin identificador";
-    return <article className="admin-order-row" key={order.id}><div><strong>Pedido {order.id?.slice(0, 8).toUpperCase()}</strong><small>{order.detalles?.length ?? 0} productos</small></div><div><strong>{customerName}</strong><small>{customerSub}</small></div><span>{formatDateTime(order.created_at)}</span><span className={`order-status order-${stateName.toLowerCase()}`}>{stateName || "-"}</span><strong>{money.format(order.total ?? 0)}</strong><button className="icon-button category-edit" type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver detalle del pedido ${order.id?.slice(0, 8).toUpperCase()}`}><Eye size={16} /></button></article>;
+    const isExpanded = !!expandedOrders[order.id];
+    const canExpand = order.defontana_sincronizado === true || !!order.folio_defontana || !!order.defontana_error;
+
+    return (
+      <React.Fragment key={order.id}>
+        <article className={`admin-order-row ${isExpanded ? "order-row-expanded" : ""}`}>
+          <div className="d-flex align-items-center gap-2">
+            {canExpand && (
+              <button
+                type="button"
+                className={`btn-defontana-toggle ${isExpanded ? "active" : ""}`}
+                onClick={() => toggleOrderExpand(order.id)}
+                title={isExpanded ? "Ocultar estado Defontana" : "Ver estado Defontana"}
+                aria-expanded={isExpanded}
+              >
+                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+            )}
+            <div>
+              <strong>Pedido {order.id?.slice(0, 8).toUpperCase()}</strong>
+              <small>{order.detalles?.length ?? 0} productos</small>
+            </div>
+          </div>
+          <div><strong>{customerName}</strong><small>{customerSub}</small></div>
+          <span>{formatDateTime(order.created_at)}</span>
+          <span className={`order-status order-${stateName.toLowerCase()}`}>{stateName || "-"}</span>
+          <strong>{money.format(order.total ?? 0)}</strong>
+          <button className="icon-button category-edit" type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver detalle del pedido ${order.id?.slice(0, 8).toUpperCase()}`}><Eye size={16} /></button>
+        </article>
+
+        {canExpand && isExpanded && (
+          <div className="admin-order-defontana-panel">
+            <div className="defontana-panel-inner">
+              <div className="defontana-brand-badge">
+                <span className="defontana-dot"></span>
+                <strong>Defontana ERP</strong>
+              </div>
+
+              {order.defontana_error ? (
+                <div className="defontana-status-box defontana-status-error">
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <AlertCircle size={16} className="text-danger flex-shrink-0" />
+                    <span className="badge-defontana-error">ERROR DE SINCRONIZACIÓN</span>
+                    {order.folio_defontana ? (
+                      <span className="defontana-folio-pill">Folio #{order.folio_defontana}</span>
+                    ) : null}
+                  </div>
+                  <p className="defontana-error-text mb-0">
+                    {order.defontana_error}
+                  </p>
+                </div>
+              ) : (
+                <div className="defontana-status-box defontana-status-success">
+                  <div className="d-flex align-items-center gap-2">
+                    <CheckCircle2 size={16} className="text-success flex-shrink-0" />
+                    <span className="badge-defontana-ok">OK</span>
+                    <span className="defontana-ok-text">Sincronizado correctamente</span>
+                    {order.folio_defontana && (
+                      <span className="defontana-folio-pill">
+                        Folio Defontana: <strong>#{order.folio_defontana}</strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </React.Fragment>
+    );
   })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{formatDateTime(selectedOrder.created_at)}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
 
 <div className="order-notifications-section mt-4 pt-3 border-top">

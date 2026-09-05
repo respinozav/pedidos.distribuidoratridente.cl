@@ -3,6 +3,7 @@ import tests.test_ordering as to
 import tests.test_notifications as tn
 import tests.test_publicidad as tp
 import tests.test_sesion_logs as ts
+import tests.test_defontana as td
 
 
 class MonkeyPatch:
@@ -28,7 +29,10 @@ def main():
     tn.test_notify_administrators_only_sends_to_recibe_pedido_users(mp)
     tp.test_publicidad_crud_cycle()
     ts.test_session_logs_recording_and_queries()
-    print(">>> ALL 9 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    td.test_defontana_save_order_mocked()
+    td.test_defontana_item_packaging_rules()
+    td.test_defontana_resolve_client_and_product()
+    print(">>> ALL 12 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     evolution_api_url: str = "http://localhost:8080"
     evolution_api_global_key: str = "tridente_global_secret_123"
     whatsapp_instance_name: str = "tridente_ws"
+    defontana_api_base_url: str = "https://replapi.defontana.com"
+    defontana_client_id: str = ""
+    defontana_company_id: str = ""
+    defontana_api_user: str = ""
+    defontana_api_password: str = ""
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[3] / ".env",
