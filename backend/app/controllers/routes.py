@@ -51,7 +51,7 @@ from app.schemas.dto import (
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
 from app.api.endpoints.configuracion_avisos import router as configuracion_avisos_router
-from app.services.notifications import dispatch_order_notifications_in_background, notify_customer_password_changed
+from app.services.notifications import _order_pdf_filename, dispatch_order_notifications_in_background, notify_customer_password_changed
 
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_box_price, customer_product_price
@@ -641,9 +641,11 @@ def list_orders(database: DatabaseSession, _: AdminUser) -> list[object]:
 
 @router.get("/pedidos/{order_id}/pdf", tags=["Pedidos"])
 def order_pdf(order_id: UUID, database: DatabaseSession, _: AdminUser) -> Response:
-    content = OrderService(database).pdf(order_id)
-    code = str(order_id).split("-")[0].upper()
-    return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="pedido-{code}.pdf"'})
+    order_service = OrderService(database)
+    order = order_service.get(order_id)
+    content = order_service.pdf(order_id)
+    filename = _order_pdf_filename(order)
+    return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.get("/creditos", response_model=list[CreditOutput], tags=["Créditos"])

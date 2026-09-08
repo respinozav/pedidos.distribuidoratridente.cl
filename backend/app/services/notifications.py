@@ -1,5 +1,6 @@
 import html
 import logging
+import re
 import smtplib
 import threading
 import time
@@ -42,6 +43,19 @@ def _product_detail_label(detail: object) -> str:
     if code:
         return f"<b>{name}</b>{empaque_badge} <font color='#667085'>[{code}]</font>"
     return f"<b>{name}</b>{empaque_badge}"
+
+
+def _order_pdf_filename(order: Pedido) -> str:
+    order_code = str(order.id).split("-")[0].upper()
+    client_name = ""
+    if getattr(order, "cliente", None):
+        client_name = order.cliente.nombre or order.cliente.rut or ""
+    client_name = client_name.strip()
+    safe_client_name = re.sub(r'[\\/*?:"<>|]', "", client_name)
+    safe_client_name = re.sub(r"\s+", " ", safe_client_name).strip()
+    if safe_client_name:
+        return f"{safe_client_name} - {order_code}.pdf"
+    return f"pedido-{order_code}.pdf"
 
 
 
@@ -495,13 +509,37 @@ def _order_pdf(order: Pedido) -> bytes:
 
     details = Table(rows, colWidths=[74 * mm, 18 * mm, 22 * mm, 28 * mm, 32 * mm], repeatRows=1)
     details.setStyle(TableStyle(table_styles))
-    total = Table([["TOTAL", _currency(order.total)]], colWidths=[135 * mm, 39 * mm], hAlign="RIGHT")
+
+    # Conteo de productos
+    total_items = len(sorted_detalles)
+    items_label = f"Total productos: {total_items} ítem{'s' if total_items != 1 else ''}"
+    
+    total_unidades = sum(getattr(d, "cantidad", 0) for d in sorted_detalles if getattr(d, "tipo_empaque", "unidad") != "caja")
+    total_cajas = sum(getattr(d, "cantidad", 0) for d in sorted_detalles if getattr(d, "tipo_empaque", "unidad") == "caja")
+    cant_desglose = []
+    if total_unidades:
+        cant_desglose.append(f"{total_unidades} un.")
+    if total_cajas:
+        cant_desglose.append(f"{total_cajas} cj.")
+    
+    if cant_desglose:
+        items_label += f" ({', '.join(cant_desglose)})"
+
+    footer_row = [
+        Paragraph(f"<font color='#667085'><b>{html.escape(items_label)}</b></font>", styles["Details"]),
+        "TOTAL",
+        _currency(order.total),
+    ]
+    total = Table([footer_row], colWidths=[92 * mm, 43 * mm, 39 * mm], hAlign="RIGHT")
     total.setStyle(TableStyle([
         ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 13),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#172B4D")),
+        ("FONTNAME", (1, 0), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (1, 0), (-1, -1), 13),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TEXTCOLOR", (1, 0), (-1, -1), colors.HexColor("#172B4D")),
     ]))
     story.extend([details, total])
     document.build(story)
@@ -591,7 +629,7 @@ def _build_order_message(
 <p style='margin:24px 0 0;color:#667085;font-size:12px'>Se adjunta el comprobante PDF con el detalle del pedido.</p></div></div></body></html>""",
         subtype="html",
     )
-    message.add_attachment(_order_pdf(order), maintype="application", subtype="pdf", filename=f"pedido-{order_code}.pdf")
+    message.add_attachment(_order_pdf(order), maintype="application", subtype="pdf", filename=_order_pdf_filename(order))
     return message
 
 
@@ -685,7 +723,7 @@ def notify_administrators_via_whatsapp(
         if pdf_bytes is None:
             pdf_bytes = _order_pdf(order)
 
-        filename = f"pedido-{order_code}.pdf"
+        filename = _order_pdf_filename(order)
 
         for admin in admin_users:
             admin_start = time.perf_counter()

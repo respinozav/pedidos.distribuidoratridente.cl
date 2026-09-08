@@ -23,6 +23,7 @@ def main():
     tc.test_build_full_catalog_pdf_returns_valid_pdf()
     tc.test_build_public_vs_full_catalog_cache_and_invalidation()
     to.test_create_creates_default_state_when_none_exists(mp)
+    tn.test_order_pdf_filename_generation()
     tn.test_product_detail_label_compacts_code_on_same_line()
     tn.test_order_pdf_contains_valid_header()
     tn.test_order_pdf_with_mixed_afecto_and_exento()

@@ -2,7 +2,37 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.services.notifications import _order_pdf, _product_detail_label
+from app.services.notifications import _order_pdf, _order_pdf_filename, _product_detail_label
+
+
+def test_order_pdf_filename_generation() -> None:
+    # Caso 1: Cliente con nombre/razón social
+    order1 = SimpleNamespace(
+        id="73efe6eb-1234-5678-9abc-def012345678",
+        cliente=SimpleNamespace(nombre="APLICACIONES AGROMINERAS ELQUI LIMITADA", rut="76.043.962-2"),
+    )
+    assert _order_pdf_filename(order1) == "APLICACIONES AGROMINERAS ELQUI LIMITADA - 73EFE6EB.pdf"
+
+    # Caso 2: Cliente sin nombre pero con RUT
+    order2 = SimpleNamespace(
+        id="aabbccdd-1234-5678-9abc-def012345678",
+        cliente=SimpleNamespace(nombre=None, rut="12.345.678-9"),
+    )
+    assert _order_pdf_filename(order2) == "12.345.678-9 - AABBCCDD.pdf"
+
+    # Caso 3: Caracteres especiales que deben sanitizarse
+    order3 = SimpleNamespace(
+        id="11223344-1234-5678-9abc-def012345678",
+        cliente=SimpleNamespace(nombre="Empresa/Test: Especial*", rut=""),
+    )
+    assert _order_pdf_filename(order3) == "EmpresaTest Especial - 11223344.pdf"
+
+    # Caso 4: Sin cliente o nombre vacío
+    order4 = SimpleNamespace(
+        id="55667788-1234-5678-9abc-def012345678",
+        cliente=None,
+    )
+    assert _order_pdf_filename(order4) == "pedido-55667788.pdf"
 
 
 def test_product_detail_label_compacts_code_on_same_line() -> None:
@@ -68,9 +98,23 @@ def test_order_pdf_with_mixed_afecto_and_exento() -> None:
         total=Decimal("7500"),
     )
 
+    import base64
+    import re
+    import zlib
+
     pdf = _order_pdf(order)
     assert pdf.startswith(b"%PDF-1.4")
     assert len(pdf) > 500
+
+    # Extraer el stream de texto y validar que contenga el conteo de productos
+    text_streams = re.findall(rb'<<[^>]*?/Length (\d+)[^>]*?>>\s*stream\s*(.*?)\s*endstream', pdf, re.DOTALL)
+    decompressed_streams = [
+        zlib.decompress(base64.a85decode(content.strip(), adobe=True))
+        for _, content in text_streams
+        if b"ASCII85Decode" in pdf
+    ]
+    all_text = b"".join(decompressed_streams)
+    assert b"Total productos: 2" in all_text
 
 
 def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) -> None:
