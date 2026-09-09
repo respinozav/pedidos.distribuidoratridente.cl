@@ -168,7 +168,6 @@ export default function SessionLogs() {
         </div>
         <div className="topbar-actions">
           <span className="topbar-date d-none d-sm-inline">Auditoría de Inicios de Sesión</span>
-          <StockAlertBell />
           <button
             className="btn btn-outline-secondary d-flex align-items-center gap-2"
             onClick={() => {
@@ -180,6 +179,7 @@ export default function SessionLogs() {
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             <span>Actualizar</span>
           </button>
+          <StockAlertBell />
         </div>
       </header>
 

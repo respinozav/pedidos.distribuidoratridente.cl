@@ -1440,6 +1440,7 @@ button, input { font: inherit; }
   position: relative;
   display: inline-flex;
   align-items: center;
+  order: 999;
 }
 
 .stock-alert-bell-btn {
