@@ -8,6 +8,7 @@ import tests.test_admin_profile as tap
 import tests.test_colaborador_role as tcol
 import tests.test_producto_notificar_stock as tpns
 import tests.test_negative_stock_order as tnso
+import tests.test_publicidad_email as tpe
 
 
 class MonkeyPatch:
@@ -70,7 +71,10 @@ def main():
     tpns.test_product_crud_stock_notification()
     tpns.test_stock_alert_query()
     tnso.test_negative_stock_cart_and_order()
-    print(">>> ALL 18 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    tpe.test_publicidad_email_dto()
+    tpe.test_publicidad_html_builder()
+    tpe.test_send_publicidad_campaign_isolated_bcc()
+    print(">>> ALL 21 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

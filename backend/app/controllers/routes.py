@@ -41,6 +41,8 @@ from app.schemas.dto import (
     PublicidadOutput,
     PublicidadProductoOutput,
     RoleOutput,
+    SendPublicidadEmailInput,
+    SendPublicidadEmailOutput,
     SesionLogOutput,
     SesionLogPage,
     SesionLogStats,
@@ -58,6 +60,7 @@ from app.services.notifications import (
     dispatch_order_notifications_in_background,
     notify_customer_password_changed,
     notify_user_password_changed,
+    send_publicidad_campaign,
 )
 
 from app.services.ordering import OrderService
@@ -1124,6 +1127,68 @@ def delete_publicidad(
     database.delete(entity)
     database.commit()
     return {"message": "Publicidad eliminada correctamente"}
+
+
+@router.post(
+    "/admin/publicidades/{publicidad_id}/enviar-correo",
+    response_model=SendPublicidadEmailOutput,
+    tags=["Publicidad"],
+)
+def send_publicidad_email_campaign(
+    publicidad_id: UUID,
+    payload: SendPublicidadEmailInput,
+    database: DatabaseSession,
+    _: SuperAdminUser,
+) -> SendPublicidadEmailOutput:
+    """Envía un banner publicitario por correo a los clientes seleccionados o a todos con copia oculta garantizada."""
+    publicidad = database.scalar(
+        select(Publicidad)
+        .options(selectinload(Publicidad.producto))
+        .where(Publicidad.id == publicidad_id)
+    )
+    if not publicidad:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Publicidad no encontrada")
+
+    query = (
+        select(Cliente)
+        .where(
+            Cliente.eliminado_at.is_(None),
+            Cliente.activo.is_(True),
+            Cliente.correo.is_not(None),
+            Cliente.correo != "",
+        )
+    )
+
+    if not payload.todos:
+        if not payload.cliente_ids:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Debes seleccionar al menos un cliente o marcar la opción de envío a todos.",
+            )
+        query = query.where(Cliente.id.in_(payload.cliente_ids))
+
+    clientes = list(database.scalars(query))
+    if not clientes:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No se encontraron clientes activos con correo válido para el envío.",
+        )
+
+    res = send_publicidad_campaign(
+        publicidad=publicidad,
+        clientes=clientes,
+        asunto=payload.asunto,
+        mensaje_adicional=payload.mensaje_adicional,
+        database=database,
+    )
+
+    return SendPublicidadEmailOutput(
+        total_destinatarios=int(res["total_destinatarios"]),
+        enviados=int(res["enviados"]),
+        fallidos=int(res["fallidos"]),
+        detalles=list(res["detalles"]),
+    )
+
 
 
 @router.get("/admin/sesiones/logs", response_model=SesionLogPage, tags=["Logs Sesiones"])

@@ -433,3 +433,18 @@ class SesionLogStats(BaseModel):
     cliente_total: int
 
 
+class SendPublicidadEmailInput(BaseModel):
+    asunto: str = Field(min_length=1, max_length=200)
+    mensaje_adicional: str | None = None
+    todos: bool = False
+    cliente_ids: list[UUID] = Field(default_factory=list)
+
+
+class SendPublicidadEmailOutput(BaseModel):
+    total_destinatarios: int
+    enviados: int
+    fallidos: int
+    detalles: list[dict] = Field(default_factory=list)
+
+
+

@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from fastapi import HTTPException
 from app.core.config import get_settings
-from app.models.entities import Cliente, Pedido, PedidoNotificacionLog, Rol, Usuario
+from app.models.entities import Cliente, Pedido, PedidoNotificacionLog, Publicidad, Rol, Usuario
 
 logger = logging.getLogger(__name__)
 LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "logo_tridente.png"
@@ -1038,3 +1038,319 @@ def dispatch_order_notifications_in_background(order_id: UUID, tipo: str = "NUEV
         daemon=True,
     )
     thread.start()
+
+
+PUBLICIDAD_COLOR_THEMES = {
+    "#082620": {"bg_start": "#082620", "bg_end": "#041612", "btn": "#23735e", "tag_bg": "rgba(35, 115, 94, 0.28)", "tag_border": "#6ee7b7", "tag_text": "#6ee7b7", "sub_color": "#d1fae5"},
+    "#2c2203": {"bg_start": "#2c2203", "bg_end": "#181301", "btn": "#946f08", "tag_bg": "rgba(234, 179, 8, 0.22)", "tag_border": "#fde047", "tag_text": "#fde047", "sub_color": "#fef08a"},
+    "#2f0a10": {"bg_start": "#2f0a10", "bg_end": "#1a0407", "btn": "#a8253b", "tag_bg": "rgba(239, 68, 68, 0.22)", "tag_border": "#fca5a5", "tag_text": "#fca5a5", "sub_color": "#fecaca"},
+    "#0b1e36": {"bg_start": "#0b1e36", "bg_end": "#050f1c", "btn": "#1b4f8a", "tag_bg": "rgba(59, 130, 246, 0.22)", "tag_border": "#93c5fd", "tag_text": "#93c5fd", "sub_color": "#bfdbfe"},
+    "#230d35": {"bg_start": "#230d35", "bg_end": "#12051c", "btn": "#6b28a8", "tag_bg": "rgba(168, 85, 247, 0.22)", "tag_border": "#d8b4fe", "tag_text": "#d8b4fe", "sub_color": "#e9d5ff"},
+    "#361705": {"bg_start": "#361705", "bg_end": "#1d0b02", "btn": "#a34a12", "tag_bg": "rgba(249, 115, 22, 0.22)", "tag_border": "#fdba74", "tag_text": "#fdba74", "sub_color": "#fed7aa"},
+    "#092429": {"bg_start": "#092429", "bg_end": "#041215", "btn": "#196875", "tag_bg": "rgba(20, 184, 166, 0.22)", "tag_border": "#5eead4", "tag_text": "#5eead4", "sub_color": "#99f6e4"},
+    "#181f29": {"bg_start": "#181f29", "bg_end": "#0d1117", "btn": "#475569", "tag_bg": "rgba(148, 163, 184, 0.22)", "tag_border": "#cbd5e1", "tag_text": "#cbd5e1", "sub_color": "#e2e8f0"},
+}
+
+
+def build_publicidad_email_html(
+    publicidad: Publicidad,
+    cliente: Cliente,
+    mensaje_adicional: str | None = None,
+    portal_url: str = "https://pedidos.distribuidoratridente.cl",
+) -> str:
+    """Genera el contenido HTML del correo promocional adaptado para clientes de email."""
+    theme = PUBLICIDAD_COLOR_THEMES.get(
+        publicidad.color_fondo,
+        PUBLICIDAD_COLOR_THEMES["#082620"]
+    )
+    client_name = html.escape(cliente.nombre.strip() if cliente.nombre else "Estimado(a) Cliente")
+    titulo_escaped = html.escape(publicidad.titulo)
+    subtitulo_escaped = html.escape(publicidad.subtitulo or "")
+    tag1_escaped = html.escape(publicidad.etiqueta_1 or "")
+    tag_rojo_escaped = html.escape(publicidad.etiqueta_roja or "PROMOCIÓN")
+    boton_escaped = html.escape(publicidad.texto_boton or "Ver Promoción en el Catálogo →")
+
+    # Bloque de mensaje adicional si el usuario redactó uno
+    mensaje_adicional_html = ""
+    if mensaje_adicional and mensaje_adicional.strip():
+        safe_msg = html.escape(mensaje_adicional.strip()).replace("\n", "<br/>")
+        mensaje_adicional_html = f"""
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#f8fafc;border-left:4px solid #0284c7;border-radius:6px;padding:14px 18px;">
+          <tr>
+            <td style="font-size:14px;line-height:1.6;color:#334155;">
+              {safe_msg}
+            </td>
+          </tr>
+        </table>
+        """
+
+    # Bloque de producto asociado si existe
+    producto_card_html = ""
+    if publicidad.producto and not publicidad.producto.eliminado_at:
+        prod = publicidad.producto
+        prod_nombre = html.escape(prod.nombre)
+        prod_codigo = html.escape(prod.codigo or "")
+        prod_precio = f"${prod.precio:,.0f}".replace(",", ".")
+
+        img_tag = ""
+        if prod.imagen_url and (prod.imagen_url.startswith("http://") or prod.imagen_url.startswith("https://")):
+            img_tag = f'<img src="{html.escape(prod.imagen_url)}" alt="{prod_nombre}" width="64" height="64" style="display:block;border-radius:8px;object-fit:cover;border:1px solid #e2e8f0;margin-right:14px;" />'
+
+        producto_card_html = f"""
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;margin-top:20px;padding:12px 16px;">
+          <tr>
+            {'<td width="78" style="vertical-align:middle;">' + img_tag + '</td>' if img_tag else ''}
+            <td style="vertical-align:middle;">
+              <div style="font-size:11px;font-weight:700;color:#93c5fd;text-transform:uppercase;letter-spacing:0.5px;">CÓDIGO: {prod_codigo}</div>
+              <div style="font-size:14px;font-weight:750;color:#ffffff;margin-top:2px;">{prod_nombre}</div>
+              <div style="font-size:13px;font-weight:700;color:#38bdf8;margin-top:3px;">Precio ref: {prod_precio}</div>
+            </td>
+          </tr>
+        </table>
+        """
+
+    # Badge superior si existe etiqueta_1
+    tag1_html = ""
+    if tag1_escaped:
+        tag1_html = f"""
+        <span style="display:inline-block;background-color:{theme['tag_bg']};color:{theme['tag_text']};border:1px solid {theme['tag_border']};border-radius:20px;font-size:11px;font-weight:800;padding:4px 12px;text-transform:uppercase;letter-spacing:0.5px;margin-right:8px;margin-bottom:8px;">
+          {tag1_escaped}
+        </span>
+        """
+
+    tag_rojo_html = f"""
+    <span style="display:inline-block;background-color:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:20px;font-size:11px;font-weight:800;padding:4px 10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+      {tag_rojo_escaped}
+    </span>
+    """
+
+    return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>{titulo_escaped}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:none;color:#1e293b;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f1f5f9;table-layout:fixed;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <!-- Contenedor central blanco -->
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#ffffff;border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;box-shadow:0 6px 16px rgba(0,0,0,0.06);">
+          
+          <!-- Encabezado Institucional -->
+          <tr>
+            <td style="background-color:#102a43;padding:24px 30px;border-bottom:1px solid #0b1e36;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td width="46" style="vertical-align:middle;padding-right:12px;">
+                    <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="40" height="40" style="display:block;border:0;outline:none;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <div style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.4px;">Distribuidora Tridente</div>
+                    <div style="color:#62b0e8;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-top:2px;">Catálogo & Promociones Exclusivas</div>
+                  </td>
+                  <td align="right" style="vertical-align:middle;">
+                    <a href="{portal_url}" target="_blank" style="background-color:rgba(14,165,233,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);font-size:11px;font-weight:700;padding:5px 12px;border-radius:18px;text-decoration:none;text-transform:uppercase;">Ir al Portal</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Saludo y Mensaje -->
+          <tr>
+            <td style="padding:28px 30px 14px 30px;">
+              <div style="font-size:16px;font-weight:750;color:#0f172a;margin-bottom:12px;">
+                Hola {client_name},
+              </div>
+              <p style="font-size:14px;line-height:1.55;color:#475569;margin:0 0 16px 0;">
+                Te compartimos la siguiente novedad destacada y beneficio disponible en nuestro catálogo mayorista:
+              </p>
+              {mensaje_adicional_html}
+            </td>
+          </tr>
+
+          <!-- TARJETA DEL BANNER PUBLICITARIO (Estilo temático) -->
+          <tr>
+            <td style="padding:0 30px 24px 30px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:{theme['bg_start']};background:linear-gradient(135deg, {theme['bg_start']} 0%, {theme['bg_end']} 100%);border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.1);">
+                <tr>
+                  <td style="padding:28px 24px;">
+                    <!-- Etiquetas / Badges -->
+                    <div style="margin-bottom:12px;">
+                      {tag1_html}
+                      {tag_rojo_html}
+                    </div>
+
+                    <!-- Título -->
+                    <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;line-height:1.25;margin-bottom:8px;">
+                      {titulo_escaped}
+                    </div>
+
+                    <!-- Subtítulo -->
+                    {f'<div style="font-size:14px;line-height:1.5;color:{theme["sub_color"]};margin-bottom:14px;">{subtitulo_escaped}</div>' if subtitulo_escaped else ''}
+
+                    <!-- Producto Card si existe -->
+                    {producto_card_html}
+
+                    <!-- Botón de Llamado a la Acción -->
+                    <div style="margin-top:22px;">
+                      <a href="{portal_url}" target="_blank" style="display:inline-block;background-color:{theme['btn']};color:#ffffff;font-size:13px;font-weight:800;padding:11px 22px;border-radius:8px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 2px 8px rgba(0,0,0,0.25);">
+                        {boton_escaped}
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Mensaje de ayuda / acceso rápido -->
+          <tr>
+            <td style="padding:0 30px 28px 30px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;">
+                <tr>
+                  <td style="font-size:12px;line-height:1.5;color:#64748b;">
+                    💡 <strong>¿Cómo realizar tu pedido?</strong> Ingresa con tus credenciales a <a href="{portal_url}" target="_blank" style="color:#0284c7;font-weight:600;text-decoration:underline;">{portal_url}</a>, añade los productos a tu carro de compras y confirma el despacho.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Pie Institucional -->
+          <tr>
+            <td style="background-color:#f8fafc;padding:20px 30px;border-top:1px solid #e2e8f0;text-align:center;">
+              <p style="font-size:11px;color:#94a3b8;margin:0 0 6px 0;line-height:1.4;">
+                Distribuidora Tridente · Distribución y Abastecimiento para Negocios y Comercios
+              </p>
+              <p style="font-size:10px;color:#cbd5e1;margin:0;line-height:1.4;">
+                Este correo fue enviado de manera individual a {html.escape(cliente.correo or '')}.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_publicidad_campaign(
+    publicidad: Publicidad,
+    clientes: list[Cliente],
+    asunto: str,
+    mensaje_adicional: str | None,
+    database: Session,
+) -> dict[str, object]:
+    """
+    Envía la publicidad por correo a una lista de clientes garantizando COPIA OCULTA (CCO / BCC).
+    Cada cliente recibe un correo emitido de forma individual y privada, sin exponer las direcciones
+    ni nombres de los otros destinatarios.
+    """
+    smtp_config = _get_smtp_settings(database)
+    if not smtp_config.get("configured") or not smtp_config.get("host"):
+        raise HTTPException(
+            status_code=400,
+            detail="El servidor SMTP no está configurado. Completa la configuración de correo en Sistema antes de enviar campañas.",
+        )
+
+    host = str(smtp_config.get("host"))
+    port = int(smtp_config.get("port") or 465)
+    username = str(smtp_config.get("username") or "")
+    password = str(smtp_config.get("password") or "")
+    from_name = str(smtp_config.get("from_name") or "Distribuidora Tridente")
+    from_email = str(smtp_config.get("from_email") or username)
+
+    valid_clientes = [
+        c for c in clientes
+        if c.correo and "@" in c.correo and c.correo.strip()
+    ]
+
+    if not valid_clientes:
+        return {
+            "total_destinatarios": 0,
+            "enviados": 0,
+            "fallidos": 0,
+            "detalles": [],
+        }
+
+    try:
+        if port == 465:
+            smtp_server = smtplib.SMTP_SSL(host, port, timeout=25)
+        else:
+            smtp_server = smtplib.SMTP(host, port, timeout=25)
+            smtp_server.ehlo()
+            if smtp_server.has_extn("starttls"):
+                smtp_server.starttls()
+                smtp_server.ehlo()
+
+        if username and password:
+            smtp_server.login(username, password)
+    except Exception as conn_err:
+        logger.exception("Error al conectar con servidor SMTP para campaña publicitaria: %s", conn_err)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al conectar con el servidor SMTP: {str(conn_err)}",
+        )
+
+    enviados = 0
+    fallidos = 0
+    detalles = []
+
+    try:
+        for cli in valid_clientes:
+            recipient_email = cli.correo.strip()
+            recipient_name = cli.nombre.strip() if cli.nombre else "Cliente"
+            try:
+                msg = EmailMessage()
+                msg["Subject"] = asunto
+                msg["From"] = f"{from_name} <{from_email}>"
+                # Copia oculta garantizada: encabezado To exclusivo para este destinatario
+                msg["To"] = f"{recipient_name} <{recipient_email}>"
+
+                html_content = build_publicidad_email_html(publicidad, cli, mensaje_adicional)
+                plain_content = (
+                    f"Hola {recipient_name},\n\n"
+                    f"{mensaje_adicional.strip() + chr(10) + chr(10) if mensaje_adicional and mensaje_adicional.strip() else ''}"
+                    f"{publicidad.titulo}\n"
+                    f"{publicidad.subtitulo or ''}\n\n"
+                    f"Para ver el catálogo completo visita https://pedidos.distribuidoratridente.cl\n\n"
+                    f"Distribuidora Tridente"
+                )
+                msg.set_content(plain_content)
+                msg.add_alternative(html_content, subtype="html")
+
+                smtp_server.send_message(msg)
+                enviados += 1
+                detalles.append({
+                    "cliente_id": str(cli.id),
+                    "correo": recipient_email,
+                    "estado": "ENVIADO",
+                })
+            except Exception as send_err:
+                fallidos += 1
+                error_desc = str(send_err)
+                logger.warning("Fallo al enviar correo publicitario a %s: %s", recipient_email, error_desc)
+                detalles.append({
+                    "cliente_id": str(cli.id),
+                    "correo": recipient_email,
+                    "estado": "FALLIDO",
+                    "error": error_desc,
+                })
+    finally:
+        try:
+            smtp_server.quit()
+        except Exception:
+            pass
+
+    return {
+        "total_destinatarios": len(valid_clientes),
+        "enviados": enviados,
+        "fallidos": fallidos,
+        "detalles": detalles,
+    }
