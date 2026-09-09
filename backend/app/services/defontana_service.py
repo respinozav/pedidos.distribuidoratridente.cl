@@ -174,7 +174,7 @@ class DefontanaService:
             return None, "Defontana no configurada"
 
         from app.core.database import SessionLocal
-        from app.models.entities import DetallePedido, Pedido
+        from app.models.entities import DetallePedido, Pedido, Producto
 
         with SessionLocal() as session:
             order = session.scalar(
@@ -188,6 +188,29 @@ class DefontanaService:
             )
             if not order:
                 return None, f"Pedido {order_id} no encontrado"
+
+            def _is_afecto(item: Any) -> bool:
+                # 1. Si producto está cargado en el item
+                if getattr(item, "producto", None) is not None and getattr(item.producto, "afecto", None) is not None:
+                    return bool(item.producto.afecto)
+                # 2. Si no es DetallePedido (ej. DTO o SimpleNamespace de prueba con afecto explícito)
+                if not isinstance(item, DetallePedido) and getattr(item, "afecto", None) is not None:
+                    return bool(item.afecto)
+                # 3. Fallback a BD por producto_id
+                if getattr(item, "producto_id", None):
+                    p = session.get(Producto, item.producto_id)
+                    if p is not None and getattr(p, "afecto", None) is not None:
+                        return bool(p.afecto)
+                # 4. Fallback a BD por codigo_producto
+                prod_c = getattr(item, "codigo_producto", None)
+                if prod_c:
+                    p = session.scalar(select(Producto).where(Producto.codigo == str(prod_c)))
+                    if p is not None and getattr(p, "afecto", None) is not None:
+                        return bool(p.afecto)
+                # 5. Atributo afecto general en el item si existe
+                if getattr(item, "afecto", None) is not None:
+                    return bool(item.afecto)
+                return False
 
             client_data = None
             if order.cliente and order.cliente.rut:
@@ -218,6 +241,7 @@ class DefontanaService:
             # Procesar detalles
             order_details = []
             total_neto = Decimal("0")
+            total_afecto = Decimal("0")
 
             for item in order.detalles:
                 prod_code = item.codigo_producto or ""
@@ -237,8 +261,14 @@ class DefontanaService:
                 else:
                     comment = "Unidad"
 
+                is_afecto = _is_afecto(item)
+                is_exempt = not is_afecto
+                tax_rate = 19.0 if is_afecto else 0.0
+
                 line_total = Decimal(str(price)) * count
                 total_neto += line_total
+                if is_afecto:
+                    total_afecto += line_total
 
                 order_details.append({
                     "type": prod_type,
@@ -248,15 +278,15 @@ class DefontanaService:
                     "count": count,
                     "price": price,
                     "comment": comment,
-                    "isExempt": False,
+                    "isExempt": is_exempt,
                     "isService": False,
                     "deliveryDate": delivery_date,
                     "deliveryTime": {"hour": 12, "minute": 0},
                     "discount": {"value": 0.0, "type": 1},
-                    "tax": {"code": "IVA", "value": 19.0},
+                    "tax": {"code": "IVA", "value": tax_rate},
                 })
 
-            iva_value = float(round(total_neto * Decimal("0.19"), 0))
+            iva_value = float(round(total_afecto * Decimal("0.19"), 0))
 
             body = {
                 "documentTypeId": "boleta",

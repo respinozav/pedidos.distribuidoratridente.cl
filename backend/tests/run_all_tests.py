@@ -65,6 +65,9 @@ def main():
     td.test_defontana_save_order_mocked()
     td.test_defontana_item_packaging_rules()
     td.test_defontana_resolve_client_and_product()
+    td.test_defontana_order_exclusively_afecto()
+    td.test_defontana_order_exclusively_exento()
+    td.test_defontana_order_mixed_afecto_and_exento()
     tap.test_admin_profile_workflow()
     tcol.test_colaborador_role_permissions()
     tpns.test_product_input_validation()
@@ -74,7 +77,7 @@ def main():
     tpe.test_publicidad_email_dto()
     tpe.test_publicidad_html_builder()
     tpe.test_send_publicidad_campaign_isolated_bcc()
-    print(">>> ALL 21 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    print(">>> ALL 24 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":
