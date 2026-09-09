@@ -956,7 +956,7 @@ function CustomerManager() {
 function AdminOrderManager() {
   const [orders, setOrders] = useState([]);
   const [states, setStates] = useState([]);
-  const [filters, setFilters] = useState({ estado: "Pedido", codigo: "", desde: "", hasta: "" });
+  const [filters, setFilters] = useState({ estado: "Pedido", cliente: "", codigo: "", desde: "", hasta: "" });
   const [orderPage, setOrderPage] = useState(1);
   const pageSize = 10;
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -1160,16 +1160,33 @@ function AdminOrderManager() {
 
   useEffect(() => {
     setOrderPage(1);
-  }, [filters.estado, filters.codigo, filters.desde, filters.hasta]);
+  }, [filters.estado, filters.cliente, filters.codigo, filters.desde, filters.hasta]);
 
   const visibleOrders = orders.filter((order) => {
-    const code = filters.codigo.trim().toUpperCase();
+    const code = (filters.codigo || "").trim().toUpperCase();
+    const clienteFilter = (filters.cliente || "").trim().toLowerCase();
     const createdAt = order.created_at ? new Date(order.created_at) : null;
     const from = filters.desde ? new Date(`${filters.desde}T00:00:00`) : null;
     const to = filters.hasta ? new Date(`${filters.hasta}T23:59:59.999`) : null;
     const stateName = getOrderStateName(order);
+
+    let matchesClient = true;
+    if (clienteFilter) {
+      const cleanRutSearch = clienteFilter.replace(/[\.\-]/g, "");
+      const orderRut = (order.cliente?.rut || "").toLowerCase().replace(/[\.\-]/g, "");
+      const orderName = (order.cliente?.nombre || "").toLowerCase();
+      const orderPhone = (order.cliente?.celular || "").toLowerCase();
+      const orderEmail = (order.cliente?.correo || "").toLowerCase();
+
+      matchesClient = orderName.includes(clienteFilter)
+        || (cleanRutSearch.length >= 2 && orderRut.includes(cleanRutSearch))
+        || orderPhone.includes(clienteFilter)
+        || orderEmail.includes(clienteFilter);
+    }
+
     return stateName.toLowerCase() === filters.estado.toLowerCase()
       && (!code || order.id?.slice(0, 8).toUpperCase().includes(code))
+      && matchesClient
       && (!from || (createdAt && createdAt >= from))
       && (!to || (createdAt && createdAt <= to));
   });
@@ -1184,7 +1201,7 @@ function AdminOrderManager() {
     }));
   }
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="order-history-filters"><label>Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label>Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label>Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, cliente, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="admin-order-filters"><label className="filter-estado">Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Nombre, RUT o celular..." value={filters.cliente} onChange={(event) => setFilters((current) => ({ ...current, cliente: event.target.value }))} /></label><label className="filter-pedido">Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label className="filter-desde">Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label className="filter-hasta">Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{notice && <div className="alert alert-success mt-3 mb-0 category-notice"><CheckCircle2 size={18} />{notice}<button className="btn-close" type="button" onClick={() => setNotice("")} /></div>}{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
     const stateName = getOrderStateName(order);
     const customerName = order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     const customerSub = order.cliente?.rut || order.cliente?.celular || "Sin identificador";
