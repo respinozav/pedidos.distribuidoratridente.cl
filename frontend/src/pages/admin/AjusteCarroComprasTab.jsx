@@ -206,174 +206,142 @@ export default function AjusteCarroComprasTab({ settings, onSettingsChange, onSa
               </p>
             </div>
           ) : (
-            <div className="table-responsive">
-              <table className="table align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Cliente</th>
-                    <th>Última Actualización</th>
-                    <th>Tiempo Restante</th>
-                    <th>Productos / Total</th>
-                    <th className="text-end">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {carts.map((cart) => {
-                    const remaining = formatRemainingTime(cart.expira_en_segundos);
-                    const isExpanded = expandedCartId === cart.id;
+            <div className="admin-cart-table">
+              <div className="admin-cart-head">
+                <span>Cliente</span>
+                <span>Última Actualización</span>
+                <span>Tiempo Restante</span>
+                <span>Productos / Total</span>
+                <span>Acciones</span>
+              </div>
+              {carts.map((cart) => {
+                const remaining = formatRemainingTime(cart.expira_en_segundos);
+                const isExpanded = expandedCartId === cart.id;
 
-                    return (
-                      <React.Fragment key={cart.id}>
-                        <tr className={remaining.isExpired ? "table-danger-subtle" : ""}>
-                          <td>
-                            <div className="d-flex align-items-center gap-2">
-                              <div
-                                className="bg-light rounded-circle p-2 d-flex align-items-center justify-content-center"
-                                style={{ width: "36px", height: "36px" }}
-                              >
-                                <User size={18} className="text-secondary" />
-                              </div>
-                              <div>
-                                <strong className="d-block text-dark">{cart.cliente_nombre}</strong>
-                                <small className="text-muted font-monospace">
-                                  {cart.cliente_rut || "Sin RUT"}
-                                </small>
-                                {cart.cliente_celular && (
-                                  <span className="text-muted ms-2 small">
-                                    <Phone size={12} className="me-1 inline" />
-                                    {cart.cliente_celular}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
+                return (
+                  <React.Fragment key={cart.id}>
+                    <article className={`admin-cart-row ${isExpanded ? "order-row-expanded" : ""}`}>
+                      <div>
+                        <strong>{cart.cliente_nombre}</strong>
+                        <small className="font-monospace">
+                          {cart.cliente_rut || "Sin RUT"}
+                          {cart.cliente_celular && ` · ${cart.cliente_celular}`}
+                        </small>
+                      </div>
 
-                          <td>
-                            <div className="d-flex align-items-center gap-1">
-                              <Clock size={14} className="text-muted" />
-                              <span className="small font-monospace">
-                                {formatDateTime(cart.updated_at)}
-                              </span>
-                            </div>
-                          </td>
+                      <div>
+                        <span>{formatDateTime(cart.updated_at)}</span>
+                      </div>
 
-                          <td>
-                            {remaining.isExpired ? (
-                              <span className="badge bg-danger d-inline-flex align-items-center gap-1">
-                                <AlertCircle size={12} />
-                                {remaining.text}
-                              </span>
-                            ) : (
-                              <span
-                                className={`badge ${
-                                  remaining.isCritical
-                                    ? "bg-warning text-dark border border-warning"
-                                    : "bg-success-subtle text-success border border-success-subtle"
-                                } d-inline-flex align-items-center gap-1`}
-                              >
-                                <Clock size={12} />
-                                Quedan {remaining.text}
-                              </span>
-                            )}
-                          </td>
-
-                          <td>
-                            <div>
-                              <strong className="text-primary">{money.format(cart.total)}</strong>
-                              <small className="text-muted d-block">
-                                {cart.total_items} {cart.total_items === 1 ? "ítem" : "ítems"} ({cart.total_unidades} un.)
-                              </small>
-                            </div>
-                          </td>
-
-                          <td className="text-end">
-                            <div className="d-inline-flex align-items-center gap-1">
-                              <button
-                                type="button"
-                                className="btn btn-light btn-sm d-inline-flex align-items-center gap-1"
-                                onClick={() => toggleExpand(cart.id)}
-                                title={isExpanded ? "Ocultar detalle" : "Ver detalle de productos"}
-                              >
-                                {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                                <span className="small">{isExpanded ? "Ocultar" : "Detalle"}</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
-                                onClick={() => handleDeleteCart(cart)}
-                                disabled={deletingCartId === cart.id}
-                                title="Eliminar carro y devolver productos al inventario"
-                              >
-                                {deletingCartId === cart.id ? (
-                                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                ) : (
-                                  <Trash2 size={14} />
-                                )}
-                                <span className="small">Eliminar Carro</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* Fila expandible con el detalle de los productos del carrito */}
-                        {isExpanded && (
-                          <tr className="bg-light">
-                            <td colSpan={5} className="p-3">
-                              <div className="border rounded bg-white p-3 shadow-sm">
-                                <h6 className="fw-bold mb-3 d-flex align-items-center gap-2 text-secondary">
-                                  <Package size={16} />
-                                  <span>Productos reservados en este carro:</span>
-                                </h6>
-                                <div className="table-responsive">
-                                  <table className="table table-sm table-bordered mb-0">
-                                    <thead className="table-light">
-                                      <tr>
-                                        <th>Código</th>
-                                        <th>Producto</th>
-                                        <th>Tipo Empaque</th>
-                                        <th>Cantidad</th>
-                                        <th>Unidades Totales</th>
-                                        <th>Precio Unitario</th>
-                                        <th className="text-end">Subtotal</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {cart.items.map((item) => (
-                                        <tr key={item.id}>
-                                          <td className="font-monospace small">{item.codigo_producto}</td>
-                                          <td><strong>{item.nombre_producto}</strong></td>
-                                          <td>
-                                            <span className={`badge ${item.tipo_empaque === "caja" ? "bg-info text-dark" : "bg-secondary"}`}>
-                                              {item.tipo_empaque === "caja" ? `Caja (${item.cantidad_caja || 1} un.)` : "Unidad"}
-                                            </span>
-                                          </td>
-                                          <td>{item.cantidad}</td>
-                                          <td><strong>{item.unidades_totales} un.</strong></td>
-                                          <td>{money.format(item.precio_unitario)}</td>
-                                          <td className="text-end fw-bold">{money.format(item.subtotal)}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                    <tfoot>
-                                      <tr className="table-light">
-                                        <th colSpan={4} className="text-end">Totales Reservados:</th>
-                                        <th>{cart.total_unidades} un.</th>
-                                        <th>Total Estimado:</th>
-                                        <th className="text-end text-primary">{money.format(cart.total)}</th>
-                                      </tr>
-                                    </tfoot>
-                                  </table>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
+                      <div>
+                        {remaining.isExpired ? (
+                          <span className="badge-due badge-due-red">
+                            {remaining.text}
+                          </span>
+                        ) : (
+                          <span
+                            className={`badge-due ${
+                              remaining.isCritical ? "badge-due-yellow" : "badge-due-green"
+                            }`}
+                          >
+                            Quedan {remaining.text}
+                          </span>
                         )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
+                      </div>
+
+                      <div>
+                        <strong>{money.format(cart.total)}</strong>
+                        <small>
+                          {cart.total_items} {cart.total_items === 1 ? "ítem" : "ítems"} ({cart.total_unidades} un.)
+                        </small>
+                      </div>
+
+                      <div className="admin-cart-actions">
+                        <button
+                          type="button"
+                          className="btn btn-light btn-sm d-inline-flex align-items-center gap-1"
+                          onClick={() => toggleExpand(cart.id)}
+                          title={isExpanded ? "Ocultar detalle" : "Ver detalle de productos"}
+                        >
+                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          <span className="small">{isExpanded ? "Ocultar" : "Detalle"}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
+                          onClick={() => handleDeleteCart(cart)}
+                          disabled={deletingCartId === cart.id}
+                          title="Eliminar carro y devolver productos al inventario"
+                        >
+                          {deletingCartId === cart.id ? (
+                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                          <span className="small">Eliminar</span>
+                        </button>
+                      </div>
+                    </article>
+
+                    {/* Fila expandible con el detalle de los productos del carrito con estilo coherente */}
+                    {isExpanded && (
+                      <div className="cart-items-detail-panel">
+                        <div className="cart-items-detail-card">
+                          <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-light">
+                            <div className="d-flex align-items-center gap-2">
+                              <Package size={15} className="text-secondary" />
+                              <strong className="text-dark" style={{ fontSize: "0.82rem" }}>
+                                Productos reservados en este carro:
+                              </strong>
+                            </div>
+                            <span className="badge bg-secondary" style={{ fontSize: "0.72rem" }}>
+                              {cart.total_items} {cart.total_items === 1 ? "línea" : "líneas"}
+                            </span>
+                          </div>
+
+                          <div className="cart-items-detail-head">
+                            <span>Código</span>
+                            <span>Producto</span>
+                            <span>Empaque</span>
+                            <span>Cant.</span>
+                            <span>Unidades</span>
+                            <span>Precio Unit.</span>
+                            <span className="text-end">Subtotal</span>
+                          </div>
+
+                          {cart.items.map((item) => (
+                            <div className="cart-items-detail-row" key={item.id}>
+                              <span className="font-monospace text-muted">{item.codigo_producto}</span>
+                              <strong>{item.nombre_producto}</strong>
+                              <div>
+                                <span className={`badge ${item.tipo_empaque === "caja" ? "bg-info text-dark" : "bg-light text-secondary border"}`} style={{ fontSize: "0.72rem" }}>
+                                  {item.tipo_empaque === "caja" ? `Caja (${item.cantidad_caja || 1} un.)` : "Unidad"}
+                                </span>
+                              </div>
+                              <span>{item.cantidad}</span>
+                              <strong>{item.unidades_totales} un.</strong>
+                              <span>{money.format(item.precio_unitario)}</span>
+                              <strong className="text-end">{money.format(item.subtotal)}</strong>
+                            </div>
+                          ))}
+
+                          <div className="cart-items-detail-footer">
+                            <div>
+                              <span className="text-muted me-2">Unidades Totales Reservadas:</span>
+                              <strong className="text-dark">{cart.total_unidades} un.</strong>
+                            </div>
+                            <div>
+                              <span className="text-muted me-2">Total Estimado Carro:</span>
+                              <strong className="text-primary fs-6">{money.format(cart.total)}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </div>
           )}
         </div>

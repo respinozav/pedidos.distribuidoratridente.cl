@@ -912,9 +912,8 @@ export default function SystemSettings() {
 
               {activeTab === "timezone" && (
                 <form onSubmit={handleSubmit}>
-                  <div className="settings-section">
-                    <div className="settings-section-header">
-                      <Globe size={18} />
+                  <div className="settings-card">
+                    <div className="settings-card-header">
                       <div>
                         <h3>Geolocalización y Zona Horaria</h3>
                         <p>
@@ -922,20 +921,21 @@ export default function SystemSettings() {
                           notificaciones de correo y WhatsApp. Esto previene desajustes de horario respecto a la hora oficial de tu negocio.
                         </p>
                       </div>
+                      <Globe size={18} className="text-primary" />
                     </div>
 
-                    <div className="settings-section-body">
+                    <div className="settings-card-body">
                       {/* Live Clock Card */}
                       <div className="p-3 mb-4 rounded-3 border bg-light d-flex flex-wrap align-items-center justify-content-between gap-3">
                         <div className="d-flex align-items-center gap-3">
                           <div
                             className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
-                            style={{ width: "44px", height: "44px", flexShrink: 0 }}
+                            style={{ width: "40px", height: "40px", flexShrink: 0 }}
                           >
-                            <Clock size={22} />
+                            <Clock size={20} />
                           </div>
                           <div>
-                            <span className="text-muted d-block small text-uppercase fw-semibold">
+                            <span className="text-muted d-block small text-uppercase fw-semibold" style={{ fontSize: "0.72rem", letterSpacing: "0.03rem" }}>
                               Hora Actual del Sistema ({settings.timezone || "America/Santiago"})
                             </span>
                             <strong className="fs-5 text-dark font-monospace">
@@ -964,7 +964,7 @@ export default function SystemSettings() {
                             }
                           }}
                         >
-                          <MapPin size={15} />
+                          <MapPin size={14} />
                           <span>Detectar mi ubicación actual</span>
                         </button>
                       </div>
@@ -1011,7 +1011,7 @@ export default function SystemSettings() {
                   </div>
 
                   <div className="d-flex justify-content-end mt-4 pt-2">
-                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                    <button type="submit" className="btn btn-primary d-inline-flex align-items-center gap-2" disabled={loading}>
                       {loading ? (
                         <>
                           <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -1019,7 +1019,7 @@ export default function SystemSettings() {
                         </>
                       ) : (
                         <>
-                          <Save size={17} />
+                          <Save size={16} />
                           <span>Guardar Zona Horaria</span>
                         </>
                       )}
