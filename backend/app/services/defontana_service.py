@@ -122,7 +122,97 @@ class DefontanaService:
             except Exception as e:
                 logger.warning("Error buscando cliente con RUT %s en Defontana: %s", code, e)
 
-        return None
+    def create_client(self, cliente: Any, direccion: Any = None) -> dict[str, Any] | None:
+        """
+        Registra un cliente en Defontana mediante POST /api/Sale/SaveClient.
+        Acepta un modelo Cliente (o dict/SimpleNamespace) y opcionalmente Direccion.
+        Retorna los datos del cliente creado o None si la API falla.
+        """
+        if not cliente:
+            return None
+
+        rut = getattr(cliente, "rut", None) or (cliente.get("rut") if isinstance(cliente, dict) else None)
+        if not rut:
+            logger.warning("No se puede registrar cliente en Defontana sin RUT.")
+            return None
+
+        # Limpiar y formatear RUT
+        clean = str(rut).strip().upper().replace(" ", "")
+        rut_no_dots = clean.replace(".", "")
+        parts = rut_no_dots.split("-")
+        if len(parts) == 2:
+            body, dv = parts
+            formatted_body = ""
+            for i, ch in enumerate(reversed(body)):
+                if i > 0 and i % 3 == 0:
+                    formatted_body = "." + formatted_body
+                formatted_body = ch + formatted_body
+            rut_formatted = f"{formatted_body}-{dv}"
+        else:
+            rut_formatted = clean
+
+        name = (
+            getattr(cliente, "nombre", None)
+            or (cliente.get("nombre") if isinstance(cliente, dict) else None)
+            or f"Cliente {rut_formatted}"
+        )
+        email = (
+            getattr(cliente, "correo", None)
+            or (cliente.get("correo") if isinstance(cliente, dict) else None)
+            or ""
+        )
+
+        addr_str = ""
+        district_str = ""
+        if direccion:
+            addr_str = getattr(direccion, "direccion", None) or (direccion.get("direccion") if isinstance(direccion, dict) else "")
+            district_str = getattr(direccion, "comuna", None) or (direccion.get("comuna") if isinstance(direccion, dict) else "")
+
+        address = addr_str or "Sin Dirección"
+        district = district_str or "Santiago"
+        city = district_str or "Santiago"
+
+        payload = {
+            "legalCode": rut_formatted,
+            "fileid": rut_formatted,
+            "name": str(name)[:100],
+            "address": str(address)[:100],
+            "district": str(district)[:50],
+            "city": str(city)[:50],
+            "email": str(email)[:100],
+            "business": "Particular",
+            "giro": "Particular",
+            "rubroId": "1",
+            "customFields": [],
+        }
+
+        url = f"{self.base_url}/api/Sale/SaveClient"
+        headers = self._get_headers()
+        try:
+            with httpx.Client(timeout=20.0) as client_http:
+                resp = client_http.post(url, json=payload, headers=headers)
+                if resp.status_code == 401:
+                    headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
+                    resp = client_http.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+
+            success = data.get("success", False)
+            msg = data.get("message") or data.get("exceptionMessage")
+            if success:
+                logger.info("Cliente %s (%s) creado exitosamente en Defontana: %s", rut_formatted, name, msg)
+                return {
+                    "fileID": rut_formatted,
+                    "legalCode": rut_formatted,
+                    "name": name,
+                    "success": True,
+                }
+            else:
+                logger.warning("Defontana respondió no exitoso al crear cliente %s: %s", rut_formatted, msg)
+                return self.resolve_client(rut_formatted)
+        except Exception as e:
+            logger.exception("Error al crear cliente con RUT %s en Defontana: %s", rut_formatted, e)
+            return None
 
     def resolve_product(self, code: str) -> dict[str, Any] | None:
         """Busca un producto por su código en Defontana."""
@@ -215,6 +305,15 @@ class DefontanaService:
             client_data = None
             if order.cliente and order.cliente.rut:
                 client_data = self.resolve_client(order.cliente.rut)
+                if not client_data:
+                    logger.info(
+                        "Cliente RUT %s no encontrado en Defontana. Registrando cliente automáticamente...",
+                        order.cliente.rut,
+                    )
+                    created_data = self.create_client(order.cliente, order.direccion)
+                    if created_data:
+                        resolved = self.resolve_client(order.cliente.rut)
+                        client_data = resolved or created_data
 
             client_file_id = (
                 (client_data.get("fileID") if client_data else None)

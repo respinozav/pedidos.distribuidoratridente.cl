@@ -378,6 +378,144 @@ def test_defontana_order_mixed_afecto_and_exento():
     print("test_defontana_order_mixed_afecto_and_exento: OK")
 
 
+def test_defontana_create_client_mocked():
+    service = DefontanaService()
+
+    cliente = SimpleNamespace(
+        rut="11.222.333-4",
+        nombre="Juan Perez Gonzalez",
+        correo="juan.perez@example.com",
+    )
+    direccion = SimpleNamespace(
+        direccion="Av. Siempre Viva 742",
+        comuna="Providencia",
+    )
+
+    captured_req = {}
+
+    class MockResponse:
+        status_code = 200
+
+        def json(self):
+            return {"success": True, "message": "Cliente Guardado Exitosamente"}
+
+        def raise_for_status(self):
+            pass
+
+    def mock_post(url, json=None, headers=None):
+        nonlocal captured_req
+        captured_req = {"url": url, "json": json, "headers": headers}
+        return MockResponse()
+
+    with patch("httpx.Client.post", side_effect=mock_post):
+        result = service.create_client(cliente, direccion)
+
+    assert result is not None
+    assert result["success"] is True
+    assert result["fileID"] == "11.222.333-4"
+    assert result["legalCode"] == "11.222.333-4"
+    assert result["name"] == "Juan Perez Gonzalez"
+
+    payload = captured_req["json"]
+    assert payload["legalCode"] == "11.222.333-4"
+    assert payload["fileid"] == "11.222.333-4"
+    assert payload["name"] == "Juan Perez Gonzalez"
+    assert payload["address"] == "Av. Siempre Viva 742"
+    assert payload["district"] == "Providencia"
+    assert payload["city"] == "Providencia"
+    assert payload["email"] == "juan.perez@example.com"
+    assert payload["business"] == "Particular"
+    assert payload["giro"] == "Particular"
+    assert payload["rubroId"] == "1"
+
+    print("test_defontana_create_client_mocked: OK")
+
+
+def test_defontana_sync_order_creates_client_when_not_exists():
+    service = DefontanaService()
+
+    customer = SimpleNamespace(
+        rut="99.888.777-6",
+        nombre="Cliente Nuevo SpA",
+        correo="contacto@clientenuevo.cl",
+    )
+    direccion = SimpleNamespace(
+        direccion="Los Conquistadores 100",
+        comuna="Las Condes",
+    )
+    item = SimpleNamespace(
+        codigo_producto="20",
+        nombre_producto="LUCKY STRIKE",
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+        precio_unitario=Decimal("5000"),
+        cantidad=2,
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
+    )
+    fake_order = SimpleNamespace(
+        id=uuid4(),
+        cliente=customer,
+        direccion=direccion,
+        detalles=[item],
+        folio_defontana=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def scalar(self, stmt):
+            return fake_order
+
+        def commit(self):
+            pass
+
+    created_client_result = {
+        "fileID": "99.888.777-6",
+        "legalCode": "99.888.777-6",
+        "name": "Cliente Nuevo SpA",
+        "sellerID": "VENDEDOR",
+        "localID": "Local",
+        "paymentID": "Contado",
+    }
+
+    captured_payload = {}
+
+    def mock_save(payload):
+        nonlocal captured_payload
+        captured_payload = payload
+        return {"success": True, "folio": 8888}
+
+    # En la 1ra búsqueda retorna None (no existe). Tras crearlo, retorna la ficha.
+    resolve_calls = []
+
+    def mock_resolve(rut):
+        resolve_calls.append(rut)
+        if len(resolve_calls) == 1:
+            return None
+        return created_client_result
+
+    with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
+         patch.object(service, "resolve_client", side_effect=mock_resolve), \
+         patch.object(service, "create_client", return_value=created_client_result) as mock_create, \
+         patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
+         patch.object(service, "save_order", side_effect=mock_save):
+
+        folio, err = service.sync_order(fake_order.id)
+        assert folio == 8888
+        assert err is None
+        mock_create.assert_called_once_with(customer, direccion)
+        assert captured_payload["clientFileId"] == "99.888.777-6"
+        assert len(resolve_calls) >= 2
+
+    print("test_defontana_sync_order_creates_client_when_not_exists: OK")
+
+
 if __name__ == "__main__":
     test_defontana_save_order_mocked()
     test_defontana_item_packaging_rules()
@@ -385,4 +523,6 @@ if __name__ == "__main__":
     test_defontana_order_exclusively_afecto()
     test_defontana_order_exclusively_exento()
     test_defontana_order_mixed_afecto_and_exento()
+    test_defontana_create_client_mocked()
+    test_defontana_sync_order_creates_client_when_not_exists()
     print("TODOS LOS TESTS DE DEFONTANA PASARON EXITOSAMENTE!")
