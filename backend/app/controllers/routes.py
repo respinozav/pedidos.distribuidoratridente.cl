@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession
+from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession, SuperAdminUser
 from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
 from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Publicidad, Rol, SesionLog, Usuario
 from app.repositories.base import Repository
@@ -187,18 +187,18 @@ def refresh_session_token(current_auth: AuthSubject, database: DatabaseSession) 
 
 
 @router.get("/roles", response_model=list[RoleOutput], tags=["Usuarios"])
-def list_roles(database: DatabaseSession, _: AdminUser) -> list[Rol]:
+def list_roles(database: DatabaseSession, _: SuperAdminUser) -> list[Rol]:
     return list(database.scalars(select(Rol).where(Rol.activo.is_(True)).order_by(Rol.nombre)))
 
 
 @router.get("/usuarios", response_model=list[UserOutput], tags=["Usuarios"])
-def list_users(database: DatabaseSession, _: AdminUser) -> list[Usuario]:
+def list_users(database: DatabaseSession, _: SuperAdminUser) -> list[Usuario]:
     statement = select(Usuario).options(selectinload(Usuario.rol)).order_by(Usuario.nombre)
     return list(database.scalars(statement))
 
 
 @router.post("/usuarios", response_model=UserOutput, status_code=status.HTTP_201_CREATED, tags=["Usuarios"])
-def create_user(payload: UserCreate, database: DatabaseSession, _: AdminUser) -> Usuario:
+def create_user(payload: UserCreate, database: DatabaseSession, _: SuperAdminUser) -> Usuario:
     role = database.get(Rol, payload.rol_id)
     if not role or not role.activo:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Rol no disponible")
@@ -210,7 +210,7 @@ def create_user(payload: UserCreate, database: DatabaseSession, _: AdminUser) ->
 
 
 @router.put("/usuarios/{user_id}", response_model=UserOutput, tags=["Usuarios"])
-def update_user(user_id: UUID, payload: UserUpdate, database: DatabaseSession, current_user: AdminUser) -> Usuario:
+def update_user(user_id: UUID, payload: UserUpdate, database: DatabaseSession, current_user: SuperAdminUser) -> Usuario:
     entity = Repository(Usuario, database).get(user_id)
     if not entity:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
@@ -593,12 +593,12 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
 
 
 @router.get("/clientes", response_model=list[CustomerOutput], tags=["Clientes"])
-def list_customers(database: DatabaseSession, _: AdminUser) -> list[Cliente]:
+def list_customers(database: DatabaseSession, _: SuperAdminUser) -> list[Cliente]:
     return list(database.scalars(select(Cliente).options(selectinload(Cliente.direcciones)).where(Cliente.eliminado_at.is_(None))))
 
 
 @router.post("/clientes", response_model=CustomerOutput, status_code=status.HTTP_201_CREATED, tags=["Clientes"])
-def create_customer(payload: CustomerCreate, database: DatabaseSession, _: AdminUser) -> Cliente:
+def create_customer(payload: CustomerCreate, database: DatabaseSession, _: SuperAdminUser) -> Cliente:
     values = payload.model_dump(exclude={"password"})
     entity = Repository(Cliente, database).add(Cliente(**values, password_hash=hash_password(payload.password)))
     database.commit()
@@ -606,7 +606,7 @@ def create_customer(payload: CustomerCreate, database: DatabaseSession, _: Admin
 
 
 @router.put("/clientes/{customer_id}", response_model=CustomerOutput, tags=["Clientes"])
-def update_customer(customer_id: UUID, payload: CustomerUpdate, database: DatabaseSession, _: AdminUser) -> Cliente:
+def update_customer(customer_id: UUID, payload: CustomerUpdate, database: DatabaseSession, _: SuperAdminUser) -> Cliente:
     entity = Repository(Cliente, database).get(customer_id)
     if not entity or entity.eliminado_at:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado")
@@ -619,7 +619,7 @@ def update_customer(customer_id: UUID, payload: CustomerUpdate, database: Databa
 
 
 @router.post("/clientes/{customer_id}/direcciones", response_model=AddressOutput, status_code=status.HTTP_201_CREATED, tags=["Clientes"])
-def add_address(customer_id: UUID, payload: AddressInput, database: DatabaseSession, _: AdminUser) -> Direccion:
+def add_address(customer_id: UUID, payload: AddressInput, database: DatabaseSession, _: SuperAdminUser) -> Direccion:
     customer = database.get(Cliente, customer_id)
     if not customer or customer.eliminado_at:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado")
@@ -641,7 +641,7 @@ def update_address(
     address_id: UUID,
     payload: AddressInput,
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
 ) -> Direccion:
     address = database.get(Direccion, address_id)
     if not address or address.cliente_id != customer_id:
@@ -745,7 +745,7 @@ def order_pdf(order_id: UUID, database: DatabaseSession, _: AdminUser) -> Respon
 
 
 @router.get("/creditos", response_model=list[CreditOutput], tags=["Créditos"])
-def list_credits(database: DatabaseSession, _: AdminUser, pagado: bool = False) -> list[Credito]:
+def list_credits(database: DatabaseSession, _: SuperAdminUser, pagado: bool = False) -> list[Credito]:
     statement = (
         select(Credito)
         .options(selectinload(Credito.cliente), selectinload(Credito.pedido))
@@ -756,7 +756,7 @@ def list_credits(database: DatabaseSession, _: AdminUser, pagado: bool = False) 
 
 
 @router.patch("/creditos/{credit_id}/pago", response_model=CreditOutput, tags=["Créditos"])
-def pay_credit(credit_id: UUID, payload: CreditPaymentInput, database: DatabaseSession, _: AdminUser) -> Credito:
+def pay_credit(credit_id: UUID, payload: CreditPaymentInput, database: DatabaseSession, _: SuperAdminUser) -> Credito:
     credit = database.scalar(
         select(Credito)
         .options(selectinload(Credito.cliente), selectinload(Credito.pedido))
@@ -801,7 +801,7 @@ def update_order_status(order_id: UUID, payload: OrderStatusUpdate, database: Da
 @router.get("/admin/pedidos/logs", response_model=NotificationLogPage, tags=["Logs Notificaciones"])
 def list_notification_logs(
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
     canal: str | None = None,
     estado: str | None = None,
     pedido_id: UUID | None = None,
@@ -859,7 +859,7 @@ def list_notification_logs(
 
 
 @router.get("/admin/pedidos/logs/stats", response_model=NotificationLogStats, tags=["Logs Notificaciones"])
-def notification_logs_stats(database: DatabaseSession, _: AdminUser) -> NotificationLogStats:
+def notification_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> NotificationLogStats:
     """Obtiene métricas rápidas de los logs de notificaciones."""
     total = database.scalar(select(func.count(PedidoNotificacionLog.id))) or 0
     whatsapp_enviados = (
@@ -1004,7 +1004,7 @@ def list_public_publicidades(
 
 @router.get("/admin/publicidades", response_model=list[PublicidadOutput], tags=["Publicidad"])
 def list_admin_publicidades(
-    database: DatabaseSession, _: AdminUser
+    database: DatabaseSession, _: SuperAdminUser
 ) -> list[PublicidadOutput]:
     """Obtiene todos los banners publicitarios para gestión administrativa."""
     statement = (
@@ -1018,7 +1018,7 @@ def list_admin_publicidades(
 
 @router.post("/admin/publicidades", response_model=PublicidadOutput, status_code=status.HTTP_201_CREATED, tags=["Publicidad"])
 def create_publicidad(
-    payload: PublicidadInput, database: DatabaseSession, _: AdminUser
+    payload: PublicidadInput, database: DatabaseSession, _: SuperAdminUser
 ) -> PublicidadOutput:
     """Crea un nuevo banner publicitario."""
     if payload.producto_id:
@@ -1051,7 +1051,7 @@ def create_publicidad(
 
 @router.put("/admin/publicidades/{publicidad_id}", response_model=PublicidadOutput, tags=["Publicidad"])
 def update_publicidad(
-    publicidad_id: UUID, payload: PublicidadInput, database: DatabaseSession, _: AdminUser
+    publicidad_id: UUID, payload: PublicidadInput, database: DatabaseSession, _: SuperAdminUser
 ) -> PublicidadOutput:
     """Actualiza un banner publicitario existente."""
     entity = database.get(Publicidad, publicidad_id)
@@ -1090,7 +1090,7 @@ def update_publicidad(
 
 @router.delete("/admin/publicidades/{publicidad_id}", tags=["Publicidad"])
 def delete_publicidad(
-    publicidad_id: UUID, database: DatabaseSession, _: AdminUser
+    publicidad_id: UUID, database: DatabaseSession, _: SuperAdminUser
 ) -> dict[str, str]:
     """Elimina definitivamente un banner publicitario de la base de datos."""
     entity = database.get(Publicidad, publicidad_id)
@@ -1105,7 +1105,7 @@ def delete_publicidad(
 @router.get("/admin/sesiones/logs", response_model=SesionLogPage, tags=["Logs Sesiones"])
 def list_session_logs(
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
     tipo_usuario: str | None = None,
     estado: str | None = None,
     search: str | None = Query(default=None, max_length=150),
@@ -1159,7 +1159,7 @@ def list_session_logs(
 
 
 @router.get("/admin/sesiones/logs/stats", response_model=SesionLogStats, tags=["Logs Sesiones"])
-def session_logs_stats(database: DatabaseSession, _: AdminUser) -> SesionLogStats:
+def session_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> SesionLogStats:
     """Obtiene métricas rápidas de los logs de auditoría de sesiones."""
     total = database.scalar(select(func.count(SesionLog.id))) or 0
     exitosos = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.estado == "EXITOSO")) or 0

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.dependencies import AdminUser, DatabaseSession
+from app.api.dependencies import DatabaseSession, SuperAdminUser
 from app.repositories.system_settings_repository import SystemSettingsRepository
 from app.schemas.system_settings import (
     SystemSettingsResponse,
@@ -16,7 +16,7 @@ repo = SystemSettingsRepository()
 
 @router.get("", response_model=SystemSettingsResponse)
 @router.get("/", response_model=SystemSettingsResponse, include_in_schema=False)
-def get_system_settings(database: DatabaseSession, _: AdminUser):
+def get_system_settings(database: DatabaseSession, _: SuperAdminUser):
     return repo.get_settings(database)
 
 
@@ -25,7 +25,7 @@ def get_system_settings(database: DatabaseSession, _: AdminUser):
 def update_system_settings(
     settings_in: SystemSettingsUpdate,
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
 ):
     return repo.update_settings(database, settings_in)
 
@@ -34,7 +34,7 @@ def update_system_settings(
 def test_email_sending(
     payload: TestEmailRequest,
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
 ):
     overrides = {
         "smtp_host": payload.smtp_host,

@@ -5,6 +5,7 @@ import tests.test_publicidad as tp
 import tests.test_sesion_logs as ts
 import tests.test_defontana as td
 import tests.test_admin_profile as tap
+import tests.test_colaborador_role as tcol
 
 
 class MonkeyPatch:
@@ -35,7 +36,8 @@ def main():
     td.test_defontana_item_packaging_rules()
     td.test_defontana_resolve_client_and_product()
     tap.test_admin_profile_workflow()
-    print(">>> ALL 13 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    tcol.test_colaborador_role_permissions()
+    print(">>> ALL 14 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select, desc
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import AdminUser, DatabaseSession
+from app.api.dependencies import DatabaseSession, SuperAdminUser
 from app.models.entities import ConfiguracionAvisos, LogCorreo
 from app.schemas.configuracion_avisos import (
     ConfiguracionAvisosResponse,
@@ -16,7 +16,7 @@ router = APIRouter(tags=["Configuración de Avisos de Cobranza"])
 
 
 @router.get("/configuracion_avisos", response_model=ConfiguracionAvisosResponse)
-def get_configuracion_avisos(database: DatabaseSession, _: AdminUser):
+def get_configuracion_avisos(database: DatabaseSession, _: SuperAdminUser):
     config = database.scalar(select(ConfiguracionAvisos).filter(ConfiguracionAvisos.id == 1))
     if not config:
         config = ConfiguracionAvisos(
@@ -41,7 +41,7 @@ def get_configuracion_avisos(database: DatabaseSession, _: AdminUser):
 def update_configuracion_avisos(
     payload: ConfiguracionAvisosUpdate,
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
 ):
     config = database.scalar(select(ConfiguracionAvisos).filter(ConfiguracionAvisos.id == 1))
     if not config:
@@ -83,7 +83,7 @@ def update_configuracion_avisos(
 def get_log_correos(
     response: Response,
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
@@ -104,7 +104,7 @@ def get_log_correos(
 @router.post("/configuracion_avisos/ejecutar")
 def trigger_procesar_avisos(
     database: DatabaseSession,
-    _: AdminUser,
+    _: SuperAdminUser,
     forzar_reenvio: bool = Query(default=False, description="Reenviar aunque ya se haya despachado hoy"),
 ):
     from app.services.cobranzas import procesar_avisos_cobranza_smtp

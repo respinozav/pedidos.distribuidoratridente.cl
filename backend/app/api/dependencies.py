@@ -4,7 +4,8 @@ from uuid import UUID
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -25,13 +26,26 @@ def get_current_admin(
         user_id = UUID(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError) as error:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token invalido") from error
-    user = database.get(Usuario, user_id)
+    user = database.scalar(
+        select(Usuario)
+        .options(selectinload(Usuario.rol))
+        .where(Usuario.id == user_id)
+    )
     if not user or not user.activo:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no autorizado")
     return user
 
 
 AdminUser = Annotated[Usuario, Depends(get_current_admin)]
+
+
+def require_super_admin(user: AdminUser) -> Usuario:
+    if not user.rol or user.rol.nombre.strip().upper() != "ADMINISTRADOR":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso restringido a administradores")
+    return user
+
+
+SuperAdminUser = Annotated[Usuario, Depends(require_super_admin)]
 
 
 def get_current_customer(
