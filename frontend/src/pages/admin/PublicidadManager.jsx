@@ -134,20 +134,6 @@ export default function PublicidadManager() {
     const nextCorrelative = getNextCorrelativeOrder();
     if (isNaN(entered) || entered <= 0) {
       setFormData((prev) => ({ ...prev, orden: nextCorrelative }));
-      return;
-    }
-    const isTaken = publicidades.some(
-      (p) => p.id !== editingId && Number(p.orden) === entered
-    );
-    if (isTaken) {
-      Swal.fire({
-        icon: "warning",
-        title: "Orden ya utilizado",
-        html: `El número de orden <b>#${entered}</b> ya está ocupado por otro banner.<br/>No se pueden repetir órdenes entre banners.<br/>Se asignó automáticamente el siguiente correlativo libre <b>#${nextCorrelative}</b>.`,
-        confirmButtonText: "Entendido",
-        confirmButtonColor: "#0d6efd",
-      });
-      setFormData((prev) => ({ ...prev, orden: nextCorrelative }));
     }
   }
 
@@ -209,21 +195,12 @@ export default function PublicidadManager() {
       finalOrder = getNextCorrelativeOrder();
     }
 
+    // Si el orden ingresado ya está en uso por otro banner, asignar automáticamente el siguiente correlativo libre
     const isOrderTaken = publicidades.some(
       (p) => p.id !== editingId && Number(p.orden) === finalOrder
     );
-
     if (isOrderTaken) {
-      const nextSuggested = getNextCorrelativeOrder();
-      Swal.fire({
-        icon: "warning",
-        title: "Orden ya utilizado",
-        html: `El número de orden <b>#${finalOrder}</b> ya está ocupado por otro banner.<br/>No se pueden repetir números de orden.<br/>Se ha asignado automáticamente el correlativo <b>#${nextSuggested}</b>.`,
-        confirmButtonText: "Aceptar",
-        confirmButtonColor: "#0d6efd",
-      });
-      setFormData((prev) => ({ ...prev, orden: nextSuggested }));
-      return;
+      finalOrder = getNextCorrelativeOrder();
     }
 
     setSaving(true);
@@ -808,10 +785,10 @@ export default function PublicidadManager() {
                     />
                     {isCurrentOrderTaken ? (
                       <div
-                        className="text-warning-emphasis bg-warning bg-opacity-10 p-2 rounded border border-warning mt-1"
+                        className="text-primary-emphasis bg-primary bg-opacity-10 p-2 rounded border border-primary-subtle mt-1"
                         style={{ fontSize: "0.8rem" }}
                       >
-                        ⚠️ La posición <strong>#{formData.orden}</strong> ya está ocupada por "{takenBanner?.titulo}". No se permite repetir orden.
+                        ℹ️ La posición <strong>#{formData.orden}</strong> está en uso por "{takenBanner?.titulo}". Al guardar se ajustará correlativamente sin problema.
                         <div className="mt-1">
                           <button
                             type="button"
@@ -819,12 +796,12 @@ export default function PublicidadManager() {
                             style={{ fontSize: "0.75rem" }}
                             onClick={() => setFormData({ ...formData, orden: nextCorrelative })}
                           >
-                            Asignar correlativo #{nextCorrelative}
+                            Usar libre correlativo #{nextCorrelative}
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <small className="text-muted">Orden en el carrusel de inicio (debe ser único correlativo).</small>
+                      <small className="text-muted">Orden correlativo en el carrusel de inicio.</small>
                     )}
                   </div>
                 </div>
