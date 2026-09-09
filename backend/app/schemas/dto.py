@@ -197,6 +197,21 @@ class UserCreate(UserInput):
     password: str = Field(min_length=8, max_length=128)
 
 
+class AdminProfileUpdate(BaseModel):
+    nombre: str = Field(min_length=2, max_length=150)
+    celular: str | None = Field(default=None, max_length=30)
+
+    @field_validator("nombre", "celular", mode="before")
+    @classmethod
+    def clean_profile_fields(cls, value: str | None) -> str | None:
+        return value.strip() or None if isinstance(value, str) else value
+
+
+class AdminPasswordUpdate(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class UserUpdate(UserInput):
     password: str | None = Field(default=None, min_length=8, max_length=128)
 

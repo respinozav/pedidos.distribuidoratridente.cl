@@ -433,6 +433,53 @@ def notify_customer_password_changed(customer: Cliente, database: Session | None
         logger.exception("No fue posible enviar el acuse de cambio de contraseña al cliente %s", customer.id)
 
 
+def notify_user_password_changed(user: Usuario, database: Session | None = None) -> None:
+    if database is None:
+        try:
+            from app.core.database import SessionLocal
+
+            with SessionLocal() as db_session:
+                smtp_config = _get_smtp_settings(db_session)
+        except Exception:
+            smtp_config = _get_smtp_settings(None)
+    else:
+        smtp_config = _get_smtp_settings(database)
+
+    recipient = (user.correo or "").strip()
+    if not smtp_config["configured"] or not recipient:
+        return
+    message = EmailMessage()
+    message["Subject"] = "Cambio de contraseña | Distribuidora Tridente"
+    message["From"] = f"{smtp_config['from_name']} <{smtp_config['from_email']}>"
+    message["To"] = recipient
+    message.set_content("Tu contraseña fue actualizada correctamente. Si no realizaste este cambio, comunícate con Distribuidora Tridente de inmediato.")
+    message.add_alternative(
+        """<html><body style='margin:0;background:#f4f7fb;font-family:Segoe UI,Arial,sans-serif;color:#172b4d'>
+<div style='max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #d9e2ec;border-radius:8px;overflow:hidden;'>
+<div style='padding:24px 32px;background:#102a43;color:#ffffff'>
+  <table width="100%" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td width="48" style="vertical-align:middle;padding-right:14px;">
+        <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="42" height="42" style="display:block;border:0;outline:none;" />
+      </td>
+      <td style="vertical-align:middle;">
+        <div style="font-size:22px;font-weight:700;color:#ffffff;line-height:1.2;">Distribuidora Tridente</div>
+        <div style="margin-top:4px;color:#9bceff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SEGURIDAD DE TU CUENTA</div>
+      </td>
+    </tr>
+  </table>
+</div>
+<div style='padding:28px 32px'><h1 style='font-size:21px;margin-top:0'>Tu contraseña fue actualizada</h1><p>Confirmamos que la contraseña de tu cuenta de administrador fue cambiada correctamente.</p><p style='color:#667085'>Si no realizaste este cambio, comunícate con Distribuidora Tridente de inmediato.</p></div></div></body></html>""",
+        subtype="html",
+    )
+    try:
+        with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
+            smtp.login(smtp_config["username"], smtp_config["password"])
+            smtp.send_message(message)
+    except (OSError, smtplib.SMTPException):
+        logger.exception("No fue posible enviar el acuse de cambio de contraseña al usuario %s", user.id)
+
+
 def _order_pdf(order: Pedido) -> bytes:
     customer_name = order.cliente.nombre or order.cliente.rut or order.cliente.celular or "Cliente"
     customer_id = order.cliente.rut or order.cliente.celular or "Sin identificador"

@@ -14,6 +14,8 @@ from app.repositories.system_settings_repository import SystemSettingsRepository
 from app.schemas.dto import (
     AddressInput,
     AddressOutput,
+    AdminPasswordUpdate,
+    AdminProfileUpdate,
     CategoryInput,
     CategoryOutput,
     CreditOutput,
@@ -51,7 +53,12 @@ from app.schemas.dto import (
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
 from app.api.endpoints.configuracion_avisos import router as configuracion_avisos_router
-from app.services.notifications import _order_pdf_filename, dispatch_order_notifications_in_background, notify_customer_password_changed
+from app.services.notifications import (
+    _order_pdf_filename,
+    dispatch_order_notifications_in_background,
+    notify_customer_password_changed,
+    notify_user_password_changed,
+)
 
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_box_price, customer_product_price
@@ -219,6 +226,40 @@ def update_user(user_id: UUID, payload: UserUpdate, database: DatabaseSession, c
     database.commit()
     database.refresh(entity, attribute_names=["rol"])
     return entity
+
+
+@router.get("/admin/perfil", response_model=UserOutput, tags=["Perfil admin"])
+def admin_profile(database: DatabaseSession, current_admin: AdminUser) -> Usuario:
+    return database.scalar(
+        select(Usuario)
+        .options(selectinload(Usuario.rol))
+        .where(Usuario.id == current_admin.id)
+    )
+
+
+@router.put("/admin/perfil", response_model=UserOutput, tags=["Perfil admin"])
+def update_admin_profile(
+    payload: AdminProfileUpdate,
+    database: DatabaseSession,
+    current_admin: AdminUser,
+) -> Usuario:
+    current_admin.nombre = payload.nombre
+    current_admin.celular = payload.celular
+    database.commit()
+    return admin_profile(database, current_admin)
+
+
+@router.put("/admin/perfil/clave", status_code=status.HTTP_204_NO_CONTENT, tags=["Perfil admin"])
+def update_admin_password(
+    payload: AdminPasswordUpdate,
+    database: DatabaseSession,
+    current_admin: AdminUser,
+) -> None:
+    if not current_admin.password_hash or not verify_password(payload.current_password, current_admin.password_hash):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contraseña actual es incorrecta")
+    current_admin.password_hash = hash_password(payload.new_password)
+    database.commit()
+    notify_user_password_changed(current_admin, database=database)
 
 
 @router.options("/clientes/login", tags=["Acceso cliente"])
