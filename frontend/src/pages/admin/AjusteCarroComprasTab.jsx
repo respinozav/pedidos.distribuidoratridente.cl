@@ -120,33 +120,32 @@ export default function AjusteCarroComprasTab({ settings, onSettingsChange, onSa
             <Clock size={20} className="text-primary" />
           </div>
           <div className="settings-card-body">
-            <div className="row g-3 align-items-center">
-              <div className="col-12 col-md-6">
-                <label htmlFor="carro_compras_expira_horas" className="form-label fw-bold">
-                  Tiempo de expiración del carrito (en horas)
-                </label>
-                <div className="input-group" style={{ maxWidth: "320px" }}>
-                  <input
-                    id="carro_compras_expira_horas"
-                    type="number"
-                    min="1"
-                    max="720"
-                    step="1"
-                    className="form-control"
-                    name="carro_compras_expira_horas"
-                    value={settings.carro_compras_expira_horas || 24}
-                    onChange={onSettingsChange}
-                    required
-                  />
-                  <span className="input-group-text">horas</span>
-                </div>
-                <small className="form-text text-muted mt-2 d-block">
-                  Ejemplo: <strong>24 horas</strong>. Cada 60 segundos el job programado verifica carritos inactivos y devuelve los productos reservados.
-                </small>
+            <div className="settings-field" style={{ maxWidth: "420px" }}>
+              <label htmlFor="carro_compras_expira_horas">
+                Tiempo de expiración del carrito (en horas)
+              </label>
+              <div className="input-group" style={{ maxWidth: "280px" }}>
+                <input
+                  id="carro_compras_expira_horas"
+                  type="number"
+                  min="1"
+                  max="720"
+                  step="1"
+                  className="form-control"
+                  name="carro_compras_expira_horas"
+                  value={settings.carro_compras_expira_horas || 24}
+                  onChange={onSettingsChange}
+                  required
+                />
+                <span className="input-group-text">horas</span>
               </div>
+              <small className="form-text">
+                Ejemplo: <strong>24 horas</strong>. Cada 60 segundos el job programado verifica carritos inactivos y devuelve los productos reservados.
+              </small>
+            </div>
 
-              <div className="col-12 col-md-6 d-flex justify-content-md-end align-self-end">
-                <button type="submit" className="btn btn-primary d-inline-flex align-items-center gap-2" disabled={saving}>
+            <div className="d-flex justify-content-end mt-4 pt-2">
+              <button type="submit" className="btn btn-primary d-inline-flex align-items-center gap-2" disabled={saving}>
                   {saving ? (
                     <>
                       <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -162,8 +161,7 @@ export default function AjusteCarroComprasTab({ settings, onSettingsChange, onSa
               </div>
             </div>
           </div>
-        </div>
-      </form>
+        </form>
 
       {/* Tarjeta de Carritos de Compra Vigentes */}
       <div className="settings-card">

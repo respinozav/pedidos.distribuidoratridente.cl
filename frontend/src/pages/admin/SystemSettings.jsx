@@ -857,11 +857,11 @@ export default function SystemSettings() {
                       <Clock size={18} className="text-primary" />
                     </div>
                     <div className="settings-card-body">
-                      <div className="mb-3">
-                        <label htmlFor="jwt_access_token_expire_minutes" className="form-label fw-bold">
+                      <div className="settings-field" style={{ maxWidth: "420px" }}>
+                        <label htmlFor="jwt_access_token_expire_minutes">
                           Duración de la sesión (en minutos)
                         </label>
-                        <div className="input-group" style={{ maxWidth: "340px" }}>
+                        <div className="input-group" style={{ maxWidth: "280px" }}>
                           <input
                             id="jwt_access_token_expire_minutes"
                             type="number"
@@ -876,7 +876,7 @@ export default function SystemSettings() {
                           />
                           <span className="input-group-text">minutos</span>
                         </div>
-                        <small className="form-text text-muted mt-2 d-block">
+                        <small className="form-text">
                           Al expirar este tiempo, el usuario o cliente deberá ingresar nuevamente sus credenciales.
                         </small>
                       </div>
@@ -925,28 +925,23 @@ export default function SystemSettings() {
                     </div>
 
                     <div className="settings-card-body">
-                      {/* Live Clock Card */}
-                      <div className="p-3 mb-4 rounded-3 border bg-light d-flex flex-wrap align-items-center justify-content-between gap-3">
+                      {/* Banner de Estado y Hora Actual con estilo estándar del sistema */}
+                      <div className="settings-info-box mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
                         <div className="d-flex align-items-center gap-3">
-                          <div
-                            className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
-                            style={{ width: "40px", height: "40px", flexShrink: 0 }}
-                          >
-                            <Clock size={20} />
-                          </div>
+                          <Clock size={20} className="text-primary flex-shrink-0" />
                           <div>
-                            <span className="text-muted d-block small text-uppercase fw-semibold" style={{ fontSize: "0.72rem", letterSpacing: "0.03rem" }}>
-                              Hora Actual del Sistema ({settings.timezone || "America/Santiago"})
+                            <span className="settings-badge d-inline-block mb-1">
+                              Hora Actual ({settings.timezone || "America/Santiago"})
                             </span>
-                            <strong className="fs-5 text-dark font-monospace">
+                            <div className="text-dark font-monospace fw-bold" style={{ fontSize: "0.88rem" }}>
                               {currentTimeDisplay || "Calculando..."}
-                            </strong>
+                            </div>
                           </div>
                         </div>
 
                         <button
                           type="button"
-                          className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2"
+                          className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1.5"
                           onClick={() => {
                             try {
                               const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -969,9 +964,9 @@ export default function SystemSettings() {
                         </button>
                       </div>
 
-                      <div className="row g-3">
-                        <div className="col-12 col-md-8">
-                          <label htmlFor="timezone" className="form-label fw-bold">
+                      <div className="settings-field-group">
+                        <div className="settings-field" style={{ maxWidth: "460px" }}>
+                          <label htmlFor="timezone">
                             Seleccionar Zona Horaria
                           </label>
                           <select
@@ -1001,9 +996,9 @@ export default function SystemSettings() {
                               <option value="UTC">UTC (Tiempo Universal Coordinado)</option>
                             </optgroup>
                           </select>
-                          <small className="form-text text-muted mt-2 d-block">
+                          <small className="form-text">
                             Al seleccionar la zona horaria adecuada (por ejemplo, <strong>Chile Continental</strong>),
-                            los pedidos generados no tendrán el desfase de 4 horas y los comprobantes mostrarán exactamente la hora local.
+                            los pedidos generados no tendrán desfase y los comprobantes mostrarán la hora local exacta.
                           </small>
                         </div>
                       </div>
