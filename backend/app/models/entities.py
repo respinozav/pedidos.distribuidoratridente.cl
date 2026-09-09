@@ -81,6 +81,8 @@ class Producto(AuditMixin, Base):
     tiene_caja: Mapped[bool] = mapped_column(Boolean, default=False)
     cantidad_caja: Mapped[int | None] = mapped_column(Integer, nullable=True)
     precio_caja: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    notificar_stock: Mapped[bool] = mapped_column(Boolean, default=False)
+    stock_notificacion: Mapped[int | None] = mapped_column(Integer, nullable=True)
     eliminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     categoria: Mapped[Categoria] = relationship(back_populates="productos")
 

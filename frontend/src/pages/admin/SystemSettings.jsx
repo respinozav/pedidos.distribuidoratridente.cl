@@ -15,14 +15,11 @@ import {
   LogOut,
   Phone,
   Check,
-  Bell,
   Globe,
   MapPin,
-  ShoppingCart,
 } from "lucide-react";
-import NotificacionesTab from "./NotificacionesTab";
-import AjusteCarroComprasTab from "./AjusteCarroComprasTab";
 import { api } from "../../services/api";
+import StockAlertBell from "../../components/admin/StockAlertBell";
 import {
   getSettings,
   updateSettings,
@@ -335,7 +332,6 @@ export default function SystemSettings() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [whatsappInfo, setWhatsappInfo] = useState(null);
-  const [totalNotificacionesEnviadas, setTotalNotificacionesEnviadas] = useState(0);
   const [settings, setSettings] = useState({
     smtp_host: "",
     smtp_port: "",
@@ -355,7 +351,6 @@ export default function SystemSettings() {
 
   useEffect(() => {
     loadSettings();
-    loadTotalNotificaciones();
   }, []);
 
   useEffect(() => {
@@ -383,20 +378,6 @@ export default function SystemSettings() {
     const interval = setInterval(updateLiveClock, 1000);
     return () => clearInterval(interval);
   }, [settings.timezone]);
-
-  const loadTotalNotificaciones = async () => {
-    try {
-      const response = await api.get("/log_correos?limit=1");
-      const totalHeader = response.headers?.["x-total-count"];
-      if (totalHeader !== undefined) {
-        setTotalNotificacionesEnviadas(parseInt(totalHeader, 10) || 0);
-      } else if (Array.isArray(response.data)) {
-        setTotalNotificacionesEnviadas(response.data.length);
-      }
-    } catch {
-      // Si falla, se mantiene en 0 o valor previo
-    }
-  };
 
   const loadSettings = async () => {
     setFetching(true);
@@ -551,10 +532,11 @@ export default function SystemSettings() {
       <header className="admin-topbar">
         <div className="topbar-title">
           <p className="eyebrow mb-1">CONFIGURACION</p>
-          <h1>Ajustes del Sistema</h1>
+          <h1>Sistema</h1>
         </div>
         <div className="topbar-actions">
           <span className="topbar-date d-none d-sm-inline">Parámetros globales</span>
+          <StockAlertBell />
         </div>
       </header>
 
@@ -563,7 +545,7 @@ export default function SystemSettings() {
           <div>
             <p className="eyebrow">PARAMETROS</p>
             <h2>Configuración del Sistema</h2>
-            <p>Configuración de notificaciones de cobranza.</p>
+            <p>Configuración de servidores, canales de comunicación y parámetros globales.</p>
           </div>
           <div className="summary-metric">
             {activeTab === "smtp" ? (
@@ -584,20 +566,10 @@ export default function SystemSettings() {
                     : "Estado WhatsApp"}
                 </small>
               </>
-            ) : activeTab === "notificaciones" ? (
-              <>
-                <span className="fs-4 fw-bold">{totalNotificacionesEnviadas}</span>
-                <small>Notificaciones Enviadas</small>
-              </>
             ) : activeTab === "session" ? (
               <>
                 <span className="fs-4 fw-bold">{settings.jwt_access_token_expire_minutes || 60} min</span>
                 <small>Expiración de Sesión</small>
-              </>
-            ) : activeTab === "carro_compras" ? (
-              <>
-                <span className="fs-4 fw-bold">{settings.carro_compras_expira_horas || 24} hrs</span>
-                <small>Expiración de Carros</small>
               </>
             ) : (
               <>
@@ -621,12 +593,8 @@ export default function SystemSettings() {
                 ? "SMTP"
                 : activeTab === "whatsapp"
                 ? "WhatsApp"
-                : activeTab === "notificaciones"
-                ? "Cobranza"
                 : activeTab === "session"
                 ? "Sesión"
-                : activeTab === "carro_compras"
-                ? "Carro de Compras"
                 : "Zona Horaria"}
             </span>
           </div>
@@ -650,27 +618,11 @@ export default function SystemSettings() {
             </button>
             <button
               type="button"
-              className={`settings-tab-btn ${activeTab === "notificaciones" ? "active" : ""}`}
-              onClick={() => setActiveTab("notificaciones")}
-            >
-              <Bell size={17} />
-              <span>Notificaciones</span>
-            </button>
-            <button
-              type="button"
               className={`settings-tab-btn ${activeTab === "session" ? "active" : ""}`}
               onClick={() => setActiveTab("session")}
             >
               <Clock size={17} />
               <span>Ajuste de Sesión</span>
-            </button>
-            <button
-              type="button"
-              className={`settings-tab-btn ${activeTab === "carro_compras" ? "active" : ""}`}
-              onClick={() => setActiveTab("carro_compras")}
-            >
-              <ShoppingCart size={17} />
-              <span>Ajuste Carro de Compras</span>
             </button>
             <button
               type="button"
@@ -840,10 +792,6 @@ export default function SystemSettings() {
                 </div>
               )}
 
-              {activeTab === "notificaciones" && (
-                <NotificacionesTab onUpdateCount={loadTotalNotificaciones} />
-              )}
-
               {activeTab === "session" && (
                 <form onSubmit={handleSubmit}>
                   <div className="settings-card">
@@ -899,15 +847,6 @@ export default function SystemSettings() {
                     </button>
                   </div>
                 </form>
-              )}
-
-              {activeTab === "carro_compras" && (
-                <AjusteCarroComprasTab
-                  settings={settings}
-                  onSettingsChange={handleInputChange}
-                  onSaveSettings={handleSubmit}
-                  saving={loading}
-                />
               )}
 
               {activeTab === "timezone" && (

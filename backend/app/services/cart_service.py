@@ -143,12 +143,7 @@ class CartService:
         unidades_necesarias = diferencia_cant * factor
 
         if unidades_necesarias > 0:
-            # Necesitamos descontar más stock
-            if product.cantidad < unidades_necesarias:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"Stock insuficiente para {product.nombre}. Disponible: {product.cantidad} unidades.",
-                )
+            # Descontar stock (permite stock negativo si no hay existencias suficientes)
             product.cantidad -= unidades_necesarias
         elif unidades_necesarias < 0:
             # Devolver stock

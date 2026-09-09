@@ -567,6 +567,30 @@ def list_admin_products(
     return ProductPage(items=list(products), total=total, page=page, page_size=page_size)
 
 
+@router.get("/admin/productos/alertas-stock", response_model=list[ProductOutput], tags=["Productos"])
+def list_stock_alert_products(
+    database: DatabaseSession,
+    _: AdminUser,
+) -> list[ProductOutput]:
+    statement = (
+        select(Producto)
+        .outerjoin(Producto.categoria)
+        .options(selectinload(Producto.categoria))
+        .where(
+            Producto.eliminado_at.is_(None),
+            Producto.notificar_stock.is_(True),
+            Producto.stock_notificacion.is_not(None),
+            Producto.cantidad <= Producto.stock_notificacion,
+        )
+        .order_by(
+            Producto.cantidad.asc(),
+            Producto.nombre.asc(),
+        )
+    )
+    products = database.scalars(statement).all()
+    return list(products)
+
+
 @router.post("/productos", response_model=ProductOutput, status_code=status.HTTP_201_CREATED, tags=["Productos"])
 def create_product(payload: ProductInput, database: DatabaseSession, _: AdminUser) -> Producto:
     duplicate = database.scalar(select(Producto.id).where(func.lower(Producto.codigo) == payload.codigo.lower()))

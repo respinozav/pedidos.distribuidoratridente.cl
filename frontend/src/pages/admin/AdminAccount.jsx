@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, AlertCircle, Save, KeyRound, UserCheck } from "lucide-react";
 import Swal from "sweetalert2";
 import { api } from "../../services/api";
+import StockAlertBell from "../../components/admin/StockAlertBell";
 
 export default function AdminAccount({ onProfileUpdated }) {
   const [profile, setProfile] = useState(null);
@@ -121,6 +122,10 @@ export default function AdminAccount({ onProfileUpdated }) {
         <div className="topbar-title">
           <p className="eyebrow mb-1">CUENTA</p>
           <h1>Mis datos</h1>
+        </div>
+        <div className="topbar-actions">
+          <span className="topbar-date d-none d-sm-inline">Mi perfil</span>
+          <StockAlertBell />
         </div>
       </header>
 

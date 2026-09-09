@@ -19,6 +19,7 @@ import {
 import Swal from "sweetalert2";
 import { api } from "../../services/api";
 import PromoBannerCarousel from "../../components/PromoBannerCarousel";
+import StockAlertBell from "../../components/admin/StockAlertBell";
 import {
   formatImageSrc,
   getBannerTheme,
@@ -259,6 +260,7 @@ export default function PublicidadManager() {
           <h1>Publicidad y Banners</h1>
         </div>
         <div className="topbar-actions">
+          <StockAlertBell />
           <button className="btn btn-primary d-flex align-items-center gap-2" onClick={handleOpenCreate}>
             <Plus size={18} />
             Nuevo banner

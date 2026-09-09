@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 
@@ -41,6 +41,24 @@ class ProductInput(BaseModel):
     tiene_caja: bool = False
     cantidad_caja: int | None = Field(default=None, ge=1)
     precio_caja: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+    notificar_stock: bool = False
+    stock_notificacion: int | None = Field(default=None, ge=1)
+
+    @field_validator("stock_notificacion")
+    @classmethod
+    def validate_stock_notificacion(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("El número de stock para notificación debe ser igual o mayor a 1")
+        return value
+
+    @model_validator(mode="after")
+    def validate_notification_stock(self) -> "ProductInput":
+        if self.notificar_stock:
+            if self.stock_notificacion is None or self.stock_notificacion < 1:
+                raise ValueError("Si notificar stock está activo, el número de stock debe ser igual o mayor a 1")
+        else:
+            self.stock_notificacion = None
+        return self
 
     @field_validator("nombre")
     @classmethod

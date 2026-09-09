@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { api } from "../../services/api";
+import StockAlertBell from "../../components/admin/StockAlertBell";
 
 const dateFormatter = new Intl.DateTimeFormat("es-CL", {
   dateStyle: "short",
@@ -198,6 +199,7 @@ export default function NotificationLogs() {
         </div>
         <div className="topbar-actions">
           <span className="topbar-date d-none d-sm-inline">Auditoría de Notificaciones</span>
+          <StockAlertBell />
           <button
             className="btn btn-outline-secondary d-flex align-items-center gap-2"
             onClick={() => {

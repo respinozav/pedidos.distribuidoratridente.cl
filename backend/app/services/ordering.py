@@ -34,6 +34,25 @@ class OrderService:
         if len(products) != len(set(product_ids)):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Uno o mas productos no existen")
 
+        # Si el cliente tenía un carrito persistido en la base de datos, reintegrar el stock previamente reservado
+        # para que la deducción de este pedido sea la única que descuente inventario de forma definitiva
+        cart = self.database.scalar(
+            select(CarritoCompra)
+            .options(selectinload(CarritoCompra.items))
+            .where(CarritoCompra.cliente_id == customer_id)
+        )
+        if cart:
+            for item in cart.items:
+                product_in_cart = products.get(item.producto_id)
+                if not product_in_cart:
+                    product_in_cart = self.database.scalar(
+                        select(Producto).where(Producto.id == item.producto_id).with_for_update()
+                    )
+                if product_in_cart:
+                    factor = (item.cantidad_caja or 1) if item.tipo_empaque == "caja" else 1
+                    product_in_cart.cantidad += item.cantidad * factor
+            self.database.delete(cart)
+
         details: list[DetallePedido] = []
         subtotal = Decimal("0")
         for line in payload.productos:
@@ -95,11 +114,6 @@ class OrderService:
                 self.database.flush()
         order = Pedido(cliente_id=customer_id, direccion_id=address.id, estado_id=initial_state.id, subtotal=subtotal, total=subtotal, detalles=details)
         self.database.add(order)
-
-        # Si el cliente tenía un carrito persistido en la base de datos, limpiarlo (cascade elimina items)
-        cart = self.database.scalar(select(CarritoCompra).where(CarritoCompra.cliente_id == customer_id))
-        if cart:
-            self.database.delete(cart)
 
         self.database.commit()
         created_order = self.get(order.id)
