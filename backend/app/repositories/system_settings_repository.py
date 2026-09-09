@@ -21,6 +21,7 @@ class SystemSettingsRepository:
                 whatsapp_enabled=False,
                 jwt_access_token_expire_minutes=env_config.jwt_access_token_expire_minutes or 60,
                 timezone="America/Santiago",
+                carro_compras_expira_horas=24,
             )
             db.add(settings)
             db.commit()
@@ -33,6 +34,9 @@ class SystemSettingsRepository:
                 updated = True
             if not getattr(settings, "timezone", None):
                 settings.timezone = "America/Santiago"
+                updated = True
+            if getattr(settings, "carro_compras_expira_horas", None) is None:
+                settings.carro_compras_expira_horas = 24
                 updated = True
             if updated:
                 db.commit()

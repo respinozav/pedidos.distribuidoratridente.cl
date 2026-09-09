@@ -1858,6 +1858,34 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     setSelectedAddress((current) => (current && customer.direcciones?.some((address) => address.id === current && address.activo)) ? current : activeAddressId);
   }, [customer.direcciones]);
 
+  // Cargar carrito persistido desde la base de datos al ingresar al portal
+  useEffect(() => {
+    async function loadSavedCart() {
+      try {
+        const { data } = await api.get("/cliente/carrito");
+        if (data && Array.isArray(data.items)) {
+          setCart(
+            data.items.map((it) => ({
+              id: it.producto_id,
+              cart_item_id: it.id,
+              cart_key: `${it.producto_id}_${it.tipo_empaque}`,
+              codigo: it.codigo_producto,
+              nombre: it.nombre_producto,
+              imagen_url: it.imagen_url,
+              quantity: it.cantidad,
+              tipo_empaque: it.tipo_empaque,
+              cantidad_caja: it.cantidad_caja,
+              unit_price: Number(it.precio_unitario),
+            }))
+          );
+        }
+      } catch {
+        // Si no está autenticado o falla, mantener estado local
+      }
+    }
+    loadSavedCart();
+  }, [customer.id]);
+
 
 
   async function loadHistory() {
@@ -2157,49 +2185,117 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
     const isCaja = tipo_empaque === "caja";
     const cartKey = `${product.id}_${tipo_empaque}`;
 
-    setCart((current) => {
-      const line = current.find((item) => (item.cart_key || item.id) === cartKey);
-      return line
-        ? current.map((item) =>
-            (item.cart_key || item.id) === cartKey ? { ...item, quantity: item.quantity + cantidad } : item
-          )
-        : [
-            ...current,
-            {
-              ...product,
-              cart_key: cartKey,
-              tipo_empaque,
-              cantidad_caja: isCaja ? product.cantidad_caja : null,
-              unit_price: applied_price,
-              quantity: cantidad,
-            },
-          ];
-    });
+    // Calcular la cantidad total requerida si ya existe en el carrito
+    const existing = cart.find((item) => (item.cart_key || item.id) === cartKey);
+    const targetQty = (existing?.quantity || 0) + cantidad;
 
-    const msg = `${cantidad} ${isCaja ? (cantidad === 1 ? "caja" : "cajas") : (cantidad === 1 ? "unidad" : "unidades")} de ${product.nombre} agregada(s) al pedido.`;
+    try {
+      const { data } = await api.post("/cliente/carrito/items", {
+        producto_id: product.id,
+        cantidad: targetQty,
+        tipo_empaque,
+        cantidad_caja: isCaja ? product.cantidad_caja : null,
+      });
 
-    Swal.fire({
-      icon: "success",
-      title: "¡Agregado al pedido!",
-      text: msg,
-      timer: 1800,
-      showConfirmButton: false,
-      position: "center",
-    });
+      if (data && Array.isArray(data.items)) {
+        setCart(
+          data.items.map((it) => ({
+            id: it.producto_id,
+            cart_item_id: it.id,
+            cart_key: `${it.producto_id}_${it.tipo_empaque}`,
+            codigo: it.codigo_producto,
+            nombre: it.nombre_producto,
+            imagen_url: it.imagen_url,
+            quantity: it.cantidad,
+            tipo_empaque: it.tipo_empaque,
+            cantidad_caja: it.cantidad_caja,
+            unit_price: Number(it.precio_unitario),
+          }))
+        );
+      }
+
+      // Actualizar stock localmente en la lista de productos
+      loadProducts();
+
+      const msg = `${cantidad} ${isCaja ? (cantidad === 1 ? "caja" : "cajas") : (cantidad === 1 ? "unidad" : "unidades")} de ${product.nombre} agregada(s) al pedido.`;
+      Swal.fire({
+        icon: "success",
+        title: "¡Agregado al pedido!",
+        text: msg,
+        timer: 1800,
+        showConfirmButton: false,
+        position: "center",
+      });
+    } catch (err) {
+      const detail = err.response?.data?.detail || "No fue posible agregar el producto al carro.";
+      Swal.fire("Stock no disponible", detail, "warning");
+    }
   }
 
   async function handleAddFromBanner(product, qty = 1) {
     await add(product);
   }
 
-  function updateQuantity(cartKey, quantity) {
-    setCart((current) =>
-      quantity < 1
-        ? current.filter((item) => (item.cart_key || item.id) !== cartKey)
-        : current.map((item) =>
-            (item.cart_key || item.id) === cartKey ? { ...item, quantity } : item
-          )
-    );
+  async function updateQuantity(cartKey, quantity) {
+    const item = cart.find((i) => (i.cart_key || i.id) === cartKey);
+    if (!item) return;
+
+    try {
+      if (quantity < 1) {
+        // Eliminar ítem y devolver stock
+        if (item.cart_item_id) {
+          const { data } = await api.delete(`/cliente/carrito/items/${item.cart_item_id}`);
+          if (data && Array.isArray(data.items)) {
+            setCart(
+              data.items.map((it) => ({
+                id: it.producto_id,
+                cart_item_id: it.id,
+                cart_key: `${it.producto_id}_${it.tipo_empaque}`,
+                codigo: it.codigo_producto,
+                nombre: it.nombre_producto,
+                imagen_url: it.imagen_url,
+                quantity: it.cantidad,
+                tipo_empaque: it.tipo_empaque,
+                cantidad_caja: it.cantidad_caja,
+                unit_price: Number(it.precio_unitario),
+              }))
+            );
+          } else {
+            setCart((curr) => curr.filter((i) => (i.cart_key || i.id) !== cartKey));
+          }
+        } else {
+          setCart((curr) => curr.filter((i) => (i.cart_key || i.id) !== cartKey));
+        }
+      } else {
+        // Actualizar cantidad en backend
+        const { data } = await api.post("/cliente/carrito/items", {
+          producto_id: item.id,
+          cantidad: quantity,
+          tipo_empaque: item.tipo_empaque || "unidad",
+          cantidad_caja: item.cantidad_caja || null,
+        });
+        if (data && Array.isArray(data.items)) {
+          setCart(
+            data.items.map((it) => ({
+              id: it.producto_id,
+              cart_item_id: it.id,
+              cart_key: `${it.producto_id}_${it.tipo_empaque}`,
+              codigo: it.codigo_producto,
+              nombre: it.nombre_producto,
+              imagen_url: it.imagen_url,
+              quantity: it.cantidad,
+              tipo_empaque: it.tipo_empaque,
+              cantidad_caja: it.cantidad_caja,
+              unit_price: Number(it.precio_unitario),
+            }))
+          );
+        }
+      }
+      loadProducts();
+    } catch (err) {
+      const detail = err.response?.data?.detail || "No fue posible actualizar la cantidad.";
+      Swal.fire("Aviso", detail, "warning");
+    }
   }
 
   async function createOrder() {

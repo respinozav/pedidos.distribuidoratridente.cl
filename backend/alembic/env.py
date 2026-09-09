@@ -28,10 +28,14 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    is_local = settings.database_host in ("localhost", "127.0.0.1", "::1")
     connectable = create_engine(
         settings.database_url,
         poolclass=pool.NullPool,
-        connect_args={"options": f"-csearch_path={settings.database_schema}", "sslmode": "require"},
+        connect_args={
+            "options": f"-csearch_path={settings.database_schema}",
+            "sslmode": "prefer" if is_local else "require",
+        },
     )
     with connectable.connect() as connection:
         try:

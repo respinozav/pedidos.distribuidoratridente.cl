@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from app.core.database import SessionLocal
 from app.models.entities import ConfiguracionAvisos
+from app.services.cart_service import CartService
 from app.services.cobranzas import procesar_avisos_cobranza_smtp
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,12 @@ async def cobranzas_scheduler_loop() -> None:
                             resultado = procesar_avisos_cobranza_smtp(db)
                             logger.info("Resultado job de cobranzas: %s", resultado)
                             _ultimo_dia_ejecutado = hoy_str
+
+            # Verificación periódica de carritos de compra inactivos
+            with SessionLocal() as db:
+                carritos_expirados = CartService.expire_inactive_carts(db)
+                if carritos_expirados > 0:
+                    logger.info("Job de Carrito: Se eliminaron %s carritos inactivos y se devolvió su stock.", carritos_expirados)
 
         except asyncio.CancelledError:
             logger.info("Scheduler de cobranzas cancelado.")

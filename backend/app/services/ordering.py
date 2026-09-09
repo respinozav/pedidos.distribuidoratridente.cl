@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.entities import Cliente, Credito, DetallePedido, Direccion, Estado, Pedido, Producto
+from app.models.entities import Cliente, Credito, DetallePedido, Direccion, Estado, Pedido, Producto, CarritoCompra
 from app.repositories.base import Repository
 from app.schemas.dto import OrderCreate
 from app.services.defontana_service import dispatch_defontana_order_sync_in_background
@@ -95,6 +95,12 @@ class OrderService:
                 self.database.flush()
         order = Pedido(cliente_id=customer_id, direccion_id=address.id, estado_id=initial_state.id, subtotal=subtotal, total=subtotal, detalles=details)
         self.database.add(order)
+
+        # Si el cliente tenía un carrito persistido en la base de datos, limpiarlo (cascade elimina items)
+        cart = self.database.scalar(select(CarritoCompra).where(CarritoCompra.cliente_id == customer_id))
+        if cart:
+            self.database.delete(cart)
+
         self.database.commit()
         created_order = self.get(order.id)
         dispatch_order_notifications_in_background(created_order.id, tipo="NUEVO_PEDIDO")

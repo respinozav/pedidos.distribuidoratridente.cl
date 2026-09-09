@@ -3,7 +3,7 @@ import Swal from "sweetalert2";
 
 const apiBaseUrl =
   import.meta.env.VITE_API_URL ??
-  (import.meta.env.DEV ? "http://localhost:8001/api" : "/api");
+  (import.meta.env.DEV ? "http://localhost:8002/api" : "/api");
 
 export const api = axios.create({
   baseURL: apiBaseUrl,

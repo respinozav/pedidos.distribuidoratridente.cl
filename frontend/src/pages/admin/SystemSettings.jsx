@@ -18,8 +18,10 @@ import {
   Bell,
   Globe,
   MapPin,
+  ShoppingCart,
 } from "lucide-react";
 import NotificacionesTab from "./NotificacionesTab";
+import AjusteCarroComprasTab from "./AjusteCarroComprasTab";
 import { api } from "../../services/api";
 import {
   getSettings,
@@ -346,6 +348,7 @@ export default function SystemSettings() {
     whatsapp_phone_number: "",
     jwt_access_token_expire_minutes: 60,
     timezone: "America/Santiago",
+    carro_compras_expira_horas: 24,
   });
 
   const [currentTimeDisplay, setCurrentTimeDisplay] = useState("");
@@ -405,6 +408,7 @@ export default function SystemSettings() {
         smtp_port: data.smtp_port ? String(data.smtp_port) : "",
         jwt_access_token_expire_minutes: data.jwt_access_token_expire_minutes || 60,
         timezone: data.timezone || "America/Santiago",
+        carro_compras_expira_horas: data.carro_compras_expira_horas || 24,
       }));
     } catch {
       setError("No fue posible cargar los ajustes del sistema.");
@@ -434,6 +438,9 @@ export default function SystemSettings() {
         jwt_access_token_expire_minutes: settings.jwt_access_token_expire_minutes
           ? parseInt(settings.jwt_access_token_expire_minutes, 10)
           : 60,
+        carro_compras_expira_horas: settings.carro_compras_expira_horas
+          ? parseInt(settings.carro_compras_expira_horas, 10)
+          : 24,
       };
       await updateSettings(payload);
       setNotice("Ajustes actualizados correctamente.");
@@ -587,6 +594,11 @@ export default function SystemSettings() {
                 <span className="fs-4 fw-bold">{settings.jwt_access_token_expire_minutes || 60} min</span>
                 <small>Expiración de Sesión</small>
               </>
+            ) : activeTab === "carro_compras" ? (
+              <>
+                <span className="fs-4 fw-bold">{settings.carro_compras_expira_horas || 24} hrs</span>
+                <small>Expiración de Carros</small>
+              </>
             ) : (
               <>
                 <span className="fs-5 fw-bold text-truncate" style={{ maxWidth: "220px", display: "inline-block" }}>
@@ -613,6 +625,8 @@ export default function SystemSettings() {
                 ? "Cobranza"
                 : activeTab === "session"
                 ? "Sesión"
+                : activeTab === "carro_compras"
+                ? "Carro de Compras"
                 : "Zona Horaria"}
             </span>
           </div>
@@ -649,6 +663,14 @@ export default function SystemSettings() {
             >
               <Clock size={17} />
               <span>Ajuste de Sesión</span>
+            </button>
+            <button
+              type="button"
+              className={`settings-tab-btn ${activeTab === "carro_compras" ? "active" : ""}`}
+              onClick={() => setActiveTab("carro_compras")}
+            >
+              <ShoppingCart size={17} />
+              <span>Ajuste Carro de Compras</span>
             </button>
             <button
               type="button"
@@ -877,6 +899,15 @@ export default function SystemSettings() {
                     </button>
                   </div>
                 </form>
+              )}
+
+              {activeTab === "carro_compras" && (
+                <AjusteCarroComprasTab
+                  settings={settings}
+                  onSettingsChange={handleInputChange}
+                  onSaveSettings={handleSubmit}
+                  saving={loading}
+                />
               )}
 
               {activeTab === "timezone" && (

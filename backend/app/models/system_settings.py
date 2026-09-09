@@ -27,3 +27,6 @@ class SystemSettings(Base):
 
     # Timezone Settings
     timezone: Mapped[str | None] = mapped_column(String, nullable=True, default="America/Santiago")
+
+    # Carro de Compras Settings
+    carro_compras_expira_horas: Mapped[int | None] = mapped_column(Integer, nullable=True, default=24)

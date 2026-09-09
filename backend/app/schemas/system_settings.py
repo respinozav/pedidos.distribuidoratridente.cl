@@ -14,6 +14,7 @@ class SystemSettingsBase(BaseModel):
     whatsapp_phone_number: Optional[str] = None
     jwt_access_token_expire_minutes: Optional[int] = 60
     timezone: Optional[str] = "America/Santiago"
+    carro_compras_expira_horas: Optional[int] = 24
 
 
 class SystemSettingsUpdate(SystemSettingsBase):

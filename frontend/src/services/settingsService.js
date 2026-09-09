@@ -32,4 +32,14 @@ export const sendTestEmail = async (data) => {
   return response.data;
 };
 
+export const getActiveCarts = async () => {
+  const response = await api.get("/admin/carritos");
+  return response.data;
+};
+
+export const adminDeleteCart = async (cartId) => {
+  const response = await api.delete(`/admin/carritos/${cartId}`);
+  return response.data;
+};
+
 

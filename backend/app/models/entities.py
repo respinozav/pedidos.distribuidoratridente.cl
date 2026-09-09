@@ -102,6 +102,7 @@ class Cliente(AuditMixin, Base):
     direcciones: Mapped[list["Direccion"]] = relationship(back_populates="cliente")
     pedidos: Mapped[list["Pedido"]] = relationship(back_populates="cliente")
     creditos: Mapped[list["Credito"]] = relationship(back_populates="cliente")
+    carrito_compra: Mapped["CarritoCompra | None"] = relationship(back_populates="cliente", uselist=False, cascade="all, delete-orphan")
 
 
 class Direccion(AuditMixin, Base):
@@ -279,4 +280,58 @@ class LogCorreo(Base):
     estado: Mapped[str] = mapped_column(String(50), default="ENVIADO")
     net_request_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enviado_el: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CarritoCompra(Base):
+    __tablename__ = "carritos_compras"
+    __table_args__ = (
+        Index("ix_carritos_compras_cliente_id", "cliente_id"),
+        Index("ix_carritos_compras_updated_at", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clientes.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    direccion_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("direcciones.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    cliente: Mapped[Cliente] = relationship(back_populates="carrito_compra")
+    direccion: Mapped[Direccion | None] = relationship()
+    items: Mapped[list["CarritoCompraItem"]] = relationship(
+        back_populates="carrito", cascade="all, delete-orphan", order_by="CarritoCompraItem.created_at.asc()"
+    )
+
+
+class CarritoCompraItem(Base):
+    __tablename__ = "carritos_compras_items"
+    __table_args__ = (
+        Index("ix_carritos_compras_items_carrito_id", "carrito_id"),
+        Index("ix_carritos_compras_items_producto_id", "producto_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    carrito_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("carritos_compras.id", ondelete="CASCADE"), index=True
+    )
+    producto_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("productos.id", ondelete="RESTRICT"), index=True
+    )
+    cantidad: Mapped[int] = mapped_column(Integer)
+    tipo_empaque: Mapped[str] = mapped_column(String(20), default="unidad")
+    cantidad_caja: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    precio_unitario: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    carrito: Mapped[CarritoCompra] = relationship(back_populates="items")
+    producto: Mapped[Producto] = relationship()
 

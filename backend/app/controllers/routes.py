@@ -56,6 +56,13 @@ from app.services.notifications import _order_pdf_filename, dispatch_order_notif
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_box_price, customer_product_price
 from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
+from app.schemas.cart import (
+    AdminActiveCartOutput,
+    CartItemInput,
+    CartItemOutput,
+    CartOutput,
+)
+from app.services.cart_service import CartService
 
 
 router = APIRouter(prefix="/api")
@@ -637,6 +644,54 @@ def customer_order_history(customer_id: UUID, database: DatabaseSession, current
 @router.get("/pedidos", response_model=list[OrderOutput], tags=["Pedidos"])
 def list_orders(database: DatabaseSession, _: AdminUser) -> list[object]:
     return OrderService(database).list_all()
+
+
+# =========================================================================
+# RUTAS DE CARRO DE COMPRAS (CLIENTE)
+# =========================================================================
+@router.get("/cliente/carrito", response_model=CartOutput, tags=["Carro de Compras"])
+def get_customer_cart(database: DatabaseSession, current_customer: CustomerUser) -> CartOutput:
+    return CartService(database).get_cart_dto(current_customer.id)
+
+
+@router.post("/cliente/carrito/items", response_model=CartOutput, tags=["Carro de Compras"])
+def add_or_update_cart_item(
+    payload: CartItemInput,
+    database: DatabaseSession,
+    current_customer: CustomerUser,
+) -> CartOutput:
+    return CartService(database).add_or_update_item(current_customer.id, payload)
+
+
+@router.delete("/cliente/carrito/items/{item_id}", response_model=CartOutput, tags=["Carro de Compras"])
+def remove_cart_item(
+    item_id: UUID,
+    database: DatabaseSession,
+    current_customer: CustomerUser,
+) -> CartOutput:
+    return CartService(database).remove_item(current_customer.id, item_id)
+
+
+@router.delete("/cliente/carrito", status_code=status.HTTP_204_NO_CONTENT, tags=["Carro de Compras"])
+def clear_customer_cart(
+    database: DatabaseSession,
+    current_customer: CustomerUser,
+) -> None:
+    CartService(database).clear_cart(current_customer.id)
+
+
+# =========================================================================
+# RUTAS DE CARRO DE COMPRAS (ADMINISTRADOR)
+# =========================================================================
+@router.get("/admin/carritos", response_model=list[AdminActiveCartOutput], tags=["Carro de Compras Admin"])
+def list_active_carts(database: DatabaseSession, _: AdminUser) -> list[AdminActiveCartOutput]:
+    return CartService(database).list_active_carts()
+
+
+@router.delete("/admin/carritos/{cart_id}", tags=["Carro de Compras Admin"])
+def admin_delete_cart(cart_id: UUID, database: DatabaseSession, _: AdminUser) -> dict[str, str]:
+    return CartService(database).admin_delete_cart(cart_id)
+
 
 
 @router.get("/pedidos/{order_id}/pdf", tags=["Pedidos"])
