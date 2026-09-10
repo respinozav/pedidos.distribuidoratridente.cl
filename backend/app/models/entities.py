@@ -130,6 +130,7 @@ class Pedido(AuditMixin, Base):
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     folio_defontana: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    folio_defontana_afecto: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     defontana_sincronizado: Mapped[bool] = mapped_column(Boolean, default=False)
     defontana_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     cliente: Mapped[Cliente] = relationship(back_populates="pedidos")

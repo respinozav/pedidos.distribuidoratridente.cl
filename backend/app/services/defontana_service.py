@@ -337,19 +337,17 @@ class DefontanaService:
             expiration_date = {"day": exp_date.day, "month": exp_date.month, "year": exp_date.year}
             delivery_date = {"day": now.day, "month": now.month, "year": now.year}
 
-            # Procesar detalles
-            order_details = []
-            total_neto = Decimal("0")
-            total_afecto = Decimal("0")
-
-            for item in order.detalles:
+            # Helper para armar detalle de producto
+            def _build_item_detail(item: Any, is_afecto: bool) -> dict:
                 prod_code = item.codigo_producto or ""
                 prod_info = self.resolve_product(prod_code) if prod_code else None
 
                 prod_type = (prod_info.get("type") if prod_info else None) or "A"
                 prod_name = (prod_info.get("name") if prod_info else None) or item.nombre_producto or f"Producto {prod_code}"
                 tipo_empaque = (getattr(item, "tipo_empaque", None) or "unidad").strip().lower()
-                cant_caja = getattr(item, "cantidad_caja", None) or (item.producto.cantidad_caja if getattr(item, "producto", None) else None)
+                cant_caja = getattr(item, "cantidad_caja", None) or (
+                    item.producto.cantidad_caja if getattr(item, "producto", None) else None
+                )
 
                 price = float(item.precio_unitario)
                 count = int(item.cantidad)
@@ -360,16 +358,14 @@ class DefontanaService:
                 else:
                     comment = "Unidad"
 
-                is_afecto = _is_afecto(item)
-                is_exempt = not is_afecto
-                tax_rate = 19.0 if is_afecto else 0.0
-
-                line_total = Decimal(str(price)) * count
-                total_neto += line_total
                 if is_afecto:
-                    total_afecto += line_total
+                    tax_obj = {"code": "IVA", "value": 19.0}
+                    is_exempt = False
+                else:
+                    tax_obj = {"code": "", "value": 0.0}
+                    is_exempt = True
 
-                order_details.append({
+                return {
                     "type": prod_type,
                     "code": str(prod_code),
                     "productName": prod_name,
@@ -382,58 +378,126 @@ class DefontanaService:
                     "deliveryDate": delivery_date,
                     "deliveryTime": {"hour": 12, "minute": 0},
                     "discount": {"value": 0.0, "type": 1},
-                    "tax": {"code": "IVA", "value": tax_rate},
-                })
+                    "tax": tax_obj,
+                }
 
-            iva_value = float(round(total_afecto * Decimal("0.19"), 0))
+            # Clasificar items entre afectos y exentos
+            items_afectos = [it for it in (order.detalles or []) if _is_afecto(it)]
+            items_exentos = [it for it in (order.detalles or []) if not _is_afecto(it)]
 
-            body = {
-                "documentTypeId": "boleta",
-                "clientFileId": str(client_file_id),
-                "sellerFileId": str(seller_file_id),
-                "shopId": str(shop_id),
-                "paymentConditionId": str(payment_condition_id),
-                "billingCoinId": "PESO",
-                "billingRate": 1.0,
-                "creationDate": creation_date,
-                "expirationDate": expiration_date,
-                "glossGeneral": f"Pedido web N° {str(order.id)[:8]}",
-                "taxes": [
-                    {
-                        "code": "IVA",
-                        "value": iva_value,
-                    }
-                ],
-                "orderDetails": order_details,
-            }
-
-            try:
-                res = self.save_order(body)
-                success = res.get("success", False)
-                folio = res.get("folio")
-                msg = res.get("message") or res.get("exceptionMessage")
-
-                if success and folio:
-                    order.folio_defontana = int(folio)
-                    order.defontana_sincronizado = True
-                    order.defontana_error = None
-                    session.commit()
-                    logger.info("Pedido %s sincronizado con éxito en Defontana con folio %s", order_id, folio)
-                    return int(folio), None
-                else:
-                    err_msg = msg or f"Error desconocido al guardar pedido: {res}"
-                    order.defontana_sincronizado = False
-                    order.defontana_error = err_msg
-                    session.commit()
-                    logger.warning("Fallo respuesta de Defontana para pedido %s: %s", order_id, err_msg)
-                    return None, err_msg
-            except Exception as exc:
-                err_msg = f"{type(exc).__name__}: {exc}"
+            if not items_afectos and not items_exentos:
+                err_msg = f"Pedido {order_id} no contiene productos para facturar"
                 order.defontana_sincronizado = False
                 order.defontana_error = err_msg
                 session.commit()
-                logger.exception("Error al sincronizar pedido %s en Defontana: %s", order_id, exc)
                 return None, err_msg
+
+            errors = []
+            sync_ok = True
+
+            # 1. Factura Electrónica 33 (Afectos) -> documentTypeId = "fvaelect", folio_defontana_afecto
+            if items_afectos and not order.folio_defontana_afecto:
+                details_afectos = [_build_item_detail(it, is_afecto=True) for it in items_afectos]
+                total_afecto = sum(Decimal(str(it.precio_unitario)) * int(it.cantidad) for it in items_afectos)
+                iva_value = float(round(total_afecto * Decimal("0.19"), 0))
+
+                gloss_suffix = " - Factura 33 (Afecto)" if items_exentos else " - Factura 33"
+                body_afecto = {
+                    "documentTypeId": "fvaelect",
+                    "clientFileId": str(client_file_id),
+                    "sellerFileId": str(seller_file_id),
+                    "shopId": str(shop_id),
+                    "paymentConditionId": str(payment_condition_id),
+                    "billingCoinId": "PESO",
+                    "billingRate": 1.0,
+                    "creationDate": creation_date,
+                    "expirationDate": expiration_date,
+                    "glossGeneral": f"Pedido web N° {str(order.id)[:8]}{gloss_suffix}",
+                    "taxes": [
+                        {
+                            "code": "IVA",
+                            "value": iva_value,
+                        }
+                    ],
+                    "orderDetails": details_afectos,
+                }
+
+                try:
+                    res_afecto = self.save_order(body_afecto)
+                    if res_afecto.get("success", False) and res_afecto.get("folio"):
+                        order.folio_defontana_afecto = int(res_afecto["folio"])
+                        logger.info(
+                            "Pedido %s: Factura 33 (Afecta) generada con éxito en Defontana con folio %s",
+                            order_id,
+                            res_afecto["folio"],
+                        )
+                    else:
+                        err_msg = (
+                            res_afecto.get("message")
+                            or res_afecto.get("exceptionMessage")
+                            or f"Error al emitir Factura 33: {res_afecto}"
+                        )
+                        errors.append(f"Factura 33: {err_msg}")
+                        sync_ok = False
+                except Exception as exc:
+                    errors.append(f"Factura 33 ({type(exc).__name__}): {exc}")
+                    sync_ok = False
+
+            # 2. Factura No Afecta o Exenta Electrónica 34 (Exentos) -> documentTypeId = "fveelect", folio_defontana
+            if items_exentos and not order.folio_defontana:
+                details_exentos = [_build_item_detail(it, is_afecto=False) for it in items_exentos]
+
+                gloss_suffix = " - Factura 34 (Exento)" if items_afectos else " - Factura 34"
+                body_exento = {
+                    "documentTypeId": "fveelect",
+                    "clientFileId": str(client_file_id),
+                    "sellerFileId": str(seller_file_id),
+                    "shopId": str(shop_id),
+                    "paymentConditionId": str(payment_condition_id),
+                    "billingCoinId": "PESO",
+                    "billingRate": 1.0,
+                    "creationDate": creation_date,
+                    "expirationDate": expiration_date,
+                    "glossGeneral": f"Pedido web N° {str(order.id)[:8]}{gloss_suffix}",
+                    "taxes": [],
+                    "orderDetails": details_exentos,
+                }
+
+                try:
+                    res_exento = self.save_order(body_exento)
+                    if res_exento.get("success", False) and res_exento.get("folio"):
+                        order.folio_defontana = int(res_exento["folio"])
+                        logger.info(
+                            "Pedido %s: Factura 34 (Exenta) generada con éxito en Defontana con folio %s",
+                            order_id,
+                            res_exento["folio"],
+                        )
+                    else:
+                        err_msg = (
+                            res_exento.get("message")
+                            or res_exento.get("exceptionMessage")
+                            or f"Error al emitir Factura 34: {res_exento}"
+                        )
+                        errors.append(f"Factura 34: {err_msg}")
+                        sync_ok = False
+                except Exception as exc:
+                    errors.append(f"Factura 34 ({type(exc).__name__}): {exc}")
+                    sync_ok = False
+
+            # Actualizar estado del pedido
+            primary_folio = order.folio_defontana_afecto or order.folio_defontana
+            if sync_ok and not errors:
+                order.defontana_sincronizado = True
+                order.defontana_error = None
+                session.commit()
+                return primary_folio, None
+            else:
+                combined_err = " | ".join(errors)
+                order.defontana_sincronizado = False
+                order.defontana_error = combined_err
+                session.commit()
+                logger.warning("Fallo sincronización Defontana para pedido %s: %s", order_id, combined_err)
+                return primary_folio, combined_err
 
 
 def dispatch_defontana_order_sync_in_background(order_id: UUID) -> None:

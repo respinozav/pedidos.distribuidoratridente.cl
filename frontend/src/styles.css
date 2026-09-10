@@ -475,8 +475,10 @@ button, input { font: inherit; }
   color: #334155;
   font-size: 0.76rem;
   font-weight: 600;
-  margin-left: auto;
   padding: 0.18rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 .defontana-folio-pill strong {
   color: #0f172a;

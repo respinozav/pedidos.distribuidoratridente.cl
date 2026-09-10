@@ -51,7 +51,7 @@ def test_defontana_item_packaging_rules():
         cantidad_caja=10,
         precio_unitario=Decimal("75680"),
         cantidad=2,
-        producto=SimpleNamespace(cantidad_caja=10),
+        producto=SimpleNamespace(afecto=True, cantidad_caja=10),
     )
     item_unidad = SimpleNamespace(
         codigo_producto="673",
@@ -60,13 +60,17 @@ def test_defontana_item_packaging_rules():
         cantidad_caja=None,
         precio_unitario=Decimal("33242"),
         cantidad=5,
-        producto=SimpleNamespace(cantidad_caja=None),
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
     )
     fake_order = SimpleNamespace(
         id=uuid4(),
         cliente=customer,
         direccion=SimpleNamespace(direccion="Calle 1"),
         detalles=[item_caja, item_unidad],
+        folio_defontana=None,
+        folio_defontana_afecto=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
     )
 
     captured_payload = {}
@@ -95,6 +99,9 @@ def test_defontana_item_packaging_rules():
         folio, err = service.sync_order(fake_order.id)
         assert folio == 1234
         assert err is None
+        assert fake_order.folio_defontana_afecto == 1234
+        assert fake_order.folio_defontana is None
+        assert captured_payload["documentTypeId"] == "fvaelect"
         details = captured_payload["orderDetails"]
         assert len(details) == 2
 
@@ -142,6 +149,10 @@ def test_defontana_order_exclusively_afecto():
         cliente=customer,
         direccion=SimpleNamespace(direccion="Calle 123"),
         detalles=[item1, item2],
+        folio_defontana=None,
+        folio_defontana_afecto=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
     )
 
     captured_payload = {}
@@ -172,6 +183,9 @@ def test_defontana_order_exclusively_afecto():
         folio, err = service.sync_order(fake_order.id)
         assert folio == 2001
         assert err is None
+        assert fake_order.folio_defontana_afecto == 2001
+        assert fake_order.folio_defontana is None
+        assert captured_payload["documentTypeId"] == "fvaelect"
 
         details = captured_payload["orderDetails"]
         assert len(details) == 2
@@ -223,6 +237,10 @@ def test_defontana_order_exclusively_exento():
         cliente=customer,
         direccion=SimpleNamespace(direccion="Calle 456"),
         detalles=[item1, item2],
+        folio_defontana=None,
+        folio_defontana_afecto=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
     )
 
     captured_payload = {}
@@ -253,22 +271,23 @@ def test_defontana_order_exclusively_exento():
         folio, err = service.sync_order(fake_order.id)
         assert folio == 2002
         assert err is None
+        assert fake_order.folio_defontana == 2002
+        assert fake_order.folio_defontana_afecto is None
+        assert captured_payload["documentTypeId"] == "fveelect"
 
         details = captured_payload["orderDetails"]
         assert len(details) == 2
         # Item 1: exento
         assert details[0]["isExempt"] is True
-        assert details[0]["tax"] == {"code": "IVA", "value": 0.0}
+        assert details[0]["tax"] == {"code": "", "value": 0.0}
 
         # Item 2: exento
         assert details[1]["isExempt"] is True
-        assert details[1]["tax"] == {"code": "IVA", "value": 0.0}
+        assert details[1]["tax"] == {"code": "", "value": 0.0}
 
-        # Taxes: Total afecto = 0. IVA = 0.0
+        # Taxes: Factura 34 no lleva IVA en el header
         taxes = captured_payload["taxes"]
-        assert len(taxes) == 1
-        assert taxes[0]["code"] == "IVA"
-        assert taxes[0]["value"] == 0.0
+        assert len(taxes) == 0
 
     print("test_defontana_order_exclusively_exento: OK")
 
@@ -317,14 +336,22 @@ def test_defontana_order_mixed_afecto_and_exento():
         cliente=customer,
         direccion=SimpleNamespace(direccion="Calle 789"),
         detalles=[item1, item2, item3],
+        folio_defontana=None,
+        folio_defontana_afecto=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
     )
 
-    captured_payload = {}
+    captured_payloads = []
 
     def mock_save(payload):
-        nonlocal captured_payload
-        captured_payload = payload
-        return {"success": True, "folio": 2003}
+        captured_payloads.append(payload)
+        doc_type = payload.get("documentTypeId")
+        if doc_type == "fvaelect":
+            return {"success": True, "folio": 3001}
+        elif doc_type == "fveelect":
+            return {"success": True, "folio": 3002}
+        return {"success": True, "folio": 9999}
 
     class FakeSession:
         def __enter__(self):
@@ -350,30 +377,28 @@ def test_defontana_order_mixed_afecto_and_exento():
          patch.object(service, "save_order", side_effect=mock_save):
 
         folio, err = service.sync_order(fake_order.id)
-        assert folio == 2003
         assert err is None
+        assert fake_order.folio_defontana_afecto == 3001
+        assert fake_order.folio_defontana == 3002
+        assert fake_order.defontana_sincronizado is True
+        assert len(captured_payloads) == 2
 
-        details = captured_payload["orderDetails"]
-        assert len(details) == 3
+        # 1. Factura 33 (Afecta)
+        p_afecto = next(p for p in captured_payloads if p["documentTypeId"] == "fvaelect")
+        assert len(p_afecto["orderDetails"]) == 2  # item1 e item3
+        assert p_afecto["orderDetails"][0]["isExempt"] is False
+        assert p_afecto["orderDetails"][0]["tax"] == {"code": "IVA", "value": 19.0}
+        assert p_afecto["orderDetails"][1]["isExempt"] is False
+        assert p_afecto["orderDetails"][1]["tax"] == {"code": "IVA", "value": 19.0}
+        # IVA = round((20000 + 10000) * 0.19) = 5700.0
+        assert p_afecto["taxes"] == [{"code": "IVA", "value": 5700.0}]
 
-        # Item 1: afecto
-        assert details[0]["isExempt"] is False
-        assert details[0]["tax"] == {"code": "IVA", "value": 19.0}
-
-        # Item 2: exento
-        assert details[1]["isExempt"] is True
-        assert details[1]["tax"] == {"code": "IVA", "value": 0.0}
-
-        # Item 3: afecto vía fallback DB
-        assert details[2]["isExempt"] is False
-        assert details[2]["tax"] == {"code": "IVA", "value": 19.0}
-
-        # Taxes: Total afecto = 20000 (item1) + 10000 (item3) = 30000. Item 2 (15000) NO paga IVA.
-        # IVA = round(30000 * 0.19) = 5700.0
-        taxes = captured_payload["taxes"]
-        assert len(taxes) == 1
-        assert taxes[0]["code"] == "IVA"
-        assert taxes[0]["value"] == 5700.0
+        # 2. Factura 34 (Exenta)
+        p_exento = next(p for p in captured_payloads if p["documentTypeId"] == "fveelect")
+        assert len(p_exento["orderDetails"]) == 1  # item2
+        assert p_exento["orderDetails"][0]["isExempt"] is True
+        assert p_exento["orderDetails"][0]["tax"] == {"code": "", "value": 0.0}
+        assert p_exento["taxes"] == []
 
     print("test_defontana_order_mixed_afecto_and_exento: OK")
 
@@ -458,6 +483,7 @@ def test_defontana_sync_order_creates_client_when_not_exists():
         direccion=direccion,
         detalles=[item],
         folio_defontana=None,
+        folio_defontana_afecto=None,
         defontana_sincronizado=False,
         defontana_error=None,
     )
@@ -509,6 +535,7 @@ def test_defontana_sync_order_creates_client_when_not_exists():
         folio, err = service.sync_order(fake_order.id)
         assert folio == 8888
         assert err is None
+        assert fake_order.folio_defontana_afecto == 8888
         mock_create.assert_called_once_with(customer, direccion)
         assert captured_payload["clientFileId"] == "99.888.777-6"
         assert len(resolve_calls) >= 2

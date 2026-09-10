@@ -306,6 +306,7 @@ class OrderOutput(ORMModel):
     subtotal: Decimal
     total: Decimal
     folio_defontana: int | None = None
+    folio_defontana_afecto: int | None = None
     defontana_sincronizado: bool = False
     defontana_error: str | None = None
     detalles: list[OrderLineOutput] = []

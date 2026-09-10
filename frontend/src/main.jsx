@@ -1223,7 +1223,7 @@ function AdminOrderManager() {
     const customerName = order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     const customerSub = order.cliente?.rut || order.cliente?.celular || "Sin identificador";
     const isExpanded = !!expandedOrders[order.id];
-    const canExpand = order.defontana_sincronizado === true || !!order.folio_defontana || !!order.defontana_error;
+    const canExpand = order.defontana_sincronizado === true || !!order.folio_defontana || !!order.folio_defontana_afecto || !!order.defontana_error;
 
     return (
       <React.Fragment key={order.id}>
@@ -1262,12 +1262,17 @@ function AdminOrderManager() {
 
               {order.defontana_error ? (
                 <div className="defontana-status-box defontana-status-error">
-                  <div className="d-flex align-items-center gap-2 mb-1">
+                  <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
                     <AlertCircle size={16} className="text-danger flex-shrink-0" />
                     <span className="badge-defontana-error">ERROR DE SINCRONIZACIÓN</span>
-                    {order.folio_defontana ? (
-                      <span className="defontana-folio-pill">Folio #{order.folio_defontana}</span>
-                    ) : null}
+                    <div className="ms-auto d-flex align-items-center gap-2 flex-wrap">
+                      {order.folio_defontana_afecto ? (
+                        <span className="defontana-folio-pill">Factura 33 (Afecta): #{order.folio_defontana_afecto}</span>
+                      ) : null}
+                      {order.folio_defontana ? (
+                        <span className="defontana-folio-pill">Factura 34 (Exenta): #{order.folio_defontana}</span>
+                      ) : null}
+                    </div>
                   </div>
                   <p className="defontana-error-text mb-0">
                     {order.defontana_error}
@@ -1275,15 +1280,22 @@ function AdminOrderManager() {
                 </div>
               ) : (
                 <div className="defontana-status-box defontana-status-success">
-                  <div className="d-flex align-items-center gap-2">
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
                     <CheckCircle2 size={16} className="text-success flex-shrink-0" />
                     <span className="badge-defontana-ok">OK</span>
                     <span className="defontana-ok-text">Sincronizado correctamente</span>
-                    {order.folio_defontana && (
-                      <span className="defontana-folio-pill">
-                        Folio Defontana: <strong>#{order.folio_defontana}</strong>
-                      </span>
-                    )}
+                    <div className="ms-auto d-flex align-items-center gap-2 flex-wrap">
+                      {order.folio_defontana_afecto && (
+                        <span className="defontana-folio-pill">
+                          Factura 33 (Afecta): <strong>#{order.folio_defontana_afecto}</strong>
+                        </span>
+                      )}
+                      {order.folio_defontana && (
+                        <span className="defontana-folio-pill">
+                          Factura 34 (Exenta): <strong>#{order.folio_defontana}</strong>
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1292,7 +1304,7 @@ function AdminOrderManager() {
         )}
       </React.Fragment>
     );
-  })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{formatDateTime(selectedOrder.created_at)}</span></div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
+  })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{formatDateTime(selectedOrder.created_at)}</span>{selectedOrder.folio_defontana_afecto && <span className="badge bg-primary ms-1">Factura 33: #{selectedOrder.folio_defontana_afecto}</span>}{selectedOrder.folio_defontana && <span className="badge bg-secondary ms-1">Factura 34: #{selectedOrder.folio_defontana}</span>}</div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
 
 <div className="order-notifications-section mt-4 pt-3 border-top">
   <div className="d-flex justify-content-between align-items-center mb-2">
