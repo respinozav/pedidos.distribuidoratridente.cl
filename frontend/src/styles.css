@@ -297,6 +297,10 @@ button, input { font: inherit; }
   grid-template-columns: minmax(115px, 0.8fr) minmax(160px, 1.8fr) minmax(115px, 0.8fr) minmax(130px, 0.95fr) minmax(130px, 0.95fr);
   margin: 1rem 0 1.25rem;
 }
+.admin-order-filters.customer-filters {
+  grid-template-columns: minmax(0, 380px);
+  margin-bottom: 0.75rem;
+}
 .admin-order-filters label {
   color: var(--muted);
   display: grid;
