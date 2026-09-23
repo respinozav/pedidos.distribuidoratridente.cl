@@ -22,6 +22,10 @@ import {
   Square,
   Search,
   ShieldCheck,
+  Globe,
+  Copy,
+  ExternalLink,
+  Code,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { api } from "../../services/api";
@@ -44,6 +48,24 @@ export default function PublicidadManager() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedIframe, setCopiedIframe] = useState(false);
+
+  const handleCopyPublicUrl = () => {
+    const url = "https://pedidos.distribuidoratridente.cl/Publicidades";
+    navigator.clipboard?.writeText(url).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    });
+  };
+
+  const handleCopyIframe = () => {
+    const iframeCode = '<iframe src="https://pedidos.distribuidoratridente.cl/Publicidades?embed=true" width="100%" height="450" frameborder="0" style="border:none;overflow:hidden;border-radius:16px;"></iframe>';
+    navigator.clipboard?.writeText(iframeCode).then(() => {
+      setCopiedIframe(true);
+      setTimeout(() => setCopiedIframe(false), 2500);
+    });
+  };
 
   // Modal Campaña de Correo State
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -461,6 +483,61 @@ export default function PublicidadManager() {
             <div className="summary-metric">
               <span>{publicidades.length}</span>
               <small>Total Banners</small>
+            </div>
+          </div>
+        </section>
+
+        {/* ENLACE PÚBLICO DE PUBLICIDADES */}
+        <section className="pub-link-card mt-3">
+          <div className="pub-link-card-content">
+            <div className="pub-link-card-icon">
+              <Globe size={22} className="text-primary" />
+            </div>
+            <div className="pub-link-card-info flex-grow-1">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <h3 className="h6 mb-0 fw-bold">Enlace Público de Publicidades</h3>
+                <span className="badge bg-success-subtle text-success border border-success-subtle">
+                  Disponible para la web
+                </span>
+              </div>
+              <p className="text-secondary small mb-2 mt-1">
+                Comparte o enlaza este banner público desde <strong>www.distribuidoratridente.cl</strong> o redes sociales para exhibir las promociones vigentes con la estética de tu sitio web:
+              </p>
+              <div className="pub-link-input-group">
+                <input
+                  type="text"
+                  readOnly
+                  className="form-control form-control-sm font-monospace text-primary fw-medium"
+                  style={{ minWidth: "300px" }}
+                  value="https://pedidos.distribuidoratridente.cl/Publicidades"
+                />
+                <button
+                  type="button"
+                  className={`btn btn-sm d-flex align-items-center gap-1 ${copiedLink ? "btn-success" : "btn-outline-primary"}`}
+                  onClick={handleCopyPublicUrl}
+                >
+                  <Copy size={13} />
+                  <span>{copiedLink ? "¡Copiado!" : "Copiar Enlace"}</span>
+                </button>
+                <a
+                  href="/Publicidades"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                >
+                  <ExternalLink size={13} />
+                  <span>Ver Página</span>
+                </a>
+                <button
+                  type="button"
+                  className={`btn btn-sm d-flex align-items-center gap-1 ${copiedIframe ? "btn-success" : "btn-outline-dark"}`}
+                  onClick={handleCopyIframe}
+                  title="Copiar etiqueta iframe para incrustar directamente dentro de una página HTML"
+                >
+                  <Code size={13} />
+                  <span>{copiedIframe ? "¡Iframe Copiado!" : "Copiar Iframe"}</span>
+                </button>
+              </div>
             </div>
           </div>
         </section>

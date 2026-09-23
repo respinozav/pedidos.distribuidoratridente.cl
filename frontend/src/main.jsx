@@ -14,6 +14,7 @@ import PublicidadManager from "./pages/admin/PublicidadManager";
 import AdminAccount from "./pages/admin/AdminAccount";
 import PromoBannerCarousel from "./components/PromoBannerCarousel";
 import StockAlertBell from "./components/admin/StockAlertBell";
+import PublicPublicidades from "./pages/public/PublicPublicidades";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
@@ -2853,9 +2854,16 @@ function App() {
     onLogout: handleInactivityLogout,
   });
 
-  const isPublicCatalogRoute = window.location.pathname.replace(/\/$/, "").toLowerCase() === "/public/catalogo";
+  const cleanPath = window.location.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  const isPublicCatalogRoute = cleanPath === "/public/catalogo";
+  const isPublicPublicidadesRoute =
+    cleanPath === "/publicidades" ||
+    cleanPath === "/publicidad" ||
+    cleanPath === "/public/publicidades" ||
+    cleanPath === "/public/publicidad";
 
   if (isPublicCatalogRoute) return <PublicCatalog />;
+  if (isPublicPublicidadesRoute) return <PublicPublicidades />;
   if (customer) return <Shop customer={customer} onProfileUpdated={setCustomer} onLogout={() => { clearSessionStorage(); setCustomerToken(null); setCustomer(null); }} />;
   if (view === "admin-dashboard") return <AdminDashboard onLogout={() => { clearSessionStorage(); setAdminToken(null); setView("customer-access"); }} />;
   if (view === "admin-access") return <AdminAccess onLogin={() => setView("admin-dashboard")} onCustomerAccess={() => setView("customer-access")} />;

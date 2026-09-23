@@ -25,6 +25,7 @@ const money = new Intl.NumberFormat("es-CL", {
 export default function PromoBannerCarousel({
   banners = [],
   onAddToCart = null,
+  onBannerClick = null,
   previewBanner = null,
   isPreview = false,
 }) {
@@ -101,6 +102,10 @@ export default function PromoBannerCarousel({
 
   const handleBannerAction = () => {
     if (isPreview) return;
+    if (onBannerClick) {
+      onBannerClick(currentBanner);
+      return;
+    }
     if (currentBanner.producto || currentBanner.producto_id) {
       setQuantity(1);
       setSelectedBannerForModal(currentBanner);

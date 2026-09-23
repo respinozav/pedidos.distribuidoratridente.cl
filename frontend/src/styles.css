@@ -1366,6 +1366,40 @@ button, input { font: inherit; }
    ADMIN PUBLICIDAD MANAGER
    ========================================================================== */
 
+.admin-publicidad-manager .pub-link-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.15rem 1.35rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.admin-publicidad-manager .pub-link-card-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.15rem;
+}
+
+.admin-publicidad-manager .pub-link-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.admin-publicidad-manager .pub-link-input-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: 680px;
+}
+
 .admin-publicidad-manager .custom-admin-table th {
   background: #f8fafc;
   color: #475569;
