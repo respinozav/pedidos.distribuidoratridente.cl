@@ -34,6 +34,17 @@
   background: transparent !important;
   min-height: auto;
   padding: 0 !important;
+  margin: 0 !important;
+}
+
+.public-publicidades-page.is-embedded .pub-main-container {
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: 100% !important;
+}
+
+.public-publicidades-page.is-embedded .pub-banner-showcase {
+  margin: 0 !important;
 }
 
 /* ==================== HEADER / NAVBAR ==================== */

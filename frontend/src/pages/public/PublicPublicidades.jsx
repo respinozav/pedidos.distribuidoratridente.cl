@@ -1,16 +1,11 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
   MessageCircle,
-  ExternalLink,
   ShoppingBag,
   FileText,
   Sparkles,
   Package,
   X,
-  Phone,
-  Truck,
-  CheckCircle2,
-  ChevronRight,
   Store,
 } from "lucide-react";
 import { api } from "../../services/api";
@@ -204,136 +199,7 @@ export default function PublicPublicidades() {
             />
           )}
         </section>
-
-        {/* CUADRÍCULA DE TODAS LAS PROMOCIONES ACTIVAS (si hay más de 1) */}
-        {!loading && banners.length > 1 && (
-          <section className="pub-grid-section">
-            <div className="pub-section-header">
-              <div>
-                <span className="pub-section-tag">Oportunidades Destacadas</span>
-                <h2 className="pub-section-title">Todas las Promociones de la Semana</h2>
-              </div>
-              <span className="text-secondary small">
-                {banners.length} promociones activas
-              </span>
-            </div>
-
-            <div className="pub-cards-grid">
-              {banners.map((b) => {
-                const prod = b.producto;
-                const imgSrc = formatImageSrc(prod?.imagen_url);
-                return (
-                  <article key={b.id} className="pub-card">
-                    {b.etiqueta_roja && (
-                      <span className="pub-card-badge">{b.etiqueta_roja}</span>
-                    )}
-
-                    <div className="pub-card-image-wrap">
-                      {imgSrc ? (
-                        <img
-                          src={imgSrc}
-                          alt={prod?.nombre || b.titulo}
-                          className="pub-card-img"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="text-center p-3 text-secondary">
-                          <Package size={36} />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pub-card-content">
-                      {b.etiqueta_1 && (
-                        <span className="pub-card-tag">{b.etiqueta_1}</span>
-                      )}
-                      <h3 className="pub-card-title">{b.titulo}</h3>
-                      {b.subtitulo && (
-                        <p className="pub-card-subtitle">{b.subtitulo}</p>
-                      )}
-
-                      <div className="pub-card-actions">
-                        <button
-                          type="button"
-                          className="pub-card-btn-action"
-                          onClick={() => handleBannerAction(b)}
-                        >
-                          <MessageCircle size={15} />
-                          <span>{b.texto_boton || "Cotizar"}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="pub-card-btn-secondary"
-                          onClick={() => handleBannerAction(b)}
-                          title="Ver detalles"
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* BENEFICIOS / TRUST PILLS (solo si no está embebido) */}
-        {!isEmbedded && (
-          <section className="pub-trust-bar">
-            <div className="pub-trust-pill">
-              <span className="pub-trust-icon">🚚</span>
-              <span>Despacho semanal en La Serena, Coquimbo y Ovalle</span>
-            </div>
-            <div className="pub-trust-pill">
-              <span className="pub-trust-icon">📦</span>
-              <span>Stock asegurado de primeras marcas</span>
-            </div>
-            <div className="pub-trust-pill">
-              <span className="pub-trust-icon">💼</span>
-              <span>Precios y márgenes diseñados para tu comercio</span>
-            </div>
-          </section>
-        )}
       </main>
-
-      {/* FOOTER (solo si no está embebido) */}
-      {!isEmbedded && (
-        <footer className="pub-footer">
-          <div className="pub-footer-content">
-            <p className="mb-0">
-              © {new Date().getFullYear()} Distribuidora Tridente. Todos los derechos reservados.
-            </p>
-            <div className="pub-footer-links">
-              <a href={MAIN_SITE_URL} target="_blank" rel="noopener noreferrer">
-                Sitio Principal
-              </a>
-              <a href="/public/catalogo" target="_blank" rel="noopener noreferrer">
-                Catálogo Digital
-              </a>
-              <a href="/" target="_blank" rel="noopener noreferrer">
-                Portal de Pedidos
-              </a>
-            </div>
-          </div>
-        </footer>
-      )}
-
-      {/* BOTÓN FLOTANTE WHATSAPP (solo si no está embebido) */}
-      {!isEmbedded && (
-        <a
-          href={getWhatsAppLink(null)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="pub-floating-whatsapp"
-          title="Contáctanos vía WhatsApp"
-        >
-          <div className="pub-floating-icon-wrap">
-            <MessageCircle size={18} />
-          </div>
-          <span>¡Escríbenos por WhatsApp!</span>
-        </a>
-      )}
 
       {/* MODAL DE ACCIÓN PÚBLICA PARA VISITANTES */}
       {selectedBanner && (
