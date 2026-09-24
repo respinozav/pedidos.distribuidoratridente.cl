@@ -277,13 +277,15 @@ def test_defontana_order_exclusively_exento():
 
         details = captured_payload["orderDetails"]
         assert len(details) == 2
-        # Item 1: exento
+        # Item 1: exento (Factura 34 no debe llevar 'Unidad' como comentario)
         assert details[0]["isExempt"] is True
         assert details[0]["tax"] == {"code": "", "value": 0.0}
+        assert details[0]["comment"] == ""
 
-        # Item 2: exento
+        # Item 2: exento (Factura 34 no debe llevar 'Unidad' como comentario)
         assert details[1]["isExempt"] is True
         assert details[1]["tax"] == {"code": "", "value": 0.0}
+        assert details[1]["comment"] == ""
 
         # Taxes: Factura 34 no lleva IVA en el header
         taxes = captured_payload["taxes"]
@@ -398,6 +400,7 @@ def test_defontana_order_mixed_afecto_and_exento():
         assert len(p_exento["orderDetails"]) == 1  # item2
         assert p_exento["orderDetails"][0]["isExempt"] is True
         assert p_exento["orderDetails"][0]["tax"] == {"code": "", "value": 0.0}
+        assert p_exento["orderDetails"][0]["comment"] == ""
         assert p_exento["taxes"] == []
 
     print("test_defontana_order_mixed_afecto_and_exento: OK")

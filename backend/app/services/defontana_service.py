@@ -355,6 +355,9 @@ class DefontanaService:
                 if tipo_empaque == "caja":
                     cant_str = f" x {cant_caja}" if cant_caja else ""
                     comment = f"Presentación: CAJA{cant_str} unid."
+                elif not is_afecto:
+                    # En Factura documento 34 (Exenta), no se debe colocar "Unidad" como comentario en Defontana
+                    comment = ""
                 else:
                     comment = "Unidad"
 
