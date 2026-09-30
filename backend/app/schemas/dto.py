@@ -21,6 +21,7 @@ class CategoryInput(BaseModel):
     orden: int | None = Field(default=None)
     usa_porcentaje_cliente: bool = True
     porcentaje: Decimal = Field(default=0, ge=0, le=100, max_digits=5, decimal_places=2)
+    comision_porcentaje: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, max_digits=5, decimal_places=2)
     activo: bool = True
     en_catalogo_publico: bool = True
 

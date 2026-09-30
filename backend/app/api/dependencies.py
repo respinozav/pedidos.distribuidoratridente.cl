@@ -48,6 +48,15 @@ def require_super_admin(user: AdminUser) -> Usuario:
 SuperAdminUser = Annotated[Usuario, Depends(require_super_admin)]
 
 
+def require_not_vendedor(user: AdminUser) -> Usuario:
+    if user.rol and user.rol.nombre.strip().upper() == "VENDEDOR":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso denegado para el rol Vendedor")
+    return user
+
+
+NotVendedorUser = Annotated[Usuario, Depends(require_not_vendedor)]
+
+
 def get_current_customer(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
     database: DatabaseSession,

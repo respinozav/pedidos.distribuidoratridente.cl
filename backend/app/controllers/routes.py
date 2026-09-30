@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession, SuperAdminUser
+from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession, NotVendedorUser, SuperAdminUser
 from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
 from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Publicidad, Rol, SesionLog, Usuario
 from app.repositories.base import Repository
@@ -415,7 +415,7 @@ def list_categories(database: DatabaseSession, active_only: bool = True) -> list
 
 
 @router.post("/categorias", response_model=CategoryOutput, status_code=status.HTTP_201_CREATED, tags=["Categorias"])
-def create_category(payload: CategoryInput, database: DatabaseSession, _: AdminUser) -> Categoria:
+def create_category(payload: CategoryInput, database: DatabaseSession, _: NotVendedorUser) -> Categoria:
     data = payload.model_dump()
     if not data.get("orden") or data["orden"] <= 0:
         max_order = database.scalar(
@@ -429,7 +429,7 @@ def create_category(payload: CategoryInput, database: DatabaseSession, _: AdminU
 
 
 @router.put("/categorias/{category_id}", response_model=CategoryOutput, tags=["Categorias"])
-def update_category(category_id: UUID, payload: CategoryInput, database: DatabaseSession, _: AdminUser) -> Categoria:
+def update_category(category_id: UUID, payload: CategoryInput, database: DatabaseSession, _: NotVendedorUser) -> Categoria:
     entity = Repository(Categoria, database).get(category_id)
     if not entity or entity.eliminado_at:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria no encontrada")
@@ -458,7 +458,7 @@ def update_category(category_id: UUID, payload: CategoryInput, database: Databas
 
 
 @router.delete("/categorias/{category_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Categorias"])
-def delete_category(category_id: UUID, database: DatabaseSession, _: AdminUser) -> None:
+def delete_category(category_id: UUID, database: DatabaseSession, _: NotVendedorUser) -> None:
     entity = Repository(Categoria, database).get(category_id)
     if not entity:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria no encontrada")
@@ -772,7 +772,7 @@ def order_pdf(order_id: UUID, database: DatabaseSession, _: AdminUser) -> Respon
 
 
 @router.get("/creditos", response_model=list[CreditOutput], tags=["Créditos"])
-def list_credits(database: DatabaseSession, _: SuperAdminUser, pagado: bool = False) -> list[Credito]:
+def list_credits(database: DatabaseSession, _: AdminUser, pagado: bool = False) -> list[Credito]:
     statement = (
         select(Credito)
         .options(selectinload(Credito.cliente), selectinload(Credito.pedido))
@@ -783,7 +783,7 @@ def list_credits(database: DatabaseSession, _: SuperAdminUser, pagado: bool = Fa
 
 
 @router.patch("/creditos/{credit_id}/pago", response_model=CreditOutput, tags=["Créditos"])
-def pay_credit(credit_id: UUID, payload: CreditPaymentInput, database: DatabaseSession, _: SuperAdminUser) -> Credito:
+def pay_credit(credit_id: UUID, payload: CreditPaymentInput, database: DatabaseSession, _: AdminUser) -> Credito:
     credit = database.scalar(
         select(Credito)
         .options(selectinload(Credito.cliente), selectinload(Credito.pedido))

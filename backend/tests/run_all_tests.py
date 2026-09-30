@@ -6,6 +6,7 @@ import tests.test_sesion_logs as ts
 import tests.test_defontana as td
 import tests.test_admin_profile as tap
 import tests.test_colaborador_role as tcol
+import tests.test_vendedor_role as tvend
 import tests.test_producto_notificar_stock as tpns
 import tests.test_negative_stock_order as tnso
 import tests.test_publicidad_email as tpe
@@ -72,6 +73,7 @@ def main():
     td.test_defontana_sync_order_creates_client_when_not_exists()
     tap.test_admin_profile_workflow()
     tcol.test_colaborador_role_permissions()
+    tvend.test_vendedor_role_and_category_commission()
     tpns.test_product_input_validation()
     tpns.test_product_crud_stock_notification()
     tpns.test_stock_alert_query()
@@ -79,7 +81,7 @@ def main():
     tpe.test_publicidad_email_dto()
     tpe.test_publicidad_html_builder()
     tpe.test_send_publicidad_campaign_isolated_bcc()
-    print(">>> ALL 26 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    print(">>> ALL 27 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

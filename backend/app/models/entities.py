@@ -59,6 +59,7 @@ class Categoria(AuditMixin, Base):
     orden: Mapped[int] = mapped_column(Integer, default=0)
     usa_porcentaje_cliente: Mapped[bool] = mapped_column(Boolean, default=True)
     porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0)
+    comision_porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0.00"), server_default="0.00")
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     en_catalogo_publico: Mapped[bool] = mapped_column(Boolean, default=True)
     eliminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
