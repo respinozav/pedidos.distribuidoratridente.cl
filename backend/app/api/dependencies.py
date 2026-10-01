@@ -57,6 +57,15 @@ def require_not_vendedor(user: AdminUser) -> Usuario:
 NotVendedorUser = Annotated[Usuario, Depends(require_not_vendedor)]
 
 
+def require_vendedor(user: AdminUser) -> Usuario:
+    if not user.rol or user.rol.nombre.strip().upper() != "VENDEDOR":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso exclusivo para el rol Vendedor")
+    return user
+
+
+VendedorUser = Annotated[Usuario, Depends(require_vendedor)]
+
+
 def get_current_customer(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
     database: DatabaseSession,

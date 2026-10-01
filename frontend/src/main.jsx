@@ -82,6 +82,8 @@ function Access({ onCustomerLogin, onAdminLogin }) {
         const { data } = await api.post("/login", { correo: email, password });
         setAdminToken(data.access_token);
         saveSessionStorage(data.access_token, "admin");
+        delete window.__vendedorDefaultSection;
+        delete window.__openVendedorGenerarVentaModal;
         onAdminLogin();
       }
     } catch {
@@ -206,6 +208,8 @@ function AdminAccess({ onLogin, onCustomerAccess }) {
       const { data } = await api.post("/login", { correo: email, password });
       setAdminToken(data.access_token);
       saveSessionStorage(data.access_token, "admin");
+      delete window.__vendedorDefaultSection;
+      delete window.__openVendedorGenerarVentaModal;
       onLogin();
     } catch {
       setError("Correo o contraseña incorrectos.");
@@ -1506,15 +1510,26 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   const [editComisionPorcentaje, setEditComisionPorcentaje] = useState("0");
   const [editEnCatalogoPublico, setEditEnCatalogoPublico] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [section, setSection] = useState(initialSection || "summary");
+  const [section, setSection] = useState(
+    initialSection === "vendedor_ventas_realizadas" ? "summary" : (initialSection || "summary")
+  );
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [adminProfile, setAdminProfile] = useState(null);
 
+  const isColaborador = adminProfile?.rol?.nombre?.trim().toUpperCase() === "COLABORADOR";
+  const isVendedor = adminProfile?.rol?.nombre?.trim().toUpperCase() === "VENDEDOR";
+  const allowedColaboradorKeys = ["categories", "products", "orders", "profile"];
+  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "profile"];
+
   useEffect(() => {
     if (initialSection) {
-      setSection(initialSection);
+      if (initialSection === "vendedor_ventas_realizadas" && !isVendedor) {
+        setSection("summary");
+      } else {
+        setSection(initialSection);
+      }
     }
-  }, [initialSection]);
+  }, [initialSection, isVendedor]);
 
   // Estados para Mis Ventas (Vendedor)
   const [misVentasOpen, setMisVentasOpen] = useState(true);
@@ -1524,17 +1539,14 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   const [clientFilter, setClientFilter] = useState("");
   const [startingSale, setStartingSale] = useState(false);
 
-  const isColaborador = adminProfile?.rol?.nombre?.trim().toUpperCase() === "COLABORADOR";
-  const isVendedor = adminProfile?.rol?.nombre?.trim().toUpperCase() === "VENDEDOR";
-  const allowedColaboradorKeys = ["categories", "products", "orders", "profile"];
-  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "profile"];
-  const activeSection = isVendedor && !allowedVendedorKeys.includes(section)
-    ? "vendedor_ventas_realizadas"
-    : isColaborador && !allowedColaboradorKeys.includes(section)
-    ? "categories"
-    : section;
+  const activeSection = isVendedor
+    ? (allowedVendedorKeys.includes(section) ? section : "vendedor_ventas_realizadas")
+    : isColaborador
+    ? (allowedColaboradorKeys.includes(section) ? section : "categories")
+    : (section === "vendedor_ventas_realizadas" ? "summary" : section);
 
   async function openGenerarVentaModal() {
+    if (!isVendedor) return;
     setModalGenerarVentaOpen(true);
     setSelectedClientId("");
     setClientFilter("");
@@ -1608,17 +1620,13 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
             openGenerarVentaModal();
           }
         } else if (role === "COLABORADOR") {
+          delete window.__vendedorDefaultSection;
+          delete window.__openVendedorGenerarVentaModal;
           setSection((current) => (allowedColaboradorKeys.includes(current) ? current : "categories"));
         } else {
-          if (window.__vendedorDefaultSection) {
-            const defaultSec = window.__vendedorDefaultSection;
-            delete window.__vendedorDefaultSection;
-            setSection(defaultSec);
-          }
-          if (window.__openVendedorGenerarVentaModal) {
-            delete window.__openVendedorGenerarVentaModal;
-            openGenerarVentaModal();
-          }
+          delete window.__vendedorDefaultSection;
+          delete window.__openVendedorGenerarVentaModal;
+          setSection((current) => (current === "vendedor_ventas_realizadas" ? "summary" : current));
         }
       })
       .catch(() => {});
@@ -1696,6 +1704,8 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
 
   function logout() {
     setAdminToken(null);
+    delete window.__vendedorDefaultSection;
+    delete window.__openVendedorGenerarVentaModal;
     onLogout();
   }
 
@@ -1903,7 +1913,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
         <Menu size={21} />
       </button>
 
-      {activeSection === "vendedor_ventas_realizadas" ? (
+      {isVendedor && activeSection === "vendedor_ventas_realizadas" ? (
         <section className="admin-workspace">
           <VendedorVentasRealizadas onOpenGenerarVenta={openGenerarVentaModal} isVendedor={isVendedor} />
         </section>
@@ -2261,7 +2271,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
       )}
 
       {/* Modal ¿A qué cliente se generará la venta? */}
-      {modalGenerarVentaOpen && (
+      {isVendedor && modalGenerarVentaOpen && (
         <div className="modal-backdrop-custom" role="presentation">
           <form
             className="category-modal"
@@ -3695,13 +3705,38 @@ function App() {
     return (
       <AdminDashboard
         initialSection={adminInitialSection}
-        onLogout={() => { clearSessionStorage(); setAdminToken(null); setView("customer-access"); }}
+        onLogout={() => {
+          clearSessionStorage();
+          setAdminToken(null);
+          setAdminInitialSection(null);
+          delete window.__vendedorDefaultSection;
+          delete window.__openVendedorGenerarVentaModal;
+          setView("customer-access");
+        }}
         onStartVendorSale={handleStartVendorSale}
       />
     );
   }
-  if (view === "admin-access") return <AdminAccess onLogin={() => setView("admin-dashboard")} onCustomerAccess={() => setView("customer-access")} />;
-  return <Access onCustomerLogin={setCustomer} onAdminLogin={() => setView("admin-dashboard")} />;
+  if (view === "admin-access") {
+    return (
+      <AdminAccess
+        onLogin={() => {
+          setAdminInitialSection(null);
+          setView("admin-dashboard");
+        }}
+        onCustomerAccess={() => setView("customer-access")}
+      />
+    );
+  }
+  return (
+    <Access
+      onCustomerLogin={setCustomer}
+      onAdminLogin={() => {
+        setAdminInitialSection(null);
+        setView("admin-dashboard");
+      }}
+    />
+  );
 }
 
 class ErrorBoundary extends Component {

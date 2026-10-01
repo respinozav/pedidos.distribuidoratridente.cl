@@ -25,7 +25,7 @@ function formatDateTime(dateValue, options = {}) {
   }
 }
 
-export default function VendedorVentasRealizadas({ onOpenGenerarVenta }) {
+export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedor = true }) {
   const [data, setData] = useState({ total_ventas: 0, total_comisiones: 0, cantidad_pedidos: 0, items: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -35,6 +35,10 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta }) {
   const [selectedVenta, setSelectedVenta] = useState(null);
 
   async function loadVentas() {
+    if (!isVendedor) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -51,8 +55,12 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta }) {
   }
 
   useEffect(() => {
-    loadVentas();
-  }, [desde, hasta]);
+    if (isVendedor) {
+      loadVentas();
+    } else {
+      setLoading(false);
+    }
+  }, [desde, hasta, isVendedor]);
 
   const filteredItems = useMemo(() => {
     if (!search.trim()) return data.items;
@@ -72,6 +80,14 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta }) {
   const filteredTotalComisiones = useMemo(() => {
     return filteredItems.reduce((acc, curr) => acc + Number(curr.comision_total || 0), 0);
   }, [filteredItems]);
+
+  if (!isVendedor) {
+    return (
+      <div className="alert alert-warning m-4">
+        Esta sección es exclusiva para usuarios con rol Vendedor.
+      </div>
+    );
+  }
 
   return (
     <>

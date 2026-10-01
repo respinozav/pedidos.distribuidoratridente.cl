@@ -7,7 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession, NotVendedorUser, SuperAdminUser
+from app.api.dependencies import (
+    AdminUser,
+    AuthSubject,
+    CustomerUser,
+    DatabaseSession,
+    NotVendedorUser,
+    SuperAdminUser,
+    VendedorUser,
+)
 from app.core.security import (
     create_access_token,
     create_customer_access_token,
@@ -1299,7 +1307,7 @@ def session_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> SesionLo
 # RUTAS DE VENDEDOR (MIS VENTAS / GENERAR VENTA / VENTAS REALIZADAS)
 # =========================================================================
 @router.get("/admin/vendedor/clientes", response_model=list[CustomerSelectItemOutput], tags=["Vendedor"])
-def list_vendedor_clients(database: DatabaseSession, _: AdminUser) -> list[CustomerSelectItemOutput]:
+def list_vendedor_clients(database: DatabaseSession, _: VendedorUser) -> list[CustomerSelectItemOutput]:
     """Lista todos los clientes activos para selección en la generación de venta por parte del vendedor."""
     clients = list(
         database.scalars(
@@ -1325,7 +1333,7 @@ def list_vendedor_clients(database: DatabaseSession, _: AdminUser) -> list[Custo
 def iniciar_venta_vendedor(
     payload: IniciarVentaInput,
     database: DatabaseSession,
-    current_user: AdminUser,
+    current_user: VendedorUser,
 ) -> IniciarVentaOutput:
     """Inicia sesión temporal como cliente para realizar venta a nombre de él, asociando al vendedor actual."""
     client = database.get(Cliente, payload.cliente_id)
@@ -1351,14 +1359,11 @@ def iniciar_venta_vendedor(
 @router.get("/admin/vendedor/ventas", response_model=VentasVendedorResumenOutput, tags=["Vendedor"])
 def list_vendedor_ventas(
     database: DatabaseSession,
-    current_user: AdminUser,
+    current_user: VendedorUser,
     desde: str | None = None,
     hasta: str | None = None,
-    vendedor_id: UUID | None = None,
 ) -> VentasVendedorResumenOutput:
-    """Lista las ventas realizadas por el vendedor actual (o todas si es administrador), con el detalle de comisiones."""
-    is_vendedor = bool(current_user.rol and current_user.rol.nombre.strip().upper() == "VENDEDOR")
-
+    """Lista las ventas realizadas por el vendedor actual (exclusivo para rol Vendedor), con el detalle de comisiones."""
     statement = (
         select(VentaVendedor)
         .options(
@@ -1367,12 +1372,8 @@ def list_vendedor_ventas(
             selectinload(VentaVendedor.detalles),
             selectinload(VentaVendedor.pedido),
         )
+        .where(VentaVendedor.vendedor_id == current_user.id)
     )
-
-    if is_vendedor:
-        statement = statement.where(VentaVendedor.vendedor_id == current_user.id)
-    elif vendedor_id:
-        statement = statement.where(VentaVendedor.vendedor_id == vendedor_id)
 
     CHILE_TZ = ZoneInfo("America/Santiago")
     if desde:
