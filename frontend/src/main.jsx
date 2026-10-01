@@ -1532,7 +1532,6 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   }, [initialSection, isVendedor]);
 
   // Estados para Mis Ventas (Vendedor)
-  const [misVentasOpen, setMisVentasOpen] = useState(true);
   const [modalGenerarVentaOpen, setModalGenerarVentaOpen] = useState(false);
   const [vendedorClients, setVendedorClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -1718,8 +1717,15 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
     [Megaphone, "Publicidad", "publicidad", true],
   ];
 
+  const vendedorNavigation = [
+    [ShoppingBag, "Mis Ventas", "vendedor_ventas_realizadas", true],
+    [Package, "Productos", "products", true],
+    [ClipboardList, "Pedidos", "orders", true],
+    [DollarSign, "Créditos", "credits", true],
+  ];
+
   const navigation = isVendedor
-    ? allNavigation.filter(([, , key]) => allowedVendedorKeys.includes(key))
+    ? vendedorNavigation
     : isColaborador
     ? allNavigation.filter(([, , key]) => allowedColaboradorKeys.includes(key))
     : allNavigation;
@@ -1736,45 +1742,6 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
         </div>
         <p className="sidebar-label">OPERACION</p>
         <nav className="sidebar-nav">
-          {/* Submenú Mis Ventas (Generar Venta / Ventas Realizadas) SOLO para Vendedor */}
-          {isVendedor && (
-            <div className="sidebar-configuration">
-              <button
-                type="button"
-                className={misVentasOpen || activeSection === "vendedor_ventas_realizadas" ? "active" : ""}
-                onClick={() => setMisVentasOpen((current) => !current)}
-              >
-                <ShoppingBag size={19} />
-                <span>Mis Ventas</span>
-              </button>
-              {misVentasOpen && (
-                <div className="sidebar-submenu">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      openGenerarVentaModal();
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Plus size={17} />
-                    <span>Generar Venta</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={activeSection === "vendedor_ventas_realizadas" ? "active" : ""}
-                    onClick={() => {
-                      setSection("vendedor_ventas_realizadas");
-                      setConfigurationOpen(false);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <ClipboardList size={17} />
-                    <span>Ventas Realizadas</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           {navigation.map(([Icon, label, key, enabled]) => (
             <button

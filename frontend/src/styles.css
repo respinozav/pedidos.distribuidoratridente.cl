@@ -2188,29 +2188,15 @@ button, input { font: inherit; }
    MODO VENDEDOR: TABLA DE VENTAS REALIZADAS Y DETALLE RESPONSIVE
    ========================================================================= */
 .vendor-sales-filters {
-  align-items: end;
-  display: grid;
-  gap: 0.65rem;
-  grid-template-columns: minmax(180px, 2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(95px, 0.7fr);
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   margin: 1rem 0 1.25rem;
 }
 
-@media (max-width: 900px) {
-  .vendor-sales-filters {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .vendor-sales-filters .filter-cliente {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 575px) {
-  .vendor-sales-filters {
-    grid-template-columns: 1fr;
-  }
-  .vendor-sales-filters .filter-cliente {
-    grid-column: auto;
-  }
+.vendor-sales-filters .filter-cliente {
+  flex: 1 1 240px;
 }
 
 .vendor-sales-table {

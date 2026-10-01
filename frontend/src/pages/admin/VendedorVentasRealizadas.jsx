@@ -93,8 +93,8 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
     <>
       <header className="admin-topbar">
         <div className="topbar-title">
-          <p className="eyebrow mb-1">MIS VENTAS</p>
-          <h1>Ventas Realizadas</h1>
+          <p className="eyebrow mb-1">OPERACION</p>
+          <h1>Mis Ventas</h1>
         </div>
         <div className="topbar-actions">
           <span className="topbar-date d-none d-sm-inline">Registro de ventas y comisiones</span>
@@ -119,16 +119,34 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
       </header>
 
       <div className="admin-content">
-        {/* Banner de resumen nativo */}
-        <section className="admin-summary">
+        {/* Banner de resumen con filtro de fechas nativo como en el dashboard */}
+        <section className="dashboard-hero">
           <div>
             <p className="eyebrow">RESUMEN DE COMISIONES</p>
             <h2>Controla tus ventas y ganancias</h2>
             <p>Historial de pedidos generados para clientes y cálculo de comisión según la categoría de cada producto.</p>
           </div>
-          <div className="summary-metric">
-            <span>{filteredItems.length}</span>
-            <small>Ventas registradas</small>
+          <div className="dashboard-date-filters">
+            <label>
+              Desde
+              <input
+                className="form-control"
+                type="date"
+                value={desde}
+                max={hasta || undefined}
+                onChange={(e) => setDesde(e.target.value)}
+              />
+            </label>
+            <label>
+              Hasta
+              <input
+                className="form-control"
+                type="date"
+                value={hasta}
+                min={desde || undefined}
+                onChange={(e) => setHasta(e.target.value)}
+              />
+            </label>
           </div>
         </section>
 
@@ -156,11 +174,21 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
           <div className="panel-heading">
             <div>
               <h2>Listado de ventas</h2>
-              <p>Filtra por cliente, código de pedido o rango de fechas.</p>
+              <p>Filtra por cliente, RUT o código de pedido.</p>
             </div>
-            <span className="panel-count">
-              {filteredItems.length} {filteredItems.length === 1 ? "registro" : "registros"}
-            </span>
+            <div className="d-flex align-items-center gap-2">
+              <span className="panel-count">
+                {filteredItems.length} {filteredItems.length === 1 ? "registro" : "registros"}
+              </span>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm d-sm-none"
+                onClick={onOpenGenerarVenta}
+              >
+                <Plus size={15} />
+                <span>Generar Venta</span>
+              </button>
+            </div>
           </div>
 
           <div className="admin-order-filters vendor-sales-filters">
@@ -174,39 +202,23 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <label className="filter-desde">
-              Desde
-              <input
-                className="form-control"
-                type="date"
-                value={desde}
-                onChange={(e) => setDesde(e.target.value)}
-              />
-            </label>
-            <label className="filter-hasta">
-              Hasta
-              <input
-                className="form-control"
-                type="date"
-                value={hasta}
-                onChange={(e) => setHasta(e.target.value)}
-              />
-            </label>
-            <div className="d-flex align-items-end">
-              <button
-                type="button"
-                className="btn btn-outline-secondary w-100"
-                style={{ minHeight: "38px" }}
-                onClick={() => {
-                  setDesde("");
-                  setHasta("");
-                  setSearch("");
-                }}
-                title="Limpiar filtros"
-              >
-                Limpiar
-              </button>
-            </div>
+            {(search || desde || hasta) && (
+              <div className="d-flex align-items-end">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  style={{ minHeight: "38px", whiteSpace: "nowrap" }}
+                  onClick={() => {
+                    setDesde("");
+                    setHasta("");
+                    setSearch("");
+                  }}
+                  title="Limpiar filtros"
+                >
+                  Limpiar filtros
+                </button>
+              </div>
+            )}
           </div>
 
           {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
@@ -214,11 +226,21 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
           {loading ? (
             <p className="mt-4 text-secondary">Cargando ventas realizadas...</p>
           ) : filteredItems.length === 0 ? (
-            <p className="history-filter-empty">
-              {search || desde || hasta
-                ? "No se encontraron ventas con los filtros seleccionados."
-                : "Aún no registras ventas. Presiona 'Generar Venta' para comenzar."}
-            </p>
+            <div className="text-center py-5">
+              <p className="history-filter-empty mb-3">
+                {search || desde || hasta
+                  ? "No se encontraron ventas con los filtros seleccionados."
+                  : "Aún no registras ventas. Presiona 'Generar Venta' para comenzar."}
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={onOpenGenerarVenta}
+              >
+                <Plus size={18} className="me-1" />
+                <span>Generar Venta</span>
+              </button>
+            </div>
           ) : (
             <div className="vendor-sales-table mt-3">
               <div className="vendor-sales-head">
