@@ -1726,8 +1726,8 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
         </div>
         <p className="sidebar-label">OPERACION</p>
         <nav className="sidebar-nav">
-          {/* Submenú Mis Ventas (Generar Venta / Ventas Realizadas) para Vendedor y Admin */}
-          {(isVendedor || !isColaborador) && (
+          {/* Submenú Mis Ventas (Generar Venta / Ventas Realizadas) SOLO para Vendedor */}
+          {isVendedor && (
             <div className="sidebar-configuration">
               <button
                 type="button"
@@ -2263,19 +2263,17 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
       {/* Modal ¿A qué cliente se generará la venta? */}
       {modalGenerarVentaOpen && (
         <div className="modal-backdrop-custom" role="presentation">
-          <div
+          <form
             className="category-modal"
-            style={{ maxWidth: "560px", width: "95%" }}
+            onSubmit={handleStartVendorSale}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-generar-venta-title"
           >
-            <header className="d-flex justify-content-between align-items-center border-bottom p-3">
+            <header>
               <div>
-                <p className="eyebrow mb-1">MIS VENTAS</p>
-                <h2 className="fs-5 mb-0" id="modal-generar-venta-title">
-                  ¿A qué cliente se generará la venta?
-                </h2>
+                <p className="eyebrow">MIS VENTAS</p>
+                <h2 id="modal-generar-venta-title">¿A qué cliente se generará la venta?</h2>
               </div>
               <button
                 type="button"
@@ -2283,89 +2281,81 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
                 onClick={() => setModalGenerarVentaOpen(false)}
                 aria-label="Cerrar modal"
               >
-                <X size={20} />
+                <X size={19} />
               </button>
             </header>
 
-            <form onSubmit={handleStartVendorSale}>
-              <div className="modal-body-custom p-4">
-                <div className="alert alert-info py-2 px-3 mb-3 small d-flex align-items-center gap-2">
-                  <ShoppingBag size={18} className="flex-shrink-0" />
-                  <span>
-                    Comprarás como si fueras este cliente registrado, aplicando sus descuentos y condiciones, y la venta quedará registrada a tu nombre de vendedor.
-                  </span>
-                </div>
+            <div className="modal-body-custom">
+              <p className="form-text mt-0 mb-3 text-secondary">
+                Comprarás como si fueras este cliente registrado, aplicando sus descuentos y condiciones comerciales. La venta y su comisión quedarán registradas a tu cuenta de vendedor.
+              </p>
 
-                <div className="mb-3">
-                  <label htmlFor="client-search-filter" className="form-label small fw-bold text-secondary">
-                    Filtrar cliente por nombre o RUT
-                  </label>
-                  <div className="search-field w-100">
-                    <Search size={16} />
-                    <input
-                      id="client-search-filter"
-                      type="search"
-                      className="form-control"
-                      placeholder="Escribe para buscar..."
-                      value={clientFilter}
-                      onChange={(e) => setClientFilter(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <label htmlFor="select-cliente-venta" className="form-label fw-bold">
-                    Razón Social y (RUT):
-                  </label>
-                  <select
-                    id="select-cliente-venta"
-                    className="form-select form-select-lg"
-                    value={selectedClientId}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Selecciona un cliente --</option>
-                    {filteredVendedorClients.map((cli) => (
-                      <option key={cli.id} value={cli.id}>
-                        {cli.nombre || "Sin razón social"} ({cli.rut || "Sin RUT"})
-                      </option>
-                    ))}
-                  </select>
-                  <small className="form-text text-muted">
-                    Mostrando {filteredVendedorClients.length} de {vendedorClients.length} clientes activos.
-                  </small>
+              <div className="mb-3">
+                <label htmlFor="client-search-filter" className="form-label">
+                  Filtrar por nombre o RUT
+                </label>
+                <div className="search-field w-100">
+                  <Search size={16} />
+                  <input
+                    id="client-search-filter"
+                    type="search"
+                    className="form-control"
+                    placeholder="Escribe para buscar..."
+                    value={clientFilter}
+                    onChange={(e) => setClientFilter(e.target.value)}
+                    autoFocus
+                  />
                 </div>
               </div>
 
-              <footer className="border-top p-3 d-flex justify-content-end gap-2">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setModalGenerarVentaOpen(false)}
+              <div className="mb-2">
+                <label htmlFor="select-cliente-venta" className="form-label">
+                  Razón Social y (RUT)
+                </label>
+                <select
+                  id="select-cliente-venta"
+                  className="form-select"
+                  value={selectedClientId}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  required
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary d-inline-flex align-items-center gap-1"
-                  disabled={!selectedClientId || startingSale}
-                >
-                  {startingSale ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-1" role="status" />
-                      Cargando tienda...
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingBag size={17} />
-                      Ingresar a Comprar
-                    </>
-                  )}
-                </button>
-              </footer>
-            </form>
-          </div>
+                  <option value="">-- Selecciona un cliente --</option>
+                  {filteredVendedorClients.map((cli) => (
+                    <option key={cli.id} value={cli.id}>
+                      {cli.nombre || "Sin razón social"} ({cli.rut || "Sin RUT"})
+                    </option>
+                  ))}
+                </select>
+                <small className="form-text text-muted mt-1 d-block">
+                  Mostrando {filteredVendedorClients.length} de {vendedorClients.length} clientes activos.
+                </small>
+              </div>
+            </div>
+
+            <footer>
+              <button
+                type="button"
+                className="btn btn-light"
+                onClick={() => setModalGenerarVentaOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={!selectedClientId || startingSale}
+              >
+                {startingSale ? (
+                  "Cargando tienda..."
+                ) : (
+                  <>
+                    <ShoppingBag size={17} />
+                    Ingresar a Comprar
+                  </>
+                )}
+              </button>
+            </footer>
+          </form>
         </div>
       )}
     </main>

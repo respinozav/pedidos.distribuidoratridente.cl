@@ -160,9 +160,9 @@ button, input { font: inherit; }
 .promo-table-head, .promo-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: 55px minmax(180px, 1.5fr) minmax(150px, 1.3fr) minmax(105px, 1fr) 90px minmax(115px, 125px) 115px; min-width: 850px; }
 .promo-row > div { min-width: 0; }
 .promo-subtitulo-cell { color: var(--ink); display: block; font-size: .8rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head, .promo-table-head, .admin-cart-head { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04rem; padding: .75rem 1rem; text-transform: uppercase; }
-.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row, .promo-row, .admin-cart-row { align-items: center; border-top: 1px solid var(--line); color: var(--ink); font-size: .82rem; padding: .75rem 1rem; transition: background-color .15s ease; }
-.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover, .promo-row:hover, .admin-cart-row:hover { background: #f8fafc; }
+.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head, .promo-table-head, .admin-cart-head, .vendor-sales-head { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04rem; padding: .75rem 1rem; text-transform: uppercase; }
+.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row, .promo-row, .admin-cart-row, .vendor-sales-row { align-items: center; border-top: 1px solid var(--line); color: var(--ink); font-size: .82rem; padding: .75rem 1rem; transition: background-color .15s ease; }
+.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover, .promo-row:hover, .admin-cart-row:hover, .vendor-sales-row:hover { background: #f8fafc; }
 .promo-table-head span:last-child { text-align: center; }
 .promo-row > .customer-actions { justify-self: center; }
 .category-percentage { color: var(--muted); font-size: .82rem; font-weight: 700; }
@@ -2183,6 +2183,114 @@ button, input { font: inherit; }
   border-radius: 6px;
   font-size: 0.85rem;
 }
+
+/* =========================================================================
+   MODO VENDEDOR: TABLA DE VENTAS REALIZADAS Y DETALLE RESPONSIVE
+   ========================================================================= */
+.vendor-sales-filters {
+  align-items: end;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(180px, 2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(95px, 0.7fr);
+  margin: 1rem 0 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .vendor-sales-filters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .vendor-sales-filters .filter-cliente {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 575px) {
+  .vendor-sales-filters {
+    grid-template-columns: 1fr;
+  }
+  .vendor-sales-filters .filter-cliente {
+    grid-column: auto;
+  }
+}
+
+.vendor-sales-table {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vendor-sales-head,
+.vendor-sales-row {
+  align-items: center;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(130px, 1fr) minmax(100px, 0.85fr) minmax(180px, 1.8fr) minmax(115px, 1fr) minmax(120px, 1.1fr) 95px;
+  min-width: 740px;
+}
+
+.vendor-sales-head span:last-child {
+  text-align: center;
+}
+
+.vendor-sales-row > .vendor-sales-actions {
+  justify-self: center;
+}
+
+.vendor-sales-badge-comision {
+  background: #dcfce7;
+  border-radius: 6px;
+  color: #15803d;
+  display: inline-block;
+  font-size: 0.84rem;
+  font-weight: 750;
+  padding: 0.25rem 0.55rem;
+}
+
+.vendor-order-detail-lines {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vendor-order-detail-lines > div {
+  align-items: center;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(140px, 1.5fr) minmax(90px, 1fr) 50px 85px 95px 75px 95px;
+  min-width: 630px;
+  padding: 0.75rem;
+}
+
+.vendor-order-detail-lines > div:first-child {
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04rem;
+  text-transform: uppercase;
+}
+
+.vendor-order-detail-lines > div + div {
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+
+.vendor-commission-highlight {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1.25rem;
+}
+
 
 
 

@@ -1,20 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
-  Calendar,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  DollarSign,
   Eye,
-  FileText,
-  Filter,
   Plus,
   RotateCcw,
-  Search,
   ShoppingBag,
-  TrendingUp,
-  User,
   X,
 } from "lucide-react";
 import { api } from "../../services/api";
@@ -36,7 +25,7 @@ function formatDateTime(dateValue, options = {}) {
   }
 }
 
-export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedor }) {
+export default function VendedorVentasRealizadas({ onOpenGenerarVenta }) {
   const [data, setData] = useState({ total_ventas: 0, total_comisiones: 0, cantidad_pedidos: 0, items: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -54,7 +43,7 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
       if (hasta) params.hasta = hasta;
       const res = await api.get("/admin/vendedor/ventas", { params });
       setData(res.data);
-    } catch (err) {
+    } catch {
       setError("No fue posible cargar las ventas realizadas. Intenta nuevamente.");
     } finally {
       setLoading(false);
@@ -85,135 +74,113 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
   }, [filteredItems]);
 
   return (
-    <div className="vendedor-ventas-view">
+    <>
       <header className="admin-topbar">
         <div className="topbar-title">
           <p className="eyebrow mb-1">MIS VENTAS</p>
           <h1>Ventas Realizadas</h1>
         </div>
         <div className="topbar-actions">
+          <span className="topbar-date d-none d-sm-inline">Registro de ventas y comisiones</span>
           <button
             type="button"
-            className="btn btn-outline-secondary me-2"
+            className="btn btn-outline-secondary"
             onClick={loadVentas}
             title="Recargar datos"
           >
-            <RotateCcw size={16} className="me-1" />
-            Actualizar
+            <RotateCcw size={16} />
+            <span className="d-none d-sm-inline ms-1">Actualizar</span>
           </button>
           <button
             type="button"
             className="btn btn-primary"
             onClick={onOpenGenerarVenta}
           >
-            <Plus size={18} className="me-1" />
-            Generar Venta
+            <Plus size={18} />
+            <span>Generar Venta</span>
           </button>
         </div>
       </header>
 
       <div className="admin-content">
-        {/* KPI Cards */}
-        <section className="row g-3 mb-4">
-          <div className="col-12 col-md-4">
-            <div className="card shadow-sm border-0 h-100 p-3" style={{ borderRadius: "12px", background: "linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)" }}>
-              <div className="d-flex align-items-center justify-content-between mb-2">
-                <span className="text-muted fw-bold small text-uppercase">Total Ventas</span>
-                <span className="badge bg-primary-subtle text-primary p-2" style={{ borderRadius: "8px" }}>
-                  <ShoppingBag size={20} />
-                </span>
-              </div>
-              <h2 className="fs-3 fw-bold text-dark mb-1">
-                {money.format(filteredTotalVentas)}
-              </h2>
-              <small className="text-muted">
-                {filteredItems.length} {filteredItems.length === 1 ? "pedido registrado" : "pedidos registrados"}
-              </small>
-            </div>
+        {/* Banner de resumen nativo */}
+        <section className="admin-summary">
+          <div>
+            <p className="eyebrow">RESUMEN DE COMISIONES</p>
+            <h2>Controla tus ventas y ganancias</h2>
+            <p>Historial de pedidos generados para clientes y cálculo de comisión según la categoría de cada producto.</p>
           </div>
-
-          <div className="col-12 col-md-4">
-            <div className="card shadow-sm border-0 h-100 p-3" style={{ borderRadius: "12px", background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)" }}>
-              <div className="d-flex align-items-center justify-content-between mb-2">
-                <span className="text-success fw-bold small text-uppercase">Comisiones Ganadas</span>
-                <span className="badge bg-success-subtle text-success p-2" style={{ borderRadius: "8px" }}>
-                  <TrendingUp size={20} />
-                </span>
-              </div>
-              <h2 className="fs-3 fw-bold text-success mb-1">
-                {money.format(filteredTotalComisiones)}
-              </h2>
-              <small className="text-muted">
-                Calculado según el % por categoría vendida
-              </small>
-            </div>
-          </div>
-
-          <div className="col-12 col-md-4">
-            <div className="card shadow-sm border-0 h-100 p-3" style={{ borderRadius: "12px", background: "linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)" }}>
-              <div className="d-flex align-items-center justify-content-between mb-2">
-                <span className="text-muted fw-bold small text-uppercase">Total de Pedidos</span>
-                <span className="badge bg-secondary-subtle text-secondary p-2" style={{ borderRadius: "8px" }}>
-                  <ClipboardList size={20} />
-                </span>
-              </div>
-              <h2 className="fs-3 fw-bold text-dark mb-1">
-                {filteredItems.length}
-              </h2>
-              <small className="text-muted">
-                Ventas asociadas al vendedor
-              </small>
-            </div>
+          <div className="summary-metric">
+            <span>{filteredItems.length}</span>
+            <small>Ventas registradas</small>
           </div>
         </section>
 
-        {/* Filters */}
-        <section className="content-panel mb-4 p-3" style={{ borderRadius: "12px" }}>
-          <div className="row g-2 align-items-end">
-            <div className="col-12 col-md-4">
-              <label className="form-label small fw-bold text-secondary mb-1">
-                Buscar cliente o pedido
-              </label>
-              <div className="search-field w-100">
-                <Search size={17} />
-                <input
-                  type="search"
-                  className="form-control"
-                  placeholder="Nombre, RUT o código..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
+        {/* Tarjetas métricas nativas del sistema (dashboard-metrics) */}
+        <section className="dashboard-metrics">
+          <article>
+            <span>VENTAS TOTALES</span>
+            <strong>{money.format(filteredTotalVentas)}</strong>
+            <small>{filteredItems.length} {filteredItems.length === 1 ? "pedido registrado" : "pedidos registrados"}</small>
+          </article>
+          <article>
+            <span>COMISIONES GANADAS</span>
+            <strong>{money.format(filteredTotalComisiones)}</strong>
+            <small>Calculado por % de categoría</small>
+          </article>
+          <article>
+            <span>TOTAL PEDIDOS</span>
+            <strong>{filteredItems.length}</strong>
+            <small>En el periodo seleccionado</small>
+          </article>
+        </section>
 
-            <div className="col-6 col-md-3">
-              <label className="form-label small fw-bold text-secondary mb-1">
-                Desde
-              </label>
+        {/* Panel de contenido y filtros nativos */}
+        <section className="content-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Listado de ventas</h2>
+              <p>Filtra por cliente, código de pedido o rango de fechas.</p>
+            </div>
+            <span className="panel-count">
+              {filteredItems.length} {filteredItems.length === 1 ? "registro" : "registros"}
+            </span>
+          </div>
+
+          <div className="admin-order-filters vendor-sales-filters">
+            <label className="filter-cliente">
+              Buscar
               <input
-                type="date"
                 className="form-control"
+                type="search"
+                placeholder="Nombre, RUT o código de pedido..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+            <label className="filter-desde">
+              Desde
+              <input
+                className="form-control"
+                type="date"
                 value={desde}
                 onChange={(e) => setDesde(e.target.value)}
               />
-            </div>
-
-            <div className="col-6 col-md-3">
-              <label className="form-label small fw-bold text-secondary mb-1">
-                Hasta
-              </label>
+            </label>
+            <label className="filter-hasta">
+              Hasta
               <input
-                type="date"
                 className="form-control"
+                type="date"
                 value={hasta}
                 onChange={(e) => setHasta(e.target.value)}
               />
-            </div>
-
-            <div className="col-12 col-md-2 d-flex gap-2">
+            </label>
+            <div className="d-flex align-items-end">
               <button
                 type="button"
                 className="btn btn-outline-secondary w-100"
+                style={{ minHeight: "38px" }}
                 onClick={() => {
                   setDesde("");
                   setHasta("");
@@ -225,126 +192,69 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
               </button>
             </div>
           </div>
-        </section>
 
-        {/* Error Alert */}
-        {error && <div className="alert alert-danger mb-4">{error}</div>}
-
-        {/* Table Panel */}
-        <section className="content-panel" style={{ borderRadius: "12px", overflow: "hidden" }}>
-          <div className="panel-heading d-flex justify-content-between align-items-center p-3 border-bottom">
-            <div>
-              <h2 className="fs-5 mb-0 fw-bold">Registro de Ventas y Comisiones</h2>
-              <small className="text-muted">Historial de pedidos generados para clientes</small>
-            </div>
-            <span className="badge bg-light text-dark border px-3 py-2">
-              {filteredItems.length} registros
-            </span>
-          </div>
+          {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
 
           {loading ? (
-            <div className="text-center p-5 text-secondary">
-              <div className="spinner-border spinner-border-sm me-2" role="status" />
-              Cargando historial de ventas...
-            </div>
+            <p className="mt-4 text-secondary">Cargando ventas realizadas...</p>
           ) : filteredItems.length === 0 ? (
-            <div className="text-center p-5 text-secondary">
-              <ShoppingBag size={48} className="text-muted mb-3 opacity-50" />
-              <p className="fs-6 mb-1 fw-bold text-dark">No hay ventas registradas</p>
-              <p className="small text-muted mb-3">
-                {search || desde || hasta
-                  ? "No se encontraron ventas que coincidan con los filtros aplicados."
-                  : "Aún no has generado ventas para clientes. Pincha en 'Generar Venta' para comenzar."}
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={onOpenGenerarVenta}
-              >
-                <Plus size={16} className="me-1" />
-                Generar mi primera venta
-              </button>
-            </div>
+            <p className="history-filter-empty">
+              {search || desde || hasta
+                ? "No se encontraron ventas con los filtros seleccionados."
+                : "Aún no registras ventas. Presiona 'Generar Venta' para comenzar."}
+            </p>
           ) : (
-            <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
-                <thead className="table-light">
-                  <tr className="small text-uppercase text-secondary">
-                    <th scope="col" style={{ paddingLeft: "20px" }}>Fecha</th>
-                    <th scope="col">Pedido</th>
-                    <th scope="col">Cliente / Razón Social</th>
-                    {!isVendedor && <th scope="col">Vendedor</th>}
-                    <th scope="col" className="text-end">Total Venta</th>
-                    <th scope="col" className="text-end">Comisión Ganada</th>
-                    <th scope="col" className="text-center" style={{ paddingRight: "20px" }}>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.map((venta) => {
-                    const orderCode = (venta.pedido_id || "").slice(0, 8).toUpperCase();
-                    return (
-                      <tr key={venta.id}>
-                        <td style={{ paddingLeft: "20px", whiteSpace: "nowrap" }}>
-                          <span className="fw-semibold text-dark">
-                            {formatDateTime(venta.created_at, { dateStyle: "short" })}
-                          </span>
-                          <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
-                            {formatDateTime(venta.created_at, { timeStyle: "short" })}
-                          </small>
-                        </td>
+            <div className="vendor-sales-table mt-3">
+              <div className="vendor-sales-head">
+                <span>Fecha</span>
+                <span>Pedido</span>
+                <span>Cliente / Razón Social</span>
+                <span style={{ textAlign: "right" }}>Total Venta</span>
+                <span style={{ textAlign: "right" }}>Comisión</span>
+                <span>Acción</span>
+              </div>
+              {filteredItems.map((venta) => {
+                const orderCode = (venta.pedido_id || "").slice(0, 8).toUpperCase();
+                return (
+                  <article className="vendor-sales-row" key={venta.id}>
+                    <div>
+                      <strong>{formatDateTime(venta.created_at, { dateStyle: "short" })}</strong>
+                      <small>{formatDateTime(venta.created_at, { timeStyle: "short" })}</small>
+                    </div>
 
-                        <td>
-                          <span className="badge bg-secondary-subtle text-secondary font-monospace fw-bold">
-                            #{orderCode}
-                          </span>
-                        </td>
+                    <div>
+                      <span className="category-order-badge">#{orderCode}</span>
+                    </div>
 
-                        <td>
-                          <div className="fw-bold text-dark">
-                            {venta.cliente?.nombre || "Sin razón social"}
-                          </div>
-                          <small className="text-muted">
-                            {venta.cliente?.rut ? `RUT: ${venta.cliente.rut}` : "Sin RUT"}
-                          </small>
-                        </td>
+                    <div>
+                      <strong>{venta.cliente?.nombre || "Sin razón social"}</strong>
+                      <small>{venta.cliente?.rut ? `RUT: ${venta.cliente.rut}` : "Sin RUT"}</small>
+                    </div>
 
-                        {!isVendedor && (
-                          <td>
-                            <span className="badge bg-light text-dark border">
-                              {venta.vendedor?.nombre || "Vendedor"}
-                            </span>
-                          </td>
-                        )}
+                    <div style={{ textAlign: "right" }}>
+                      <strong>{money.format(venta.total_venta)}</strong>
+                    </div>
 
-                        <td className="text-end fw-bold text-dark">
-                          {money.format(venta.total_venta)}
-                        </td>
+                    <div style={{ textAlign: "right" }}>
+                      <span className="vendor-sales-badge-comision">
+                        +{money.format(venta.comision_total)}
+                      </span>
+                    </div>
 
-                        <td className="text-end">
-                          <span
-                            className="badge bg-success-subtle text-success fs-6 fw-bold px-2 py-1"
-                            title="Comisión calculada según categoría"
-                          >
-                            +{money.format(venta.comision_total)}
-                          </span>
-                        </td>
-
-                        <td className="text-center" style={{ paddingRight: "20px" }}>
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
-                            onClick={() => setSelectedVenta(venta)}
-                            title="Ver desglose de productos y comisiones"
-                          >
-                            <Eye size={15} />
-                            <span>Ver Detalle</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    <div className="vendor-sales-actions">
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+                        onClick={() => setSelectedVenta(venta)}
+                        title="Ver detalle del pedido y comisiones"
+                      >
+                        <Eye size={15} />
+                        <span>Detalle</span>
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -353,16 +263,16 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
       {/* Modal Desglose de Detalle de Venta y Comisiones */}
       {selectedVenta && (
         <div className="modal-backdrop-custom" role="presentation">
-          <div
-            className="category-modal"
-            style={{ maxWidth: "750px", width: "95%" }}
+          <section
+            className="category-modal product-modal order-detail-modal"
             role="dialog"
             aria-modal="true"
+            aria-labelledby="vendor-detail-title"
           >
-            <header className="d-flex justify-content-between align-items-center border-bottom p-3">
+            <header>
               <div>
-                <p className="eyebrow mb-1">DETALLE DE VENTA Y COMISIÓN</p>
-                <h2 className="fs-5 mb-0">
+                <p className="eyebrow">VENTA</p>
+                <h2 id="vendor-detail-title">
                   Pedido #{(selectedVenta.pedido_id || "").slice(0, 8).toUpperCase()}
                 </h2>
               </div>
@@ -372,117 +282,78 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
                 onClick={() => setSelectedVenta(null)}
                 aria-label="Cerrar detalle"
               >
-                <X size={20} />
+                <X size={19} />
               </button>
             </header>
 
-            <div className="modal-body-custom p-4">
-              <div className="row g-3 mb-4 p-3 bg-light rounded-3">
-                <div className="col-12 col-sm-6">
-                  <small className="text-muted d-block">Cliente / Razón Social</small>
-                  <strong className="text-dark fs-6">
-                    {selectedVenta.cliente?.nombre || "Sin razón social"}
-                  </strong>
-                  <div className="small text-muted">{selectedVenta.cliente?.rut || "Sin RUT"}</div>
-                </div>
-
-                <div className="col-6 col-sm-3">
-                  <small className="text-muted d-block">Fecha de Venta</small>
-                  <strong className="text-dark">
-                    {formatDateTime(selectedVenta.created_at)}
-                  </strong>
-                </div>
-
-                <div className="col-6 col-sm-3 text-sm-end">
-                  <small className="text-muted d-block">Total Venta</small>
-                  <strong className="fs-6 text-dark">
-                    {money.format(selectedVenta.total_venta)}
-                  </strong>
-                </div>
+            <div className="modal-body-custom">
+              <div className="order-detail-meta">
+                <span><strong>Cliente:</strong> {selectedVenta.cliente?.nombre || selectedVenta.cliente?.rut || "Cliente"}</span>
+                <span><strong>RUT:</strong> {selectedVenta.cliente?.rut || "Sin RUT"}</span>
+                <span><strong>Fecha:</strong> {formatDateTime(selectedVenta.created_at)}</span>
               </div>
 
-              {/* Commission banner */}
-              <div className="alert alert-success d-flex align-items-center justify-content-between p-3 mb-4" style={{ borderRadius: "10px" }}>
-                <div className="d-flex align-items-center gap-2">
-                  <TrendingUp size={22} className="text-success" />
-                  <div>
-                    <strong>Total Comisión Ganada en este Pedido:</strong>
-                    <div className="small text-success">
-                      Calculada por porcentaje según la categoría de cada producto
-                    </div>
+              {/* Destacado de Comisión */}
+              <div className="vendor-commission-highlight">
+                <div>
+                  <strong style={{ color: "#166534" }}>Comisión Ganada en esta Venta</strong>
+                  <small className="d-block" style={{ color: "#15803d" }}>
+                    Calculada según el porcentaje de comisión de cada categoría
+                  </small>
+                </div>
+                <strong style={{ color: "#15803d", fontSize: "1.3rem" }}>
+                  +{money.format(selectedVenta.comision_total)}
+                </strong>
+              </div>
+
+              {/* Tabla de desglose de productos */}
+              <div className="vendor-order-detail-lines">
+                <div>
+                  <span>Producto</span>
+                  <span>Categoría</span>
+                  <span>Cant.</span>
+                  <span style={{ textAlign: "right" }}>Precio</span>
+                  <span style={{ textAlign: "right" }}>Subtotal</span>
+                  <span style={{ textAlign: "center" }}>% Com.</span>
+                  <span style={{ textAlign: "right" }}>Comisión</span>
+                </div>
+                {(selectedVenta.detalles || []).map((det) => (
+                  <div key={det.id || Math.random()}>
+                    <strong>{det.nombre_producto}</strong>
+                    <span className="text-secondary">{det.nombre_categoria || "General"}</span>
+                    <span>{det.cantidad}</span>
+                    <span style={{ textAlign: "right" }}>{money.format(det.precio_unitario)}</span>
+                    <span style={{ textAlign: "right" }}><strong>{money.format(det.subtotal)}</strong></span>
+                    <span style={{ textAlign: "center" }}>
+                      <span className="category-percentage">{Number(det.comision_porcentaje || 0)}%</span>
+                    </span>
+                    <span style={{ textAlign: "right", color: "#15803d", fontWeight: "700" }}>
+                      +{money.format(det.comision_monto)}
+                    </span>
                   </div>
-                </div>
-                <div className="fs-4 fw-bold text-success">
-                  {money.format(selectedVenta.comision_total)}
-                </div>
+                ))}
               </div>
 
-              {/* Product breakdown table */}
-              <h3 className="fs-6 fw-bold mb-2">Desglose por Producto Vendido</h3>
-              <div className="table-responsive border rounded-3">
-                <table className="table table-sm align-middle mb-0">
-                  <thead className="table-light">
-                    <tr className="small text-secondary">
-                      <th scope="col">Producto</th>
-                      <th scope="col">Categoría</th>
-                      <th scope="col" className="text-center">Cant.</th>
-                      <th scope="col" className="text-end">Precio Un.</th>
-                      <th scope="col" className="text-end">Subtotal</th>
-                      <th scope="col" className="text-center">% Comis.</th>
-                      <th scope="col" className="text-end">Comisión</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(selectedVenta.detalles || []).map((det) => (
-                      <tr key={det.id || Math.random()}>
-                        <td className="fw-semibold text-dark">
-                          {det.nombre_producto}
-                        </td>
-                        <td>
-                          <span className="badge bg-light text-secondary border">
-                            {det.nombre_categoria || "General"}
-                          </span>
-                        </td>
-                        <td className="text-center fw-bold">{det.cantidad}</td>
-                        <td className="text-end">{money.format(det.precio_unitario)}</td>
-                        <td className="text-end fw-bold">{money.format(det.subtotal)}</td>
-                        <td className="text-center">
-                          <span className="badge bg-info-subtle text-info fw-bold">
-                            {Number(det.comision_porcentaje || 0)}%
-                          </span>
-                        </td>
-                        <td className="text-end text-success fw-bold">
-                          +{money.format(det.comision_monto)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="table-light">
-                    <tr>
-                      <th colSpan={4} className="text-end">Total:</th>
-                      <th className="text-end fw-bold">{money.format(selectedVenta.total_venta)}</th>
-                      <th className="text-center text-muted small">Total Comisión</th>
-                      <th className="text-end text-success fw-bold fs-6">
-                        +{money.format(selectedVenta.comision_total)}
-                      </th>
-                    </tr>
-                  </tfoot>
-                </table>
+              <div className="order-detail-total mt-3">
+                <strong>Total Venta: {money.format(selectedVenta.total_venta)}</strong>
+                <strong style={{ color: "#15803d" }}>
+                  Total Comisión: +{money.format(selectedVenta.comision_total)}
+                </strong>
               </div>
             </div>
 
-            <footer className="border-top p-3 d-flex justify-content-end">
+            <footer>
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="btn btn-light"
                 onClick={() => setSelectedVenta(null)}
               >
                 Cerrar
               </button>
             </footer>
-          </div>
+          </section>
         </div>
       )}
-    </div>
+    </>
   );
 }
