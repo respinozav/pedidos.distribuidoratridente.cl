@@ -78,24 +78,25 @@ export default function AdminVentasManager() {
     loadVentas();
   }, [desde, hasta, selectedVendedorId]);
 
-  // Filtrado de pedidos en el listado por texto (cliente, rut, código pedido, vendedor)
+  // Filtrado de pedidos por texto (cliente, RUT o código de pedido)
   const filteredItems = useMemo(() => {
+    let result = data.items;
     const q = search.trim().toLowerCase();
-    if (!q) return data.items;
-    return data.items.filter((item) => {
-      const clienteNombre = (item.cliente?.nombre || "").toLowerCase();
-      const clienteRut = (item.cliente?.rut || "").toLowerCase();
-      const vendedorNombre = (item.vendedor?.nombre || "").toLowerCase();
-      const vendedorCorreo = (item.vendedor?.correo || "").toLowerCase();
-      const pedidoId = (item.pedido_id || "").toLowerCase();
-      return (
-        clienteNombre.includes(q) ||
-        clienteRut.includes(q) ||
-        vendedorNombre.includes(q) ||
-        vendedorCorreo.includes(q) ||
-        pedidoId.includes(q)
-      );
-    });
+    if (q) {
+      result = result.filter((item) => {
+        const clienteNombre = (item.cliente?.nombre || "").toLowerCase();
+        const clienteRut = (item.cliente?.rut || "").toLowerCase();
+        const vendedorNombre = (item.vendedor?.nombre || "").toLowerCase();
+        const pedidoId = (item.pedido_id || "").toLowerCase();
+        return (
+          clienteNombre.includes(q) ||
+          clienteRut.includes(q) ||
+          vendedorNombre.includes(q) ||
+          pedidoId.includes(q)
+        );
+      });
+    }
+    return result;
   }, [data.items, search]);
 
   const hasActiveFilters =
@@ -103,9 +104,21 @@ export default function AdminVentasManager() {
 
   const selectedVendedorName = useMemo(() => {
     if (!selectedVendedorId) return null;
-    const v = data.vendedores_disponibles.find((item) => item.id === selectedVendedorId);
-    return v ? v.nombre : null;
-  }, [selectedVendedorId, data.vendedores_disponibles]);
+    const v = data.vendedores_disponibles.find((item) => String(item.id) === String(selectedVendedorId));
+    if (v) return v.nombre;
+    const fromSummary = data.vendedores_resumen.find((item) => String(item.vendedor_id) === String(selectedVendedorId));
+    return fromSummary ? fromSummary.nombre : null;
+  }, [selectedVendedorId, data.vendedores_disponibles, data.vendedores_resumen]);
+
+  const handleVerPedidosVendedor = (vendedorId) => {
+    setSelectedVendedorId(String(vendedorId));
+    setTimeout(() => {
+      const el = document.getElementById("pedidos-realizados-section");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 50);
+  };
 
   return (
     <>
@@ -121,77 +134,18 @@ export default function AdminVentasManager() {
       </header>
 
       <div className="admin-content dashboard-content">
-        {/* Cabecera / Hero con filtros */}
-        <section className="dashboard-hero">
+        {/* Banner de resumen (Hero sin filtros apiñados) */}
+        <section className="dashboard-hero mb-3">
           <div>
             <p className="eyebrow">FUERZA DE VENTA</p>
             <h2>Comisiones y Pedidos por Vendedor</h2>
             <p>
-              Revisa las comisiones acumuladas por cada vendedor, filtra por periodos y consulta el detalle de cada pedido.
+              Supervisa las ventas acumuladas por cada vendedor, revisa sus comisiones y consulta el detalle de los pedidos.
             </p>
-          </div>
-
-          <div className="dashboard-date-filters align-items-end flex-wrap gap-2">
-            <label>
-              Desde
-              <input
-                className="form-control"
-                type="date"
-                value={desde}
-                max={hasta || today}
-                onChange={(e) => setDesde(e.target.value)}
-              />
-            </label>
-            <label>
-              Hasta
-              <input
-                className="form-control"
-                type="date"
-                value={hasta}
-                min={desde || undefined}
-                max={today}
-                onChange={(e) => setHasta(e.target.value)}
-              />
-            </label>
-            <label style={{ minWidth: "190px" }}>
-              Vendedor
-              <select
-                className="form-select"
-                value={selectedVendedorId}
-                onChange={(e) => setSelectedVendedorId(e.target.value)}
-              >
-                <option value="">Todos los vendedores</option>
-                {data.vendedores_disponibles.map((vend) => (
-                  <option key={vend.id} value={vend.id}>
-                    {vend.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {hasActiveFilters && (
-              <div className="d-flex align-items-end">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  style={{ minHeight: "38px", whiteSpace: "nowrap" }}
-                  onClick={() => {
-                    setDesde(monthStart);
-                    setHasta(today);
-                    setSelectedVendedorId("");
-                    setSearch("");
-                  }}
-                  title="Restablecer filtros"
-                >
-                  <RotateCcw size={15} className="me-1" />
-                  <span>Restablecer</span>
-                </button>
-              </div>
-            )}
           </div>
         </section>
 
-        {/* Tarjetas métricas nativas del sistema */}
+        {/* 1. Tarjetas métricas nativas del sistema (ARRIBA) */}
         <section className="dashboard-metrics">
           <article>
             <span>VENTAS TOTALES</span>
@@ -215,128 +169,200 @@ export default function AdminVentasManager() {
           <article>
             <span>VENDEDORES ACTIVOS</span>
             <strong>{data.vendedores_activos}</strong>
-            <small>De {data.vendedores_disponibles.length} vendedores</small>
+            <small>De {data.vendedores_disponibles.length} registrados</small>
           </article>
         </section>
 
+        {/* 2. Filtro de Vendedor y Fechas (DEBAJO DE LAS CARDS, siguiendo el patrón de los demás estilos) */}
+        <div className="admin-order-filters vendor-sales-filters mb-4">
+          <label className="filter-desde">
+            Desde
+            <input
+              className="form-control"
+              type="date"
+              value={desde}
+              max={hasta || today}
+              onChange={(e) => setDesde(e.target.value)}
+            />
+          </label>
+
+          <label className="filter-hasta">
+            Hasta
+            <input
+              className="form-control"
+              type="date"
+              value={hasta}
+              min={desde || undefined}
+              max={today}
+              onChange={(e) => setHasta(e.target.value)}
+            />
+          </label>
+
+          <label className="filter-vendedor" style={{ minWidth: "220px" }}>
+            Vendedor
+            <select
+              className="form-select"
+              value={selectedVendedorId}
+              onChange={(e) => setSelectedVendedorId(e.target.value)}
+            >
+              <option value="">Todos los vendedores</option>
+              {data.vendedores_disponibles.map((vend) => (
+                <option key={vend.id} value={vend.id}>
+                  {vend.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="filter-cliente">
+            Buscar
+            <input
+              className="form-control"
+              type="search"
+              placeholder="Cliente, RUT o código de pedido..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+
+          {hasActiveFilters && (
+            <div className="d-flex align-items-end">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                style={{ minHeight: "38px", whiteSpace: "nowrap" }}
+                onClick={() => {
+                  setDesde(monthStart);
+                  setHasta(today);
+                  setSelectedVendedorId("");
+                  setSearch("");
+                }}
+                title="Restablecer filtros"
+              >
+                <RotateCcw size={15} className="me-1" />
+                <span>Restablecer</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {error && <div className="alert alert-danger mb-4">{error}</div>}
 
-        {/* Panel 1: Resumen de comisiones por vendedor */}
-        {!selectedVendedorId && (
-          <section className="content-panel mb-4">
-            <div className="panel-heading">
-              <div>
-                <h2>Comisiones por Vendedor</h2>
-                <p>Consolidado de ventas y comisiones generadas en el periodo.</p>
-              </div>
+        {/* 3. Panel: Comisiones por Vendedor */}
+        <section className="content-panel mb-4">
+          <div className="panel-heading">
+            <div>
+              <h2>Comisiones por Vendedor</h2>
+              <p>Consolidado de ventas y comisiones generadas en el periodo seleccionado.</p>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              {selectedVendedorId && (
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => setSelectedVendedorId("")}
+                >
+                  Ver todos los vendedores
+                </button>
+              )}
               <span className="panel-count">
                 {data.vendedores_resumen.length}{" "}
                 {data.vendedores_resumen.length === 1 ? "vendedor con ventas" : "vendedores con ventas"}
               </span>
             </div>
+          </div>
 
-            {loading ? (
-              <p className="mt-3 text-secondary">Cargando resumen de comisiones...</p>
-            ) : data.vendedores_resumen.length === 0 ? (
-              <p className="history-filter-empty py-4 text-center">
-                No hay ventas registradas por vendedores en el periodo seleccionado.
-              </p>
-            ) : (
-              <div className="admin-ventas-table mt-3">
-                <div className="admin-vendedor-summary-head">
-                  <span>Vendedor</span>
-                  <span style={{ textAlign: "center" }}>Pedidos</span>
-                  <span style={{ textAlign: "right" }}>Total Ventas</span>
-                  <span style={{ textAlign: "right" }}>Comisión Total</span>
-                  <span style={{ textAlign: "center" }}>% Efectivo</span>
-                  <span style={{ textAlign: "center" }}>Acción</span>
-                </div>
-
-                {data.vendedores_resumen.map((v) => {
-                  const percEfectivo =
-                    Number(v.total_ventas) > 0
-                      ? ((Number(v.total_comisiones) / Number(v.total_ventas)) * 100).toFixed(1)
-                      : "0.0";
-                  return (
-                    <article className="admin-vendedor-summary-row" key={v.vendedor_id}>
-                      <div>
-                        <strong>{v.nombre}</strong>
-                        <small className="d-block text-secondary">{v.correo}</small>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <span className="badge bg-light text-dark border">{v.cantidad_pedidos}</span>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <strong>{money.format(v.total_ventas)}</strong>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <span className="vendor-sales-badge-comision">
-                          +{money.format(v.total_comisiones)}
-                        </span>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <span className="category-percentage">{percEfectivo}%</span>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary btn-sm"
-                          onClick={() => setSelectedVendedorId(v.vendedor_id)}
-                          title={`Filtrar pedidos de ${v.nombre}`}
-                        >
-                          Ver pedidos
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
+          {loading ? (
+            <p className="mt-3 text-secondary">Cargando resumen de comisiones...</p>
+          ) : data.vendedores_resumen.length === 0 ? (
+            <p className="history-filter-empty py-4 text-center">
+              No hay ventas registradas por vendedores en el periodo seleccionado.
+            </p>
+          ) : (
+            <div className="admin-ventas-table mt-3">
+              <div className="admin-vendedor-summary-head">
+                <span>Vendedor</span>
+                <span style={{ textAlign: "center" }}>Pedidos</span>
+                <span style={{ textAlign: "right" }}>Total Ventas</span>
+                <span style={{ textAlign: "right" }}>Comisión Total</span>
+                <span style={{ textAlign: "center" }}>% Efectivo</span>
+                <span style={{ textAlign: "center" }}>Acción</span>
               </div>
-            )}
-          </section>
-        )}
 
-        {/* Panel 2: Listado detallado de pedidos */}
-        <section className="content-panel">
+              {data.vendedores_resumen.map((v) => {
+                const isCurrentSelected = String(selectedVendedorId) === String(v.vendedor_id);
+                const percEfectivo =
+                  Number(v.total_ventas) > 0
+                    ? ((Number(v.total_comisiones) / Number(v.total_ventas)) * 100).toFixed(1)
+                    : "0.0";
+                return (
+                  <article
+                    className={`admin-vendedor-summary-row ${isCurrentSelected ? "bg-light border-primary" : ""}`}
+                    key={v.vendedor_id}
+                    style={isCurrentSelected ? { backgroundColor: "#eff6ff" } : undefined}
+                  >
+                    <div>
+                      <strong>{v.nombre}</strong>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <span className="badge bg-light text-dark border">{v.cantidad_pedidos}</span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <strong>{money.format(v.total_ventas)}</strong>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span className="vendor-sales-badge-comision">
+                        +{money.format(v.total_comisiones)}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <span className="category-percentage">{percEfectivo}%</span>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${isCurrentSelected ? "btn-primary" : "btn-outline-primary"}`}
+                        onClick={() => handleVerPedidosVendedor(v.vendedor_id)}
+                        title={`Ver pedidos realizados por ${v.nombre}`}
+                      >
+                        {isCurrentSelected ? "Filtrado" : "Ver pedidos"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* 4. Panel: Pedidos Realizados */}
+        <section className="content-panel" id="pedidos-realizados-section">
           <div className="panel-heading">
             <div>
               <h2>
-                Pedidos Realizados{" "}
+                Pedidos Realizados
                 {selectedVendedorName ? (
-                  <span className="text-primary fs-6 fw-normal">
-                    — Filtrado por: <strong>{selectedVendedorName}</strong>
+                  <span className="ms-2 badge bg-primary text-white fs-6 fw-normal">
+                    Vendedor: {selectedVendedorName}
                   </span>
                 ) : null}
               </h2>
-              <p>Historial de cada pedido realizado por vendedores y su comisión calculada.</p>
+              <p>Historial detallado de cada pedido y su comisión calculada.</p>
             </div>
-            <span className="panel-count">
-              {filteredItems.length} {filteredItems.length === 1 ? "pedido" : "pedidos"}
-            </span>
-          </div>
-
-          <div className="admin-order-filters vendor-sales-filters">
-            <label className="filter-cliente">
-              Buscar
-              <input
-                className="form-control"
-                type="search"
-                placeholder="Cliente, RUT, vendedor o #pedido..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-            {search && (
-              <div className="d-flex align-items-end">
+            <div className="d-flex align-items-center gap-2">
+              {selectedVendedorId && (
                 <button
                   type="button"
-                  className="btn btn-outline-secondary"
-                  style={{ minHeight: "38px" }}
-                  onClick={() => setSearch("")}
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => setSelectedVendedorId("")}
                 >
-                  Limpiar búsqueda
+                  Quitar filtro vendedor
                 </button>
-              </div>
-            )}
+              )}
+              <span className="panel-count">
+                {filteredItems.length} {filteredItems.length === 1 ? "pedido" : "pedidos"}
+              </span>
+            </div>
           </div>
 
           {loading ? (
@@ -383,9 +409,9 @@ export default function AdminVentasManager() {
                       <span className="category-order-badge">#{orderCode}</span>
                     </div>
 
+                    {/* Columna Vendedor: SOLO NOMBRE */}
                     <div>
                       <strong>{venta.vendedor?.nombre || "Sin vendedor"}</strong>
-                      <small>{venta.vendedor?.correo || ""}</small>
                     </div>
 
                     <div>
@@ -451,7 +477,7 @@ export default function AdminVentasManager() {
             <div className="modal-body-custom">
               <div className="order-detail-meta mb-3">
                 <span>
-                  <strong>Vendedor:</strong> {selectedVenta.vendedor?.nombre || "No asignado"} ({selectedVenta.vendedor?.correo || "Sin correo"})
+                  <strong>Vendedor:</strong> {selectedVenta.vendedor?.nombre || "No asignado"}
                 </span>
                 <span>
                   <strong>Cliente:</strong> {selectedVenta.cliente?.nombre || selectedVenta.cliente?.rut || "Cliente"}

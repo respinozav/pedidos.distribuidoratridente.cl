@@ -1425,9 +1425,6 @@ def list_admin_ventas(
         )
     )
 
-    if vendedor_id:
-        statement = statement.where(VentaVendedor.vendedor_id == vendedor_id)
-
     CHILE_TZ = ZoneInfo("America/Santiago")
     if desde:
         try:
@@ -1442,14 +1439,11 @@ def list_admin_ventas(
         except ValueError:
             pass
 
-    ventas = list(database.scalars(statement.order_by(VentaVendedor.created_at.desc())))
+    ventas_periodo = list(database.scalars(statement.order_by(VentaVendedor.created_at.desc())))
 
-    total_ventas = sum((v.total_venta for v in ventas), Decimal("0.00"))
-    total_comisiones = sum((v.comision_total for v in ventas), Decimal("0.00"))
-
-    # Agrupar comisiones y ventas por vendedor
+    # Agrupar comisiones y ventas por vendedor de todo el periodo
     vendedores_map: dict[UUID, dict] = {}
-    for v in ventas:
+    for v in ventas_periodo:
         vid = v.vendedor_id
         if vid not in vendedores_map:
             v_nombre = v.vendedor.nombre if v.vendedor else "Vendedor no encontrado"
@@ -1471,6 +1465,11 @@ def list_admin_ventas(
         key=lambda x: x.total_comisiones,
         reverse=True,
     )
+
+    # Si se especificó vendedor_id, filtramos la lista de items
+    ventas = [v for v in ventas_periodo if v.vendedor_id == vendedor_id] if vendedor_id else ventas_periodo
+    total_ventas = sum((v.total_venta for v in ventas), Decimal("0.00"))
+    total_comisiones = sum((v.comision_total for v in ventas), Decimal("0.00"))
 
     # Obtener lista de todos los vendedores activos para filtro en frontend
     vendedores_disponibles_stmt = (
