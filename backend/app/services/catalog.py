@@ -194,7 +194,7 @@ def _format_price(value: Any) -> str:
         return f"${value}"
 
 
-def _product_card(product: Producto, styles, show_price: bool = False) -> Table:
+def _product_card(product: Producto, styles, show_price: bool = True) -> Table:
     image_flowable: Flowable | None = None
     if product.imagen_url:
         try:
@@ -218,11 +218,15 @@ def _product_card(product: Producto, styles, show_price: bool = False) -> Table:
         image_flowable = placeholder
     name = Paragraph(html.escape(product.nombre), styles["CardName"])
     code = Paragraph(f"COD {html.escape(product.codigo)}", styles["CardCode"])
-    card_elements = [[image_flowable], [Spacer(1, 2 * mm)], [name]]
+    tax_p = Paragraph("Impuesto Incluido", styles["CardTax"])
+
+    card_elements = [[image_flowable], [Spacer(1, 1.5 * mm)], [name]]
     if show_price and product.precio is not None:
         price_text = _format_price(product.precio)
         price_p = Paragraph(f"<b>{price_text}</b>", styles["CardPrice"])
-        card_elements.extend([[Spacer(1, 1 * mm)], [price_p]])
+        card_elements.extend([[Spacer(1, 1 * mm)], [price_p], [tax_p]])
+    else:
+        card_elements.extend([[Spacer(1, 1 * mm)], [tax_p]])
     card_elements.extend([[Spacer(1, 1 * mm)], [code]])
 
     card = _RoundedCard(
@@ -237,10 +241,10 @@ def _product_card(product: Producto, styles, show_price: bool = False) -> Table:
             [
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
             ]
         )
     )
@@ -307,6 +311,7 @@ def _build_catalog_pdf_internal(database: Session, is_public: bool, force_refres
     styles.add(ParagraphStyle(name="CardName", parent=styles["Normal"], alignment=TA_CENTER, fontName="Helvetica-Bold", fontSize=10, textColor=BRAND_NAVY, leading=12))
     styles.add(ParagraphStyle(name="CardCode", parent=styles["Normal"], alignment=TA_CENTER, fontSize=8, textColor=BRAND_GRAY, leading=10))
     styles.add(ParagraphStyle(name="CardPrice", parent=styles["Normal"], alignment=TA_CENTER, fontName="Helvetica-Bold", fontSize=9, textColor=BRAND_NAVY, leading=11))
+    styles.add(ParagraphStyle(name="CardTax", parent=styles["Normal"], alignment=TA_CENTER, fontSize=6.5, leading=8, textColor=BRAND_GRAY))
     styles.add(ParagraphStyle(name="CardPlaceholder", parent=styles["Normal"], alignment=TA_CENTER, fontSize=9, textColor=BRAND_GRAY))
 
     story: list = []
@@ -330,7 +335,7 @@ def _build_catalog_pdf_internal(database: Session, is_public: bool, force_refres
             story.extend(_category_title(category.nombre, styles))
             story.append(Spacer(1, 5 * mm))
             rows = _chunk(chunk, PRODUCTS_PER_ROW)
-            table_rows = [[_product_card(product, styles, show_price=not is_public) for product in row] for row in rows]
+            table_rows = [[_product_card(product, styles, show_price=True) for product in row] for row in rows]
             for row in table_rows:
                 while len(row) < PRODUCTS_PER_ROW:
                     row.append("")

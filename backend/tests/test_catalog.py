@@ -106,10 +106,51 @@ def test_build_public_vs_full_catalog_cache_and_invalidation():
     pdf_public = build_public_catalog_pdf(session)
     assert _CATALOG_CACHE["content"] is not None
     assert _FULL_CATALOG_CACHE["content"] is None
+    assert pdf_public.startswith(b"%PDF")
 
     pdf_full = build_full_catalog_pdf(session)
     assert _FULL_CATALOG_CACHE["content"] is not None
+    assert pdf_full.startswith(b"%PDF")
 
     invalidate_catalog_cache()
     assert _CATALOG_CACHE["content"] is None
     assert _FULL_CATALOG_CACHE["content"] is None
+
+
+def test_product_card_contains_tax_included_text():
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from app.services.catalog import _product_card, BRAND_GRAY
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="CardName", parent=styles["Normal"]))
+    styles.add(ParagraphStyle(name="CardCode", parent=styles["Normal"]))
+    styles.add(ParagraphStyle(name="CardPrice", parent=styles["Normal"]))
+    styles.add(ParagraphStyle(name="CardTax", parent=styles["Normal"], fontSize=6.5, leading=8, textColor=BRAND_GRAY))
+    styles.add(ParagraphStyle(name="CardPlaceholder", parent=styles["Normal"]))
+
+    prod = SimpleNamespace(
+        id=uuid4(),
+        categoria_id=uuid4(),
+        nombre="Test Product Tax",
+        codigo="TAX-001",
+        precio=Decimal("9990"),
+        imagen_url=None,
+        activo=True,
+        eliminado_at=None,
+    )
+
+    card = _product_card(prod, styles, show_price=True)
+    # Flatten flowables in table cells
+    elements = [cell for row in card._cellvalues for cell in row]
+    texts = [e.text for e in elements if hasattr(e, "text")]
+
+    assert "Impuesto Incluido" in texts
+    assert "<b>$9.990</b>" in texts
+    assert "COD TAX-001" in texts
+
+    # Even without price, Impuesto Incluido should be present on product card
+    card_no_price = _product_card(prod, styles, show_price=False)
+    elements_no_price = [cell for row in card_no_price._cellvalues for cell in row]
+    texts_no_price = [e.text for e in elements_no_price if hasattr(e, "text")]
+    assert "Impuesto Incluido" in texts_no_price
+
