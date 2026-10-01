@@ -2205,6 +2205,20 @@ button, input { font: inherit; }
   flex: 1 1 240px;
 }
 
+.vendor-sales-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.vendor-sales-metrics article:nth-child(2) {
+  --metric-color: #146cce;
+  background: #eaf3ff;
+  --metric-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m7.5 4.27 9 5.15M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16ZM3.27 6.96 12 12.01l8.73-5.05M12 22.08V12' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+.vendor-sales-metrics article:nth-child(2) small {
+  font-weight: normal;
+}
+
 .vendor-sales-table {
   background: #fff;
   border: 1px solid var(--line);
@@ -2218,8 +2232,8 @@ button, input { font: inherit; }
   align-items: center;
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: minmax(130px, 1fr) minmax(100px, 0.85fr) minmax(180px, 1.8fr) minmax(115px, 1fr) minmax(120px, 1.1fr) 95px;
-  min-width: 740px;
+  grid-template-columns: minmax(130px, 1fr) minmax(100px, 0.85fr) minmax(200px, 2fr) minmax(120px, 1.1fr) 95px;
+  min-width: 650px;
 }
 
 .vendor-sales-head span:last-child {

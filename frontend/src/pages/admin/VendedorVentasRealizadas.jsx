@@ -89,10 +89,6 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
     return filteredItems.reduce((acc, curr) => acc + Number(curr.total_venta || 0), 0);
   }, [filteredItems]);
 
-  const filteredTotalComisiones = useMemo(() => {
-    return filteredItems.reduce((acc, curr) => acc + Number(curr.comision_total || 0), 0);
-  }, [filteredItems]);
-
   if (!isVendedor) {
     return (
       <div className="alert alert-warning m-4">
@@ -164,16 +160,11 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
         </section>
 
         {/* Tarjetas métricas nativas del sistema (dashboard-metrics) */}
-        <section className="dashboard-metrics">
+        <section className="dashboard-metrics vendor-sales-metrics">
           <article>
             <span>VENTAS TOTALES</span>
             <strong>{money.format(filteredTotalVentas)}</strong>
             <small>{filteredItems.length} {filteredItems.length === 1 ? "pedido registrado" : "pedidos registrados"}</small>
-          </article>
-          <article>
-            <span>COMISIONES GANADAS</span>
-            <strong>{money.format(filteredTotalComisiones)}</strong>
-            <small>Calculado por % de categoría</small>
           </article>
           <article>
             <span>TOTAL PEDIDOS</span>
@@ -261,7 +252,6 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
                 <span>Pedido</span>
                 <span>Cliente / Razón Social</span>
                 <span style={{ textAlign: "right" }}>Total Venta</span>
-                <span style={{ textAlign: "right" }}>Comisión</span>
                 <span>Acción</span>
               </div>
               {filteredItems.map((venta) => {
@@ -286,18 +276,12 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
                       <strong>{money.format(venta.total_venta)}</strong>
                     </div>
 
-                    <div style={{ textAlign: "right" }}>
-                      <span className="vendor-sales-badge-comision">
-                        +{money.format(venta.comision_total)}
-                      </span>
-                    </div>
-
                     <div className="vendor-sales-actions">
                       <button
                         type="button"
                         className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
                         onClick={() => setSelectedVenta(venta)}
-                        title="Ver detalle del pedido y comisiones"
+                        title="Ver detalle del pedido"
                       >
                         <Eye size={15} />
                         <span>Detalle</span>
