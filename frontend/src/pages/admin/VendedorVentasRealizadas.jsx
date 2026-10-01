@@ -25,12 +25,24 @@ function formatDateTime(dateValue, options = {}) {
   }
 }
 
+function getDefaultDates() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return {
+    monthStart: `${year}-${month}-01`,
+    today: `${year}-${month}-${day}`,
+  };
+}
+
 export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedor = true }) {
+  const { monthStart, today } = useMemo(() => getDefaultDates(), []);
   const [data, setData] = useState({ total_ventas: 0, total_comisiones: 0, cantidad_pedidos: 0, items: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  const [desde, setDesde] = useState(monthStart);
+  const [hasta, setHasta] = useState(today);
   const [search, setSearch] = useState("");
   const [selectedVenta, setSelectedVenta] = useState(null);
 
@@ -144,6 +156,7 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
                 type="date"
                 value={hasta}
                 min={desde || undefined}
+                max={today}
                 onChange={(e) => setHasta(e.target.value)}
               />
             </label>
@@ -202,20 +215,20 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            {(search || desde || hasta) && (
+            {(search || desde !== monthStart || hasta !== today) && (
               <div className="d-flex align-items-end">
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
                   style={{ minHeight: "38px", whiteSpace: "nowrap" }}
                   onClick={() => {
-                    setDesde("");
-                    setHasta("");
+                    setDesde(monthStart);
+                    setHasta(today);
                     setSearch("");
                   }}
-                  title="Limpiar filtros"
+                  title="Restablecer filtros"
                 >
-                  Limpiar filtros
+                  Restablecer filtros
                 </button>
               </div>
             )}
@@ -228,9 +241,9 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
           ) : filteredItems.length === 0 ? (
             <div className="text-center py-5">
               <p className="history-filter-empty mb-3">
-                {search || desde || hasta
+                {search || desde !== monthStart || hasta !== today
                   ? "No se encontraron ventas con los filtros seleccionados."
-                  : "Aún no registras ventas. Presiona 'Generar Venta' para comenzar."}
+                  : "Aún no registras ventas en el periodo seleccionado. Presiona 'Generar Venta' para comenzar."}
               </p>
               <button
                 type="button"
