@@ -506,4 +506,29 @@ class VentasVendedorResumenOutput(BaseModel):
     items: list[VentaVendedorOutput] = []
 
 
+class VendedorSimpleOutput(BaseModel):
+    id: UUID
+    nombre: str
+    correo: str
+
+
+class ResumenComisionVendedorItem(BaseModel):
+    vendedor_id: UUID
+    nombre: str
+    correo: str
+    cantidad_pedidos: int = 0
+    total_ventas: Decimal = Decimal("0.00")
+    total_comisiones: Decimal = Decimal("0.00")
+
+
+class VentasAdminResumenOutput(BaseModel):
+    total_ventas: Decimal = Decimal("0.00")
+    total_comisiones: Decimal = Decimal("0.00")
+    cantidad_pedidos: int = 0
+    vendedores_activos: int = 0
+    vendedores_resumen: list[ResumenComisionVendedorItem] = []
+    vendedores_disponibles: list[VendedorSimpleOutput] = []
+    items: list[VentaVendedorOutput] = []
+
+
 

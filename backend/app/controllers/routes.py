@@ -89,6 +89,9 @@ from app.schemas.dto import (
     UserUpdate,
     VentasVendedorResumenOutput,
     VentaVendedorOutput,
+    ResumenComisionVendedorItem,
+    VendedorSimpleOutput,
+    VentasAdminResumenOutput,
 )
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
@@ -1401,4 +1404,95 @@ def list_vendedor_ventas(
         cantidad_pedidos=len(ventas),
         items=[VentaVendedorOutput.model_validate(v, from_attributes=True) for v in ventas],
     )
+
+
+@router.get("/admin/ventas", response_model=VentasAdminResumenOutput, tags=["Admin - Ventas"])
+def list_admin_ventas(
+    database: DatabaseSession,
+    current_user: SuperAdminUser,
+    desde: str | None = None,
+    hasta: str | None = None,
+    vendedor_id: UUID | None = None,
+) -> VentasAdminResumenOutput:
+    """Lista todas las ventas realizadas por vendedores para el Administrador, agrupando comisiones por vendedor y con filtro de fechas."""
+    statement = (
+        select(VentaVendedor)
+        .options(
+            selectinload(VentaVendedor.cliente),
+            selectinload(VentaVendedor.vendedor),
+            selectinload(VentaVendedor.detalles),
+            selectinload(VentaVendedor.pedido),
+        )
+    )
+
+    if vendedor_id:
+        statement = statement.where(VentaVendedor.vendedor_id == vendedor_id)
+
+    CHILE_TZ = ZoneInfo("America/Santiago")
+    if desde:
+        try:
+            from_dt = datetime.strptime(f"{desde} 00:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(VentaVendedor.created_at >= from_dt)
+        except ValueError:
+            pass
+    if hasta:
+        try:
+            to_dt = datetime.strptime(f"{hasta} 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(VentaVendedor.created_at <= to_dt)
+        except ValueError:
+            pass
+
+    ventas = list(database.scalars(statement.order_by(VentaVendedor.created_at.desc())))
+
+    total_ventas = sum((v.total_venta for v in ventas), Decimal("0.00"))
+    total_comisiones = sum((v.comision_total for v in ventas), Decimal("0.00"))
+
+    # Agrupar comisiones y ventas por vendedor
+    vendedores_map: dict[UUID, dict] = {}
+    for v in ventas:
+        vid = v.vendedor_id
+        if vid not in vendedores_map:
+            v_nombre = v.vendedor.nombre if v.vendedor else "Vendedor no encontrado"
+            v_correo = v.vendedor.correo if v.vendedor else ""
+            vendedores_map[vid] = {
+                "vendedor_id": vid,
+                "nombre": v_nombre,
+                "correo": v_correo,
+                "cantidad_pedidos": 0,
+                "total_ventas": Decimal("0.00"),
+                "total_comisiones": Decimal("0.00"),
+            }
+        vendedores_map[vid]["cantidad_pedidos"] += 1
+        vendedores_map[vid]["total_ventas"] += v.total_venta
+        vendedores_map[vid]["total_comisiones"] += v.comision_total
+
+    vendedores_resumen = sorted(
+        [ResumenComisionVendedorItem(**v) for v in vendedores_map.values()],
+        key=lambda x: x.total_comisiones,
+        reverse=True,
+    )
+
+    # Obtener lista de todos los vendedores activos para filtro en frontend
+    vendedores_disponibles_stmt = (
+        select(Usuario)
+        .join(Rol)
+        .where(Rol.nombre == "VENDEDOR", Usuario.activo.is_(True))
+        .order_by(Usuario.nombre.asc())
+    )
+    vendedores_db = list(database.scalars(vendedores_disponibles_stmt))
+    vendedores_disponibles = [
+        VendedorSimpleOutput(id=u.id, nombre=u.nombre, correo=u.correo)
+        for u in vendedores_db
+    ]
+
+    return VentasAdminResumenOutput(
+        total_ventas=total_ventas,
+        total_comisiones=total_comisiones,
+        cantidad_pedidos=len(ventas),
+        vendedores_activos=len(vendedores_map),
+        vendedores_resumen=vendedores_resumen,
+        vendedores_disponibles=vendedores_disponibles,
+        items=[VentaVendedorOutput.model_validate(v, from_attributes=True) for v in ventas],
+    )
+
 

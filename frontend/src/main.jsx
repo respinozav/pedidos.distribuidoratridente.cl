@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, SlidersHorizontal, Trash2, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, SlidersHorizontal, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -15,6 +15,7 @@ import PromoBannerCarousel from "./components/PromoBannerCarousel";
 import StockAlertBell from "./components/admin/StockAlertBell";
 import PublicPublicidades from "./pages/public/PublicPublicidades";
 import VendedorVentasRealizadas from "./pages/admin/VendedorVentasRealizadas";
+import AdminVentasManager from "./pages/admin/AdminVentasManager";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
@@ -1747,6 +1748,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
 
   const allNavigation = [
     [LayoutDashboard, "Dashboard", "summary", true],
+    [TrendingUp, "Ventas", "admin_ventas", true],
     [FolderTree, "Categorías", "categories", true],
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
@@ -1930,6 +1932,10 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
       ) : activeSection === "summary" ? (
         <section className="admin-workspace">
           <AdminSalesDashboard />
+        </section>
+      ) : activeSection === "admin_ventas" ? (
+        <section className="admin-workspace">
+          <AdminVentasManager />
         </section>
       ) : activeSection === "products" ? (
         <section className="admin-workspace">

@@ -160,9 +160,9 @@ button, input { font: inherit; }
 .promo-table-head, .promo-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: 55px minmax(180px, 1.5fr) minmax(150px, 1.3fr) minmax(105px, 1fr) 90px minmax(115px, 125px) 115px; min-width: 850px; }
 .promo-row > div { min-width: 0; }
 .promo-subtitulo-cell { color: var(--ink); display: block; font-size: .8rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head, .promo-table-head, .admin-cart-head, .vendor-sales-head { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04rem; padding: .75rem 1rem; text-transform: uppercase; }
-.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row, .promo-row, .admin-cart-row, .vendor-sales-row { align-items: center; border-top: 1px solid var(--line); color: var(--ink); font-size: .82rem; padding: .75rem 1rem; transition: background-color .15s ease; }
-.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover, .promo-row:hover, .admin-cart-row:hover, .vendor-sales-row:hover { background: #f8fafc; }
+.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head, .promo-table-head, .admin-cart-head, .vendor-sales-head, .admin-ventas-head, .admin-vendedor-summary-head { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04rem; padding: .75rem 1rem; text-transform: uppercase; }
+.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row, .promo-row, .admin-cart-row, .vendor-sales-row, .admin-ventas-row, .admin-vendedor-summary-row { align-items: center; border-top: 1px solid var(--line); color: var(--ink); font-size: .82rem; padding: .75rem 1rem; transition: background-color .15s ease; }
+.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover, .promo-row:hover, .admin-cart-row:hover, .vendor-sales-row:hover, .admin-ventas-row:hover, .admin-vendedor-summary-row:hover { background: #f8fafc; }
 .promo-table-head span:last-child { text-align: center; }
 .promo-row > .customer-actions { justify-self: center; }
 .category-percentage { color: var(--muted); font-size: .82rem; font-weight: 700; }
@@ -2242,6 +2242,32 @@ button, input { font: inherit; }
 
 .vendor-sales-row > .vendor-sales-actions {
   justify-self: center;
+}
+
+.admin-ventas-table {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-ventas-head,
+.admin-ventas-row {
+  align-items: center;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(130px, 1fr) minmax(100px, 0.8fr) minmax(150px, 1.2fr) minmax(170px, 1.5fr) minmax(115px, 1fr) minmax(115px, 1fr) 95px;
+  min-width: 880px;
+}
+
+.admin-vendedor-summary-head,
+.admin-vendedor-summary-row {
+  align-items: center;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(180px, 1.8fr) minmax(90px, 0.8fr) minmax(120px, 1.2fr) minmax(120px, 1.2fr) minmax(90px, 0.8fr) 115px;
+  min-width: 720px;
 }
 
 .vendor-sales-badge-comision {
