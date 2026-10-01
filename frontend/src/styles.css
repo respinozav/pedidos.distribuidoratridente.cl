@@ -184,11 +184,17 @@ button, input { font: inherit; }
 .category-modal { background: #fff; border-radius: 8px; box-shadow: 0 20px 50px rgb(16 42 67 / 30%); display: flex; flex-direction: column; max-height: calc(100dvh - 2rem); max-width: 510px; overflow: hidden; width: 100%; }
 .product-modal { max-width: 690px; }
 .order-detail-modal { max-height: calc(100dvh - 2rem); }
-.category-modal header, .category-modal footer { align-items: center; display: flex; flex-shrink: 0; justify-content: space-between; padding: 1.25rem 1.5rem; }
+.category-modal header, .category-modal footer { align-items: center; display: flex; flex-shrink: 0; justify-content: space-between; padding: 1rem 1.25rem; }
 .category-modal header { border-bottom: 1px solid var(--line); }
-.category-modal header h2 { font-size: 1.2rem; font-weight: 750; margin: 0; }
-.category-modal .eyebrow { margin-bottom: .25rem; }
-.modal-body-custom { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 1.5rem; }
+.category-modal header h2 { font-size: 1.05rem; font-weight: 750; margin: 0; }
+.category-modal .eyebrow { margin-bottom: .2rem; }
+.modal-body-custom { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 1.25rem; }
+.category-modal .modal-body-custom p { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+.category-modal .form-label { color: var(--navy); font-size: .82rem; font-weight: 650; margin-bottom: .25rem; }
+.category-modal .form-control, .category-modal .form-select { font-size: .84rem; }
+.category-modal .form-text { font-size: .76rem; color: var(--muted); }
+.vendor-sale-modal { max-width: 470px; }
+.vendor-sale-modal-desc { color: var(--muted); font-size: .8rem; line-height: 1.45; margin: 0 0 1rem; }
 .status-toggle { align-items: center; border: 1px solid var(--line); border-radius: 6px; display: flex; justify-content: space-between; margin-top: 1.25rem; padding: 1rem; }
 .status-toggle strong, .status-toggle small { display: block; }
 .status-toggle small { color: var(--muted); font-size: .78rem; margin-top: .2rem; }

@@ -1,11 +1,10 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Activity, AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, SlidersHorizontal, Trash2, User, Users, X } from "lucide-react";
-
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
-import { api, clearSessionStorage, getStoredSession, saveSessionStorage, setAdminToken, setCustomerToken } from "./services/api";
+import { api, clearSessionStorage, getStoredAdminProfile, getStoredSession, saveAdminProfileStorage, saveSessionStorage, setAdminToken, setCustomerToken } from "./services/api";
 import SystemSettings from "./pages/admin/SystemSettings";
 import CommercialSettings from "./pages/admin/CommercialSettings";
 import NotificationLogs from "./pages/admin/NotificationLogs";
@@ -82,6 +81,10 @@ function Access({ onCustomerLogin, onAdminLogin }) {
         const { data } = await api.post("/login", { correo: email, password });
         setAdminToken(data.access_token);
         saveSessionStorage(data.access_token, "admin");
+        try {
+          const profileRes = await api.get("/admin/perfil");
+          saveAdminProfileStorage(profileRes.data);
+        } catch {}
         delete window.__vendedorDefaultSection;
         delete window.__openVendedorGenerarVentaModal;
         onAdminLogin();
@@ -208,6 +211,10 @@ function AdminAccess({ onLogin, onCustomerAccess }) {
       const { data } = await api.post("/login", { correo: email, password });
       setAdminToken(data.access_token);
       saveSessionStorage(data.access_token, "admin");
+      try {
+        const profileRes = await api.get("/admin/perfil");
+        saveAdminProfileStorage(profileRes.data);
+      } catch {}
       delete window.__vendedorDefaultSection;
       delete window.__openVendedorGenerarVentaModal;
       onLogin();
@@ -1510,16 +1517,44 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   const [editComisionPorcentaje, setEditComisionPorcentaje] = useState("0");
   const [editEnCatalogoPublico, setEditEnCatalogoPublico] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [section, setSection] = useState(
-    initialSection === "vendedor_ventas_realizadas" ? "summary" : (initialSection || "summary")
-  );
-  const [configurationOpen, setConfigurationOpen] = useState(false);
-  const [adminProfile, setAdminProfile] = useState(null);
+  const storedSession = useMemo(() => getStoredSession(), []);
+  const [adminProfile, setAdminProfile] = useState(() => getStoredAdminProfile());
 
-  const isColaborador = adminProfile?.rol?.nombre?.trim().toUpperCase() === "COLABORADOR";
-  const isVendedor = adminProfile?.rol?.nombre?.trim().toUpperCase() === "VENDEDOR";
+  const storedRole = useMemo(() => {
+    try {
+      return (
+        adminProfile?.rol?.nombre ||
+        storedSession?.payload?.role ||
+        storedSession?.role ||
+        ""
+      ).trim().toUpperCase();
+    } catch {
+      return "";
+    }
+  }, [adminProfile, storedSession]);
+
+  const isColaborador =
+    adminProfile?.rol?.nombre?.trim().toUpperCase() === "COLABORADOR" ||
+    (!adminProfile && storedRole === "COLABORADOR");
+  const isVendedor =
+    adminProfile?.rol?.nombre?.trim().toUpperCase() === "VENDEDOR" ||
+    (!adminProfile && storedRole === "VENDEDOR");
+
   const allowedColaboradorKeys = ["categories", "products", "orders", "profile"];
-  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "profile"];
+  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "customers", "profile"];
+
+  const initialDefaultSection = isVendedor
+    ? (initialSection && allowedVendedorKeys.includes(initialSection)
+        ? initialSection
+        : "vendedor_ventas_realizadas")
+    : isColaborador
+    ? (initialSection && allowedColaboradorKeys.includes(initialSection)
+        ? initialSection
+        : "categories")
+    : (initialSection === "vendedor_ventas_realizadas" ? "summary" : (initialSection || "summary"));
+
+  const [section, setSection] = useState(initialDefaultSection);
+  const [configurationOpen, setConfigurationOpen] = useState(false);
 
   useEffect(() => {
     if (initialSection) {
@@ -1609,6 +1644,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
     api.get("/admin/perfil")
       .then(({ data }) => {
         setAdminProfile(data);
+        saveAdminProfileStorage(data);
         const role = data?.rol?.nombre?.trim().toUpperCase();
         if (role === "VENDEDOR") {
           const defaultSec = window.__vendedorDefaultSection || "vendedor_ventas_realizadas";
@@ -1702,6 +1738,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   }
 
   function logout() {
+    clearSessionStorage();
     setAdminToken(null);
     delete window.__vendedorDefaultSection;
     delete window.__openVendedorGenerarVentaModal;
@@ -1760,7 +1797,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
             </button>
           ))}
 
-          {!isColaborador && !isVendedor && (
+          {!isColaborador && (
             <div className="sidebar-configuration">
               <button
                 className={
@@ -1781,16 +1818,18 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
               </button>
               {configurationOpen && (
                 <div className="sidebar-submenu">
-                  <button
-                    className={activeSection === "users" ? "active" : ""}
-                    onClick={() => {
-                      setSection("users");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Users size={17} />
-                    <span>Usuarios</span>
-                  </button>
+                  {!isVendedor && (
+                    <button
+                      className={activeSection === "users" ? "active" : ""}
+                      onClick={() => {
+                        setSection("users");
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Users size={17} />
+                      <span>Usuarios</span>
+                    </button>
+                  )}
                   <button
                     className={activeSection === "customers" ? "active" : ""}
                     onClick={() => {
@@ -1801,46 +1840,50 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
                     <Users size={17} />
                     <span>Clientes</span>
                   </button>
-                  <button
-                    className={activeSection === "settings" ? "active" : ""}
-                    onClick={() => {
-                      setSection("settings");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Settings size={17} />
-                    <span>Sistema</span>
-                  </button>
-                  <button
-                    className={activeSection === "commercial_settings" ? "active" : ""}
-                    onClick={() => {
-                      setSection("commercial_settings");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <SlidersHorizontal size={17} />
-                    <span>Comerciales</span>
-                  </button>
-                  <button
-                    className={activeSection === "notification_logs" ? "active" : ""}
-                    onClick={() => {
-                      setSection("notification_logs");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Activity size={17} />
-                    <span>Logs Envíos</span>
-                  </button>
-                  <button
-                    className={activeSection === "session_logs" ? "active" : ""}
-                    onClick={() => {
-                      setSection("session_logs");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <KeyRound size={17} />
-                    <span>Logs Sesiones</span>
-                  </button>
+                  {!isVendedor && (
+                    <>
+                      <button
+                        className={activeSection === "settings" ? "active" : ""}
+                        onClick={() => {
+                          setSection("settings");
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <Settings size={17} />
+                        <span>Sistema</span>
+                      </button>
+                      <button
+                        className={activeSection === "commercial_settings" ? "active" : ""}
+                        onClick={() => {
+                          setSection("commercial_settings");
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <SlidersHorizontal size={17} />
+                        <span>Comerciales</span>
+                      </button>
+                      <button
+                        className={activeSection === "notification_logs" ? "active" : ""}
+                        onClick={() => {
+                          setSection("notification_logs");
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <Activity size={17} />
+                        <span>Logs Envíos</span>
+                      </button>
+                      <button
+                        className={activeSection === "session_logs" ? "active" : ""}
+                        onClick={() => {
+                          setSection("session_logs");
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <KeyRound size={17} />
+                        <span>Logs Sesiones</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1906,7 +1949,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
         </section>
       ) : activeSection === "profile" ? (
         <section className="admin-workspace">
-          <AdminAccount onProfileUpdated={(p) => setAdminProfile(p)} />
+          <AdminAccount onProfileUpdated={(p) => { setAdminProfile(p); saveAdminProfileStorage(p); }} />
         </section>
       ) : activeSection === "notification_logs" ? (
         <section className="admin-workspace">
@@ -2241,7 +2284,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
       {isVendedor && modalGenerarVentaOpen && (
         <div className="modal-backdrop-custom" role="presentation">
           <form
-            className="category-modal"
+            className="category-modal vendor-sale-modal"
             onSubmit={handleStartVendorSale}
             role="dialog"
             aria-modal="true"
@@ -2263,7 +2306,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
             </header>
 
             <div className="modal-body-custom">
-              <p className="form-text mt-0 mb-3 text-secondary">
+              <p className="vendor-sale-modal-desc">
                 Comprarás como si fueras este cliente registrado, aplicando sus descuentos y condiciones comerciales. La venta y su comisión quedarán registradas a tu cuenta de vendedor.
               </p>
 
@@ -3152,9 +3195,9 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         Swal.fire({
           icon: "success",
           title: "Venta registrada con éxito",
-          html: `<p>El pedido fue generado correctamente para <strong>${customer.nombre || customer.rut || "el cliente"}</strong>.</p><p class="text-muted">Código de pedido: <strong>${orderCode}</strong></p><p class="mt-2 text-success fw-bold">Comisión calculada y registrada en Ventas Realizadas.</p>`,
+          html: `<p>El pedido fue generado correctamente para <strong>${customer.nombre || customer.rut || "el cliente"}</strong>.</p><p class="text-muted">Código de pedido: <strong>${orderCode}</strong></p><p class="mt-2 text-success fw-bold">Comisión calculada y registrada en Mis Ventas.</p>`,
           showCancelButton: true,
-          confirmButtonText: "Ver Ventas Realizadas",
+          confirmButtonText: "Ver Mis Ventas",
           cancelButtonText: "Seguir comprando",
           confirmButtonColor: "#0d6efd",
           cancelButtonColor: "#6c757d",
@@ -3635,10 +3678,11 @@ function App() {
   };
 
   const handleExitVendorMode = (targetSection = "vendedor_ventas_realizadas") => {
-    if (vendorSaleSession?.adminToken) {
-      setAdminToken(vendorSaleSession.adminToken);
+    const adminToken = vendorSaleSession?.adminToken || getStoredSession()?.token;
+    if (adminToken) {
+      setAdminToken(adminToken);
+      saveSessionStorage(adminToken, "admin");
     }
-    setCustomerToken(null);
     setVendorSaleSession(null);
     setAdminInitialSection(targetSection);
     setView("admin-dashboard");

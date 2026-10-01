@@ -8,6 +8,7 @@ from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import (
+    AdminOrVendedorUser,
     AdminUser,
     AuthSubject,
     CustomerUser,
@@ -657,12 +658,12 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
 
 
 @router.get("/clientes", response_model=list[CustomerOutput], tags=["Clientes"])
-def list_customers(database: DatabaseSession, _: SuperAdminUser) -> list[Cliente]:
+def list_customers(database: DatabaseSession, _: AdminOrVendedorUser) -> list[Cliente]:
     return list(database.scalars(select(Cliente).options(selectinload(Cliente.direcciones)).where(Cliente.eliminado_at.is_(None))))
 
 
 @router.post("/clientes", response_model=CustomerOutput, status_code=status.HTTP_201_CREATED, tags=["Clientes"])
-def create_customer(payload: CustomerCreate, database: DatabaseSession, _: SuperAdminUser) -> Cliente:
+def create_customer(payload: CustomerCreate, database: DatabaseSession, _: AdminOrVendedorUser) -> Cliente:
     values = payload.model_dump(exclude={"password"})
     entity = Repository(Cliente, database).add(Cliente(**values, password_hash=hash_password(payload.password)))
     database.commit()
@@ -670,7 +671,7 @@ def create_customer(payload: CustomerCreate, database: DatabaseSession, _: Super
 
 
 @router.put("/clientes/{customer_id}", response_model=CustomerOutput, tags=["Clientes"])
-def update_customer(customer_id: UUID, payload: CustomerUpdate, database: DatabaseSession, _: SuperAdminUser) -> Cliente:
+def update_customer(customer_id: UUID, payload: CustomerUpdate, database: DatabaseSession, _: AdminOrVendedorUser) -> Cliente:
     entity = Repository(Cliente, database).get(customer_id)
     if not entity or entity.eliminado_at:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado")
@@ -683,7 +684,7 @@ def update_customer(customer_id: UUID, payload: CustomerUpdate, database: Databa
 
 
 @router.post("/clientes/{customer_id}/direcciones", response_model=AddressOutput, status_code=status.HTTP_201_CREATED, tags=["Clientes"])
-def add_address(customer_id: UUID, payload: AddressInput, database: DatabaseSession, _: SuperAdminUser) -> Direccion:
+def add_address(customer_id: UUID, payload: AddressInput, database: DatabaseSession, _: AdminOrVendedorUser) -> Direccion:
     customer = database.get(Cliente, customer_id)
     if not customer or customer.eliminado_at:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado")
@@ -705,7 +706,7 @@ def update_address(
     address_id: UUID,
     payload: AddressInput,
     database: DatabaseSession,
-    _: SuperAdminUser,
+    _: AdminOrVendedorUser,
 ) -> Direccion:
     address = database.get(Direccion, address_id)
     if not address or address.cliente_id != customer_id:

@@ -6,8 +6,8 @@ from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.entities import Categoria, Rol, Usuario
-from app.api.dependencies import require_not_vendedor, require_super_admin
-from app.controllers.routes import admin_profile, create_category, list_credits
+from app.api.dependencies import require_admin_or_vendedor, require_not_vendedor, require_super_admin
+from app.controllers.routes import admin_profile, create_category, list_credits, list_customers
 from app.schemas.dto import CategoryInput
 
 
@@ -100,6 +100,12 @@ def test_vendedor_role_and_category_commission():
         # 8. Test list_credits works with AdminUser (which accepts Vendedor)
         credits_result = list_credits(database=db, _=vendedor_user, pagado=False)
         assert isinstance(credits_result, list)
+
+        # 9. Test list_customers works for Vendedor with require_admin_or_vendedor
+        allowed_vendedor = require_admin_or_vendedor(vendedor_user)
+        assert allowed_vendedor.id == vendedor_user.id
+        customers_result = list_customers(database=db, _=vendedor_user)
+        assert isinstance(customers_result, list)
 
         print("test_vendedor_role_and_category_commission passed successfully!")
     finally:

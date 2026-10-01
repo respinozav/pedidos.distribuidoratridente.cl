@@ -12,6 +12,7 @@ export const api = axios.create({
 const STORAGE_KEY_TOKEN = "tridente_auth_token";
 const STORAGE_KEY_ROLE = "tridente_auth_role";
 const STORAGE_KEY_CUSTOMER = "tridente_customer_profile";
+const STORAGE_KEY_ADMIN_PROFILE = "tridente_admin_profile";
 
 let currentToken = null;
 let onAuthExpiredCallback = null;
@@ -21,20 +22,43 @@ export function clearSessionStorage() {
     localStorage.removeItem(STORAGE_KEY_TOKEN);
     localStorage.removeItem(STORAGE_KEY_ROLE);
     localStorage.removeItem(STORAGE_KEY_CUSTOMER);
+    localStorage.removeItem(STORAGE_KEY_ADMIN_PROFILE);
   } catch {
     // Ignorar excepciones de localStorage
   }
 }
 
-export function saveSessionStorage(token, role, customer = null) {
+export function saveSessionStorage(token, role, customer = null, adminProfile = null) {
   try {
     if (token) {
       localStorage.setItem(STORAGE_KEY_TOKEN, token);
       if (role) localStorage.setItem(STORAGE_KEY_ROLE, role);
       if (customer) localStorage.setItem(STORAGE_KEY_CUSTOMER, JSON.stringify(customer));
+      if (adminProfile) localStorage.setItem(STORAGE_KEY_ADMIN_PROFILE, JSON.stringify(adminProfile));
     }
   } catch {
     // Ignorar excepciones de localStorage
+  }
+}
+
+export function saveAdminProfileStorage(adminProfile) {
+  try {
+    if (adminProfile) {
+      localStorage.setItem(STORAGE_KEY_ADMIN_PROFILE, JSON.stringify(adminProfile));
+    } else {
+      localStorage.removeItem(STORAGE_KEY_ADMIN_PROFILE);
+    }
+  } catch {
+    // Ignorar excepciones de localStorage
+  }
+}
+
+export function getStoredAdminProfile() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ADMIN_PROFILE);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -44,6 +68,7 @@ export function getStoredSession() {
     const role = localStorage.getItem(STORAGE_KEY_ROLE);
     const customerStr = localStorage.getItem(STORAGE_KEY_CUSTOMER);
     const customer = customerStr ? JSON.parse(customerStr) : null;
+    const adminProfile = getStoredAdminProfile();
 
     if (!token) return null;
 
@@ -58,7 +83,7 @@ export function getStoredSession() {
       return null;
     }
 
-    return { token, role, customer, payload };
+    return { token, role, customer, adminProfile, payload };
   } catch {
     clearSessionStorage();
     return null;
@@ -82,12 +107,13 @@ export function setAdminToken(token) {
     }
     return;
   }
-  clearSessionStorage();
   delete api.defaults.headers.common["Authorization"];
   delete api.defaults.headers["Authorization"];
 }
 
-export const setCustomerToken = setAdminToken;
+export function setCustomerToken(token) {
+  setAdminToken(token);
+}
 
 // Inicializar token guardado al cargar la aplicación si sigue vigente
 const initialSession = getStoredSession();
