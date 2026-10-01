@@ -311,7 +311,7 @@ def _build_catalog_pdf_internal(database: Session, is_public: bool, force_refres
     styles.add(ParagraphStyle(name="CardName", parent=styles["Normal"], alignment=TA_CENTER, fontName="Helvetica-Bold", fontSize=10, textColor=BRAND_NAVY, leading=12))
     styles.add(ParagraphStyle(name="CardCode", parent=styles["Normal"], alignment=TA_CENTER, fontSize=8, textColor=BRAND_GRAY, leading=10))
     styles.add(ParagraphStyle(name="CardPrice", parent=styles["Normal"], alignment=TA_CENTER, fontName="Helvetica-Bold", fontSize=9, textColor=BRAND_NAVY, leading=11))
-    styles.add(ParagraphStyle(name="CardTax", parent=styles["Normal"], alignment=TA_CENTER, fontSize=6.5, leading=8, textColor=BRAND_GRAY))
+    styles.add(ParagraphStyle(name="CardTax", parent=styles["Normal"], alignment=TA_CENTER, fontSize=8, leading=10, textColor=BRAND_GRAY))
     styles.add(ParagraphStyle(name="CardPlaceholder", parent=styles["Normal"], alignment=TA_CENTER, fontSize=9, textColor=BRAND_GRAY))
 
     story: list = []

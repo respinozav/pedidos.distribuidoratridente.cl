@@ -125,7 +125,7 @@ def test_product_card_contains_tax_included_text():
     styles.add(ParagraphStyle(name="CardName", parent=styles["Normal"]))
     styles.add(ParagraphStyle(name="CardCode", parent=styles["Normal"]))
     styles.add(ParagraphStyle(name="CardPrice", parent=styles["Normal"]))
-    styles.add(ParagraphStyle(name="CardTax", parent=styles["Normal"], fontSize=6.5, leading=8, textColor=BRAND_GRAY))
+    styles.add(ParagraphStyle(name="CardTax", parent=styles["Normal"], fontSize=8, leading=10, textColor=BRAND_GRAY))
     styles.add(ParagraphStyle(name="CardPlaceholder", parent=styles["Normal"]))
 
     prod = SimpleNamespace(
