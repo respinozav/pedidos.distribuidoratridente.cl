@@ -65,7 +65,7 @@ export default function AdminVentasManager() {
       if (hasta) params.hasta = hasta;
       if (selectedVendedorId) params.vendedor_id = selectedVendedorId;
 
-      const res = await api.get("/api/admin/ventas", { params });
+      const res = await api.get("/admin/ventas", { params });
       setData(res.data);
     } catch {
       setError("No fue posible cargar las ventas de vendedores. Intenta nuevamente.");
