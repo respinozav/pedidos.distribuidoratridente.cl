@@ -134,7 +134,9 @@ class Pedido(AuditMixin, Base):
     folio_defontana_afecto: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     defontana_sincronizado: Mapped[bool] = mapped_column(Boolean, default=False)
     defontana_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vendedor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True, index=True)
     cliente: Mapped[Cliente] = relationship(back_populates="pedidos")
+    vendedor: Mapped["Usuario | None"] = relationship(foreign_keys=[vendedor_id])
     direccion: Mapped[Direccion] = relationship()
     estado: Mapped[Estado] = relationship(back_populates="pedidos")
     detalles: Mapped[list["DetallePedido"]] = relationship(back_populates="pedido", cascade="all, delete-orphan")
@@ -142,6 +144,7 @@ class Pedido(AuditMixin, Base):
     notificaciones_logs: Mapped[list["PedidoNotificacionLog"]] = relationship(
         back_populates="pedido", cascade="all, delete-orphan", order_by="PedidoNotificacionLog.created_at.desc()"
     )
+    venta_vendedor: Mapped["VentaVendedor | None"] = relationship(back_populates="pedido", uselist=False, cascade="all, delete-orphan")
 
 
 class Credito(AuditMixin, Base):
@@ -338,4 +341,60 @@ class CarritoCompraItem(Base):
 
     carrito: Mapped[CarritoCompra] = relationship(back_populates="items")
     producto: Mapped[Producto] = relationship()
+
+
+class VentaVendedor(Base):
+    __tablename__ = "ventas_vendedor"
+    __table_args__ = (
+        Index("ix_ventas_vendedor_vendedor_id", "vendedor_id"),
+        Index("ix_ventas_vendedor_cliente_id", "cliente_id"),
+        Index("ix_ventas_vendedor_pedido_id", "pedido_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vendedor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    pedido_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pedidos.id"), unique=True, index=True)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clientes.id"), index=True)
+    total_venta: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    comision_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    vendedor: Mapped["Usuario"] = relationship(foreign_keys=[vendedor_id])
+    pedido: Mapped["Pedido"] = relationship(back_populates="venta_vendedor")
+    cliente: Mapped[Cliente] = relationship()
+    detalles: Mapped[list["DetalleVentaVendedor"]] = relationship(
+        back_populates="venta_vendedor", cascade="all, delete-orphan"
+    )
+
+
+class DetalleVentaVendedor(Base):
+    __tablename__ = "detalles_ventas_vendedor"
+    __table_args__ = (
+        Index("ix_detalles_ventas_vendedor_venta_id", "venta_vendedor_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    venta_vendedor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ventas_vendedor.id", ondelete="CASCADE"), index=True
+    )
+    producto_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("productos.id"), nullable=True)
+    categoria_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categorias.id"), nullable=True)
+    nombre_producto: Mapped[str] = mapped_column(String(180))
+    nombre_categoria: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    cantidad: Mapped[int] = mapped_column(Integer, default=1)
+    precio_unitario: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    comision_porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0.00"))
+    comision_monto: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    venta_vendedor: Mapped[VentaVendedor] = relationship(back_populates="detalles")
+    producto: Mapped[Producto | None] = relationship()
+    categoria: Mapped[Categoria | None] = relationship()
 

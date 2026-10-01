@@ -43,3 +43,27 @@ def create_access_token(user_id: UUID, role: str, expires_minutes: int | None = 
 
 def create_customer_access_token(customer_id: UUID, expires_minutes: int | None = None) -> str:
     return create_access_token(customer_id, "CLIENTE", expires_minutes=expires_minutes)
+
+
+def create_vendor_customer_token(
+    customer_id: UUID,
+    vendedor_id: UUID,
+    vendedor_nombre: str,
+    expires_minutes: int | None = None,
+) -> str:
+    minutes = expires_minutes if expires_minutes is not None and expires_minutes > 0 else settings.jwt_access_token_expire_minutes
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(minutes=minutes)
+    return jwt.encode(
+        {
+            "sub": str(customer_id),
+            "role": "CLIENTE",
+            "vendedor_id": str(vendedor_id),
+            "vendedor_nombre": vendedor_nombre,
+            "iat": int(now.timestamp()),
+            "exp": expires_at,
+            "minutes": minutes,
+        },
+        get_jwt_secret(),
+        algorithm=settings.jwt_algorithm,
+    )

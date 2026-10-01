@@ -6,7 +6,18 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.entities import Cliente, Credito, DetallePedido, Direccion, Estado, Pedido, Producto, CarritoCompra
+from app.models.entities import (
+    CarritoCompra,
+    Cliente,
+    Credito,
+    DetallePedido,
+    DetalleVentaVendedor,
+    Direccion,
+    Estado,
+    Pedido,
+    Producto,
+    VentaVendedor,
+)
 from app.repositories.base import Repository
 from app.schemas.dto import OrderCreate
 from app.services.defontana_service import dispatch_defontana_order_sync_in_background
@@ -18,7 +29,7 @@ class OrderService:
     def __init__(self, database: Session):
         self.database = database
 
-    def create(self, customer_id: UUID, payload: OrderCreate) -> Pedido:
+    def create(self, customer_id: UUID, payload: OrderCreate, vendedor_id: UUID | None = None) -> Pedido:
         customer = self.database.get(Cliente, customer_id)
         address = self.database.get(Direccion, payload.direccion_id)
         if not customer or not customer.activo or not address or address.cliente_id != customer_id or not address.activo:
@@ -112,8 +123,49 @@ class OrderService:
             self.database.add(initial_state)
             if hasattr(self.database, "flush"):
                 self.database.flush()
-        order = Pedido(cliente_id=customer_id, direccion_id=address.id, estado_id=initial_state.id, subtotal=subtotal, total=subtotal, detalles=details)
+        order = Pedido(
+            cliente_id=customer_id,
+            direccion_id=address.id,
+            estado_id=initial_state.id,
+            subtotal=subtotal,
+            total=subtotal,
+            detalles=details,
+            vendedor_id=vendedor_id,
+        )
         self.database.add(order)
+
+        if vendedor_id:
+            detalles_venta: list[DetalleVentaVendedor] = []
+            comision_acumulada = Decimal("0.00")
+            for detail in details:
+                prod = products.get(detail.producto_id)
+                cat = prod.categoria if prod else None
+                pct = Decimal(str(cat.comision_porcentaje or 0)) if cat else Decimal("0.00")
+                monto = (detail.subtotal * (pct / Decimal("100"))).quantize(Decimal("0.01"))
+                detalles_venta.append(
+                    DetalleVentaVendedor(
+                        producto_id=detail.producto_id,
+                        categoria_id=cat.id if cat else None,
+                        nombre_producto=detail.nombre_producto,
+                        nombre_categoria=cat.nombre if cat else None,
+                        cantidad=detail.cantidad,
+                        precio_unitario=detail.precio_unitario,
+                        subtotal=detail.subtotal,
+                        comision_porcentaje=pct,
+                        comision_monto=monto,
+                    )
+                )
+                comision_acumulada += monto
+
+            venta_vendedor = VentaVendedor(
+                vendedor_id=vendedor_id,
+                pedido=order,
+                cliente_id=customer_id,
+                total_venta=subtotal,
+                comision_total=comision_acumulada,
+                detalles=detalles_venta,
+            )
+            self.database.add(venta_vendedor)
 
         self.database.commit()
         created_order = self.get(order.id)

@@ -2142,5 +2142,47 @@ button, input { font: inherit; }
   line-height: 1.4;
 }
 
+/* =========================================================================
+   MODO VENDEDOR: BANNER SUPERIOR Y SUBMENÚS
+   ========================================================================= */
+.vendor-mode-banner {
+  background: linear-gradient(90deg, #1e293b 0%, #0f172a 100%);
+  border-bottom: 2px solid #eab308;
+  color: #ffffff;
+  padding: 0.65rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 1050;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.vendor-mode-banner .badge {
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.vendor-mode-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.category-commission {
+  display: inline-block;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
 
 

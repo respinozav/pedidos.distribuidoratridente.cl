@@ -2,6 +2,7 @@ from app.models.entities import (
     Categoria,
     Cliente,
     DetallePedido,
+    DetalleVentaVendedor,
     Direccion,
     Estado,
     Pedido,
@@ -11,6 +12,7 @@ from app.models.entities import (
     Rol,
     SesionLog,
     Usuario,
+    VentaVendedor,
 )
 from app.models.system_settings import SystemSettings
 
@@ -18,6 +20,7 @@ __all__ = [
     "Categoria",
     "Cliente",
     "DetallePedido",
+    "DetalleVentaVendedor",
     "Direccion",
     "Estado",
     "Pedido",
@@ -28,5 +31,6 @@ __all__ = [
     "SesionLog",
     "SystemSettings",
     "Usuario",
+    "VentaVendedor",
 ]
 

@@ -71,6 +71,14 @@ def get_current_customer(
     customer = database.get(Cliente, customer_id)
     if not customer or not customer.activo:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Cliente no autorizado")
+    vendedor_id_raw = payload.get("vendedor_id")
+    if vendedor_id_raw:
+        try:
+            customer.current_vendedor_id = UUID(str(vendedor_id_raw))
+        except (ValueError, TypeError):
+            customer.current_vendedor_id = None
+    else:
+        customer.current_vendedor_id = None
     return customer
 
 

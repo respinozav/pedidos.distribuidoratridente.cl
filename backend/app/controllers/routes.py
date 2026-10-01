@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 from uuid import UUID
 
@@ -7,8 +8,30 @@ from sqlalchemy import String, cast, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import AdminUser, AuthSubject, CustomerUser, DatabaseSession, NotVendedorUser, SuperAdminUser
-from app.core.security import create_access_token, create_customer_access_token, hash_password, verify_password
-from app.models.entities import Categoria, Cliente, Credito, Direccion, Estado, Pedido, PedidoNotificacionLog, Producto, Publicidad, Rol, SesionLog, Usuario
+from app.core.security import (
+    create_access_token,
+    create_customer_access_token,
+    create_vendor_customer_token,
+    hash_password,
+    verify_password,
+)
+from app.models.entities import (
+    Categoria,
+    Cliente,
+    Credito,
+    DetallePedido,
+    DetalleVentaVendedor,
+    Direccion,
+    Estado,
+    Pedido,
+    PedidoNotificacionLog,
+    Producto,
+    Publicidad,
+    Rol,
+    SesionLog,
+    Usuario,
+    VentaVendedor,
+)
 from app.repositories.base import Repository
 from app.repositories.system_settings_repository import SystemSettingsRepository
 from app.schemas.dto import (
@@ -26,7 +49,11 @@ from app.schemas.dto import (
     CustomerOutput,
     CustomerPasswordUpdate,
     CustomerProfileUpdate,
+    CustomerSelectItemOutput,
     CustomerUpdate,
+    DetalleVentaVendedorOutput,
+    IniciarVentaInput,
+    IniciarVentaOutput,
     NotificationLogPage,
     NotificationLogStats,
     OrderCreate,
@@ -51,6 +78,8 @@ from app.schemas.dto import (
     UserLogin,
     UserOutput,
     UserUpdate,
+    VentasVendedorResumenOutput,
+    VentaVendedorOutput,
 )
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
@@ -692,7 +721,8 @@ def update_address(
 def create_order(customer_id: UUID, payload: OrderCreate, database: DatabaseSession, current_customer: CustomerUser) -> object:
     if current_customer.id != customer_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes crear pedidos para otro cliente")
-    return OrderService(database).create(customer_id, payload)
+    vendedor_id = getattr(current_customer, "current_vendedor_id", None)
+    return OrderService(database).create(customer_id, payload, vendedor_id=vendedor_id)
 
 
 @router.get("/clientes/{customer_id}/pedidos", response_model=list[OrderOutput], tags=["Pedidos"])
@@ -1262,5 +1292,111 @@ def session_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> SesionLo
         fallidos=fallidos,
         admin_total=admin_total,
         cliente_total=cliente_total,
+    )
+
+
+# =========================================================================
+# RUTAS DE VENDEDOR (MIS VENTAS / GENERAR VENTA / VENTAS REALIZADAS)
+# =========================================================================
+@router.get("/admin/vendedor/clientes", response_model=list[CustomerSelectItemOutput], tags=["Vendedor"])
+def list_vendedor_clients(database: DatabaseSession, _: AdminUser) -> list[CustomerSelectItemOutput]:
+    """Lista todos los clientes activos para selección en la generación de venta por parte del vendedor."""
+    clients = list(
+        database.scalars(
+            select(Cliente)
+            .where(Cliente.activo.is_(True))
+            .order_by(func.coalesce(Cliente.nombre, Cliente.rut).asc())
+        )
+    )
+    return [
+        CustomerSelectItemOutput(
+            id=c.id,
+            nombre=c.nombre,
+            rut=c.rut,
+            correo=c.correo,
+            celular=c.celular,
+            porcentaje=c.porcentaje,
+        )
+        for c in clients
+    ]
+
+
+@router.post("/admin/vendedor/iniciar-venta", response_model=IniciarVentaOutput, tags=["Vendedor"])
+def iniciar_venta_vendedor(
+    payload: IniciarVentaInput,
+    database: DatabaseSession,
+    current_user: AdminUser,
+) -> IniciarVentaOutput:
+    """Inicia sesión temporal como cliente para realizar venta a nombre de él, asociando al vendedor actual."""
+    client = database.get(Cliente, payload.cliente_id)
+    if not client or not client.activo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado o inactivo")
+
+    token = create_vendor_customer_token(
+        customer_id=client.id,
+        vendedor_id=current_user.id,
+        vendedor_nombre=current_user.nombre,
+    )
+    return IniciarVentaOutput(
+        access_token=token,
+        token_type="bearer",
+        cliente_id=client.id,
+        cliente_nombre=client.nombre,
+        cliente_rut=client.rut,
+        vendedor_id=current_user.id,
+        vendedor_nombre=current_user.nombre,
+    )
+
+
+@router.get("/admin/vendedor/ventas", response_model=VentasVendedorResumenOutput, tags=["Vendedor"])
+def list_vendedor_ventas(
+    database: DatabaseSession,
+    current_user: AdminUser,
+    desde: str | None = None,
+    hasta: str | None = None,
+    vendedor_id: UUID | None = None,
+) -> VentasVendedorResumenOutput:
+    """Lista las ventas realizadas por el vendedor actual (o todas si es administrador), con el detalle de comisiones."""
+    is_vendedor = bool(current_user.rol and current_user.rol.nombre.strip().upper() == "VENDEDOR")
+
+    statement = (
+        select(VentaVendedor)
+        .options(
+            selectinload(VentaVendedor.cliente),
+            selectinload(VentaVendedor.vendedor),
+            selectinload(VentaVendedor.detalles),
+            selectinload(VentaVendedor.pedido),
+        )
+    )
+
+    if is_vendedor:
+        statement = statement.where(VentaVendedor.vendedor_id == current_user.id)
+    elif vendedor_id:
+        statement = statement.where(VentaVendedor.vendedor_id == vendedor_id)
+
+    CHILE_TZ = ZoneInfo("America/Santiago")
+    if desde:
+        try:
+            from_dt = datetime.strptime(f"{desde} 00:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(VentaVendedor.created_at >= from_dt)
+        except ValueError:
+            pass
+    if hasta:
+        try:
+            to_dt = datetime.strptime(f"{hasta} 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(VentaVendedor.created_at <= to_dt)
+        except ValueError:
+            pass
+
+    ventas = list(database.scalars(statement.order_by(VentaVendedor.created_at.desc())))
+
+    total_ventas = sum((v.total_venta for v in ventas), Decimal("0.00"))
+    total_comisiones = sum((v.comision_total for v in ventas), Decimal("0.00"))
+
+    return VentasVendedorResumenOutput(
+        total_ventas=total_ventas,
+        total_comisiones=total_comisiones,
+        cantidad_pedidos=len(ventas),
+        items=[VentaVendedorOutput.model_validate(v, from_attributes=True) for v in ventas],
     )
 

@@ -310,6 +310,7 @@ class OrderOutput(ORMModel):
     folio_defontana_afecto: int | None = None
     defontana_sincronizado: bool = False
     defontana_error: str | None = None
+    vendedor_id: UUID | None = None
     detalles: list[OrderLineOutput] = []
 
 
@@ -447,6 +448,62 @@ class SendPublicidadEmailOutput(BaseModel):
     enviados: int
     fallidos: int
     detalles: list[dict] = Field(default_factory=list)
+
+
+class IniciarVentaInput(BaseModel):
+    cliente_id: UUID
+
+
+class IniciarVentaOutput(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    cliente_id: UUID
+    cliente_nombre: str | None = None
+    cliente_rut: str | None = None
+    vendedor_id: UUID
+    vendedor_nombre: str
+
+
+class CustomerSelectItemOutput(BaseModel):
+    id: UUID
+    nombre: str | None = None
+    rut: str | None = None
+    correo: str | None = None
+    celular: str | None = None
+    porcentaje: Decimal = Decimal("0.00")
+
+
+class DetalleVentaVendedorOutput(ORMModel):
+    id: UUID
+    producto_id: UUID | None = None
+    categoria_id: UUID | None = None
+    nombre_producto: str
+    nombre_categoria: str | None = None
+    cantidad: int
+    precio_unitario: Decimal
+    subtotal: Decimal
+    comision_porcentaje: Decimal
+    comision_monto: Decimal
+
+
+class VentaVendedorOutput(ORMModel):
+    id: UUID
+    vendedor_id: UUID
+    pedido_id: UUID
+    cliente_id: UUID
+    total_venta: Decimal
+    comision_total: Decimal
+    created_at: datetime
+    cliente: OrderCustomerOutput | None = None
+    vendedor: UserOutput | None = None
+    detalles: list[DetalleVentaVendedorOutput] = []
+
+
+class VentasVendedorResumenOutput(BaseModel):
+    total_ventas: Decimal = Decimal("0.00")
+    total_comisiones: Decimal = Decimal("0.00")
+    cantidad_pedidos: int = 0
+    items: list[VentaVendedorOutput] = []
 
 
 

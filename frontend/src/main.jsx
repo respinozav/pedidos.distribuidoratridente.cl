@@ -15,6 +15,7 @@ import AdminAccount from "./pages/admin/AdminAccount";
 import PromoBannerCarousel from "./components/PromoBannerCarousel";
 import StockAlertBell from "./components/admin/StockAlertBell";
 import PublicPublicidades from "./pages/public/PublicPublicidades";
+import VendedorVentasRealizadas from "./pages/admin/VendedorVentasRealizadas";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
@@ -1488,7 +1489,7 @@ function AdminSalesDashboard() {
   return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">ANALÍTICA</p><h1>Dashboard</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Resumen comercial</span><StockAlertBell /></div></header><div className="admin-content dashboard-content"><section className="dashboard-hero"><div><p className="eyebrow">VENTAS</p><h2>Visión comercial</h2><p>Ventas y comportamiento de compra durante el periodo seleccionado.</p></div><div className="dashboard-date-filters"><label>Desde<input className="form-control" type="date" value={filters.desde} max={filters.hasta || undefined} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} min={filters.desde || undefined} max={today} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div></section>{error && <div className="alert alert-danger">{error}</div>}{loading ? <p className="text-secondary">Cargando indicadores...</p> : <><section className="dashboard-metrics"><article><span>VENTAS TOTALES</span><strong>{money.format(totalSales)}</strong><small>{salesOrders.length} pedidos no cancelados</small></article><article><span>CLIENTE PRINCIPAL</span><strong>{customerRanking[0]?.name || "Sin compras"}</strong><small>{customerRanking[0] ? money.format(customerRanking[0].total) : "-"}</small></article><article><span>PRODUCTO LÍDER</span><strong>{productRanking[0]?.name || "Sin ventas"}</strong><small>{productRanking[0] ? `${productRanking[0].units} unidades vendidas` : "-"}</small></article><article><span>UNIDADES VENDIDAS</span><strong>{totalUnits}</strong><small>En el periodo seleccionado</small></article></section><section className="dashboard-grid"><section className="content-panel dashboard-ranking"><div className="panel-heading"><div><h2>Clientes con más compras</h2><p>Ordenados de mayor a menor monto comprado.</p></div><span className="panel-count">{customerRanking.length} clientes</span></div>{customerRanking.length ? <ol className="ranking-list">{customerRanking.map((customer, index) => <li key={customer.id}><span className="ranking-position">{index + 1}</span><div className="ranking-main"><strong>{customer.name}</strong><small>{customer.orders} pedido{customer.orders === 1 ? "" : "s"}</small><i><b style={{ width: `${(customer.total / maxCustomerTotal) * 100}%` }} /></i></div><strong className="ranking-value">{money.format(customer.total)}</strong></li>)}</ol> : <p className="history-filter-empty">No hay compras en el periodo seleccionado.</p>}</section><section className="content-panel dashboard-ranking"><div className="panel-heading"><div><h2>Productos más vendidos</h2><p>Ordenados por cantidad de unidades vendidas.</p></div><span className="panel-count">{productRanking.length} productos</span></div>{productRanking.length ? <ol className="ranking-list">{productRanking.map((product, index) => <li key={product.id}><span className="ranking-position">{index + 1}</span><div className="ranking-main"><strong>{product.name}</strong><small>{product.units} unidades · {money.format(product.total)}</small><i><b style={{ width: `${(product.units / maxProductUnits) * 100}%` }} /></i></div><strong className="ranking-value">{product.units}</strong></li>)}</ol> : <p className="history-filter-empty">No hay ventas de productos en el periodo seleccionado.</p>}</section></section></>}</div></>;
 }
 
-function AdminDashboard({ onLogout }) {
+function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   const [categories, setCategories] = useState([]);
   const [name, setName] = useState("");
   const [createComision, setCreateComision] = useState("0");
@@ -1505,19 +1506,93 @@ function AdminDashboard({ onLogout }) {
   const [editComisionPorcentaje, setEditComisionPorcentaje] = useState("0");
   const [editEnCatalogoPublico, setEditEnCatalogoPublico] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [section, setSection] = useState("summary");
+  const [section, setSection] = useState(initialSection || "summary");
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [adminProfile, setAdminProfile] = useState(null);
+
+  useEffect(() => {
+    if (initialSection) {
+      setSection(initialSection);
+    }
+  }, [initialSection]);
+
+  // Estados para Mis Ventas (Vendedor)
+  const [misVentasOpen, setMisVentasOpen] = useState(true);
+  const [modalGenerarVentaOpen, setModalGenerarVentaOpen] = useState(false);
+  const [vendedorClients, setVendedorClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [startingSale, setStartingSale] = useState(false);
 
   const isColaborador = adminProfile?.rol?.nombre?.trim().toUpperCase() === "COLABORADOR";
   const isVendedor = adminProfile?.rol?.nombre?.trim().toUpperCase() === "VENDEDOR";
   const allowedColaboradorKeys = ["categories", "products", "orders", "profile"];
-  const allowedVendedorKeys = ["products", "orders", "credits", "profile"];
+  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "profile"];
   const activeSection = isVendedor && !allowedVendedorKeys.includes(section)
-    ? "products"
+    ? "vendedor_ventas_realizadas"
     : isColaborador && !allowedColaboradorKeys.includes(section)
     ? "categories"
     : section;
+
+  async function openGenerarVentaModal() {
+    setModalGenerarVentaOpen(true);
+    setSelectedClientId("");
+    setClientFilter("");
+    try {
+      const res = await api.get("/admin/vendedor/clientes");
+      setVendedorClients(res.data);
+    } catch {
+      Swal.fire("Error", "No fue posible cargar el listado de clientes.", "error");
+    }
+  }
+
+  async function handleStartVendorSale(event) {
+    event?.preventDefault();
+    if (!selectedClientId) return;
+    setStartingSale(true);
+    try {
+      const { data } = await api.post("/admin/vendedor/iniciar-venta", {
+        cliente_id: selectedClientId,
+      });
+
+      const currentAdminToken =
+        getStoredSession()?.token ||
+        api.defaults.headers.common["Authorization"]?.replace("Bearer ", "");
+
+      const clientProfileRes = await api.get("/cliente/perfil", {
+        headers: { Authorization: `Bearer ${data.access_token}` },
+      });
+
+      setModalGenerarVentaOpen(false);
+      if (onStartVendorSale) {
+        onStartVendorSale({
+          customer: clientProfileRes.data,
+          token: data.access_token,
+          adminToken: currentAdminToken,
+          vendedor_id: data.vendedor_id,
+          vendedor_nombre: data.vendedor_nombre,
+        });
+      }
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        err.response?.data?.detail || "No fue posible iniciar la venta para este cliente.",
+        "error"
+      );
+    } finally {
+      setStartingSale(false);
+    }
+  }
+
+  const filteredVendedorClients = useMemo(() => {
+    if (!clientFilter.trim()) return vendedorClients;
+    const q = clientFilter.trim().toLowerCase();
+    return vendedorClients.filter((c) => {
+      const nom = (c.nombre || "").toLowerCase();
+      const rut = (c.rut || "").toLowerCase();
+      return nom.includes(q) || rut.includes(q);
+    });
+  }, [vendedorClients, clientFilter]);
 
   useEffect(() => {
     api.get("/admin/perfil")
@@ -1525,9 +1600,25 @@ function AdminDashboard({ onLogout }) {
         setAdminProfile(data);
         const role = data?.rol?.nombre?.trim().toUpperCase();
         if (role === "VENDEDOR") {
-          setSection((current) => (allowedVendedorKeys.includes(current) ? current : "products"));
+          const defaultSec = window.__vendedorDefaultSection || "vendedor_ventas_realizadas";
+          delete window.__vendedorDefaultSection;
+          setSection((current) => (allowedVendedorKeys.includes(current) ? current : defaultSec));
+          if (window.__openVendedorGenerarVentaModal) {
+            delete window.__openVendedorGenerarVentaModal;
+            openGenerarVentaModal();
+          }
         } else if (role === "COLABORADOR") {
           setSection((current) => (allowedColaboradorKeys.includes(current) ? current : "categories"));
+        } else {
+          if (window.__vendedorDefaultSection) {
+            const defaultSec = window.__vendedorDefaultSection;
+            delete window.__vendedorDefaultSection;
+            setSection(defaultSec);
+          }
+          if (window.__openVendedorGenerarVentaModal) {
+            delete window.__openVendedorGenerarVentaModal;
+            openGenerarVentaModal();
+          }
         }
       })
       .catch(() => {});
@@ -1623,16 +1714,662 @@ function AdminDashboard({ onLogout }) {
     ? allNavigation.filter(([, , key]) => allowedColaboradorKeys.includes(key))
     : allNavigation;
 
-  return <main className="admin-app"><aside className={`admin-sidebar ${menuOpen ? "is-open" : ""}`}><div className="sidebar-brand"><BrandMark /><span>Distribuidora Tridente</span><button className="sidebar-close d-lg-none" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={20} /></button></div><p className="sidebar-label">OPERACION</p><nav className="sidebar-nav">{navigation.map(([Icon, label, key, enabled]) => <button key={label} className={activeSection === key ? "active" : ""} disabled={!enabled} onClick={() => { setSection(key); setConfigurationOpen(false); setMenuOpen(false); }}><Icon size={19} /><span>{label}</span>{!enabled && <small>Pronto</small>}</button>)}{!isColaborador && !isVendedor && <div className="sidebar-configuration"><button className={configurationOpen || activeSection === "users" || activeSection === "customers" || activeSection === "settings" || activeSection === "commercial_settings" || activeSection === "notification_logs" || activeSection === "session_logs" ? "active" : ""} onClick={() => setConfigurationOpen((current) => !current)}><Settings size={19} /><span>Configuración</span></button>{configurationOpen && <div className="sidebar-submenu"><button className={activeSection === "users" ? "active" : ""} onClick={() => { setSection("users"); setMenuOpen(false); }}><Users size={17} /><span>Usuarios</span></button><button className={activeSection === "customers" ? "active" : ""} onClick={() => { setSection("customers"); setMenuOpen(false); }}><Users size={17} /><span>Clientes</span></button><button className={activeSection === "settings" ? "active" : ""} onClick={() => { setSection("settings"); setMenuOpen(false); }}><Settings size={17} /><span>Sistema</span></button><button className={activeSection === "commercial_settings" ? "active" : ""} onClick={() => { setSection("commercial_settings"); setMenuOpen(false); }}><SlidersHorizontal size={17} /><span>Comerciales</span></button><button className={activeSection === "notification_logs" ? "active" : ""} onClick={() => { setSection("notification_logs"); setMenuOpen(false); }}><Activity size={17} /><span>Logs Envíos</span></button><button className={activeSection === "session_logs" ? "active" : ""} onClick={() => { setSection("session_logs"); setMenuOpen(false); }}><KeyRound size={17} /><span>Logs Sesiones</span></button></div>}</div>}</nav><div className="sidebar-bottom"><button type="button" className={`sidebar-user ${activeSection === "profile" ? "active" : ""}`} onClick={() => { setSection("profile"); setConfigurationOpen(false); setMenuOpen(false); }} title="Mis datos"><span>{(adminProfile?.nombre ? adminProfile.nombre.slice(0, 2) : "AD").toUpperCase()}</span><div><strong>{adminProfile?.nombre || "Administrador"}</strong><small>{adminProfile?.rol?.nombre || "Sesión activa"}</small></div></button><button className="logout-button" onClick={logout}><LogOut size={18} />Cerrar sesión</button></div></aside>{menuOpen && <div className="sidebar-backdrop d-lg-none" onClick={() => setMenuOpen(false)} />}<button className="icon-button admin-mobile-menu d-lg-none" type="button" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={21} /></button>
-    {activeSection === "summary" ? <section className="admin-workspace"><AdminSalesDashboard /></section> : activeSection === "products" ? <section className="admin-workspace"><ProductManager categories={categories} /></section> : activeSection === "orders" ? <section className="admin-workspace"><AdminOrderManager /></section> : activeSection === "credits" ? <section className="admin-workspace"><CreditManager /></section> : activeSection === "publicidad" ? <section className="admin-workspace"><PublicidadManager /></section> : activeSection === "profile" ? <section className="admin-workspace"><AdminAccount onProfileUpdated={(p) => setAdminProfile(p)} /></section> : activeSection === "notification_logs" ? <section className="admin-workspace"><NotificationLogs /></section> : activeSection === "session_logs" ? <section className="admin-workspace"><SessionLogs /></section> : activeSection === "users" ? <section className="admin-workspace"><UserManager /></section> : activeSection === "customers" ? <section className="admin-workspace"><CustomerManager /></section> : activeSection === "settings" ? <section className="admin-workspace"><SystemSettings /></section> : activeSection === "commercial_settings" ? <section className="admin-workspace"><CommercialSettings /></section> : <>
+  return (
+    <main className="admin-app">
+      <aside className={`admin-sidebar ${menuOpen ? "is-open" : ""}`}>
+        <div className="sidebar-brand">
+          <BrandMark />
+          <span>Distribuidora Tridente</span>
+          <button className="sidebar-close d-lg-none" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú">
+            <X size={20} />
+          </button>
+        </div>
+        <p className="sidebar-label">OPERACION</p>
+        <nav className="sidebar-nav">
+          {/* Submenú Mis Ventas (Generar Venta / Ventas Realizadas) para Vendedor y Admin */}
+          {(isVendedor || !isColaborador) && (
+            <div className="sidebar-configuration">
+              <button
+                type="button"
+                className={misVentasOpen || activeSection === "vendedor_ventas_realizadas" ? "active" : ""}
+                onClick={() => setMisVentasOpen((current) => !current)}
+              >
+                <ShoppingBag size={19} />
+                <span>Mis Ventas</span>
+              </button>
+              {misVentasOpen && (
+                <div className="sidebar-submenu">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openGenerarVentaModal();
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Plus size={17} />
+                    <span>Generar Venta</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={activeSection === "vendedor_ventas_realizadas" ? "active" : ""}
+                    onClick={() => {
+                      setSection("vendedor_ventas_realizadas");
+                      setConfigurationOpen(false);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <ClipboardList size={17} />
+                    <span>Ventas Realizadas</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
-    <section className="admin-workspace"><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CATALOGO</p><h1>Categorías</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de Categoría</span><button className="btn btn-primary" onClick={() => document.getElementById("category-name")?.focus()}><Plus size={18} />Nueva categoría</button><StockAlertBell /></div></header>
-      <div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">INVENTARIO</p><h2>Organiza tu Categoría</h2><p>Las categorías agrupan los productos visibles para tus clientes.</p></div><div className="summary-metric"><span>{categories.length}</span><small>Categorías registradas</small></div></section>
-        <section className="content-panel"><div className="panel-heading"><div><h2>Listado de categorías</h2><p>Administra la clasificación de tu catálogo.</p></div><span className="panel-count">{categories.length} registros</span></div><form className="category-form" onSubmit={createCategory}><div><label htmlFor="category-name" className="visually-hidden">Nombre de categoría</label><input id="category-name" className="form-control" placeholder="Escribe una nueva categoría" value={name} onChange={(event) => setName(event.target.value)} maxLength="120" required /></div><div><label htmlFor="category-create-comision" className="visually-hidden">% Comisión Vendedor</label><div className="input-group"><input id="category-create-comision" className="form-control" type="number" min="0" max="100" step="0.01" placeholder="% Comis." value={createComision} onChange={(event) => setCreateComision(event.target.value)} title="% Comisión Vendedor" /><span className="input-group-text">%</span></div></div><button className="btn btn-primary"><Plus size={18} />Agregar</button></form>
-          {notice && <div className="alert alert-success alert-dismissible fade show mt-3 mb-0 category-notice" role="alert"><CheckCircle2 size={18} />{notice}<button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setNotice("")} /></div>}
-          {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
-          {loading ? <p className="mt-4 text-secondary">Cargando categorías...</p> : <div className="category-table mt-4"><div className="category-table-head"><span>Orden</span><span>Categoría</span><span>Porcentaje</span><span>% Com. Vendedor</span><span>Catálogo Público</span><span>Estado</span><span>Acciones</span></div>{categories.length ? categories.map((category) => <div className="category-row" key={category.id}><span className="category-order-badge">{category.orden ?? 0}</span><div className="category-name"><span className="category-icon"><Boxes size={18} /></span><strong>{category.nombre}</strong></div><span className="category-percentage">{category.usa_porcentaje_cliente ? "Cliente" : `${Number(category.porcentaje)}%`}</span><span className="category-commission">{Number(category.comision_porcentaje ?? 0)}%</span><span className={category.en_catalogo_publico ? "status-active" : "status-inactive"}>{category.en_catalogo_publico ? "Sí" : "No"}</span><span className={category.activo ? "status-active" : "status-inactive"}>{category.activo ? "Activa" : "Inactiva"}</span><button className="icon-button category-edit" onClick={() => openEdit(category)} aria-label={`Editar ${category.nombre}`}><Pencil size={16} /></button></div>) : <p className="text-secondary p-4 mb-0">Aún no hay categorías. Agrega la primera para comenzar.</p>}</div>}
-        </section></div></section>{editingCategory && <div className="modal-backdrop-custom" role="presentation"><form className="category-modal" onSubmit={updateCategory} role="dialog" aria-modal="true" aria-labelledby="edit-category-title"><header><div><p className="eyebrow">CATEGORIA</p><h2 id="edit-category-title">Editar categoría</h2></div><button type="button" className="icon-button" onClick={() => setEditingCategory(null)} aria-label="Cerrar edición"><X size={19} /></button></header><div className="modal-body-custom"><label htmlFor="edit-category-name" className="form-label">Nombre</label><input id="edit-category-name" className="form-control" value={editName} onChange={(event) => setEditName(event.target.value)} maxLength="120" required autoFocus /><div className="mt-3"><label htmlFor="edit-category-order" className="form-label">Orden</label><input id="edit-category-order" className="form-control" type="number" step="1" value={editOrden} onChange={(event) => setEditOrden(event.target.value)} required /><small className="form-text">Número para definir la posición de la categoría en los listados y catálogo.</small></div><div className="mt-3"><label htmlFor="edit-category-comision" className="form-label">% Comisión Vendedor</label><div className="input-group"><input id="edit-category-comision" className="form-control" type="number" min="0" max="100" step="0.01" value={editComisionPorcentaje} onChange={(event) => setEditComisionPorcentaje(event.target.value)} required /><span className="input-group-text">%</span></div><small className="form-text">Porcentaje de comisión para el vendedor en los productos de esta categoría.</small></div><div className="status-toggle"><div><strong>Usar porcentaje del cliente</strong><small>Aplica el porcentaje configurado para el cliente.</small></div><label className="switch"><input type="checkbox" checked={editUsesCustomerPercentage} onChange={(event) => setEditUsesCustomerPercentage(event.target.checked)} /><span /></label></div>{!editUsesCustomerPercentage && <div className="mt-3"><label htmlFor="edit-category-percentage" className="form-label">Porcentaje de la categoría</label><input id="edit-category-percentage" className="form-control" type="number" min="0" max="100" step="0.01" value={editPercentage} onChange={(event) => setEditPercentage(event.target.value)} required /><small className="form-text">Se suma al precio base de los productos de esta categoría.</small></div>}<div className="status-toggle"><div><strong>Mostrar en catálogo público</strong><small>Determina si la categoría es visible para los clientes.</small></div><label className="switch"><input type="checkbox" checked={editEnCatalogoPublico} onChange={(event) => setEditEnCatalogoPublico(event.target.checked)} /><span /></label></div><div className="status-toggle"><div><strong>Estado de la categoría</strong><small>Las categorías inactivas no aparecen al cliente.</small></div><label className="switch"><input type="checkbox" checked={editActive} onChange={(event) => setEditActive(event.target.checked)} /><span /></label></div></div><footer><button type="button" className="btn btn-light" onClick={() => setEditingCategory(null)}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar cambios</>}</button></footer></form></div>}</>}</main>;
+          {navigation.map(([Icon, label, key, enabled]) => (
+            <button
+              key={label}
+              className={activeSection === key ? "active" : ""}
+              disabled={!enabled}
+              onClick={() => {
+                setSection(key);
+                setConfigurationOpen(false);
+                setMenuOpen(false);
+              }}
+            >
+              <Icon size={19} />
+              <span>{label}</span>
+              {!enabled && <small>Pronto</small>}
+            </button>
+          ))}
+
+          {!isColaborador && !isVendedor && (
+            <div className="sidebar-configuration">
+              <button
+                className={
+                  configurationOpen ||
+                  activeSection === "users" ||
+                  activeSection === "customers" ||
+                  activeSection === "settings" ||
+                  activeSection === "commercial_settings" ||
+                  activeSection === "notification_logs" ||
+                  activeSection === "session_logs"
+                    ? "active"
+                    : ""
+                }
+                onClick={() => setConfigurationOpen((current) => !current)}
+              >
+                <Settings size={19} />
+                <span>Configuración</span>
+              </button>
+              {configurationOpen && (
+                <div className="sidebar-submenu">
+                  <button
+                    className={activeSection === "users" ? "active" : ""}
+                    onClick={() => {
+                      setSection("users");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Users size={17} />
+                    <span>Usuarios</span>
+                  </button>
+                  <button
+                    className={activeSection === "customers" ? "active" : ""}
+                    onClick={() => {
+                      setSection("customers");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Users size={17} />
+                    <span>Clientes</span>
+                  </button>
+                  <button
+                    className={activeSection === "settings" ? "active" : ""}
+                    onClick={() => {
+                      setSection("settings");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Settings size={17} />
+                    <span>Sistema</span>
+                  </button>
+                  <button
+                    className={activeSection === "commercial_settings" ? "active" : ""}
+                    onClick={() => {
+                      setSection("commercial_settings");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <SlidersHorizontal size={17} />
+                    <span>Comerciales</span>
+                  </button>
+                  <button
+                    className={activeSection === "notification_logs" ? "active" : ""}
+                    onClick={() => {
+                      setSection("notification_logs");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Activity size={17} />
+                    <span>Logs Envíos</span>
+                  </button>
+                  <button
+                    className={activeSection === "session_logs" ? "active" : ""}
+                    onClick={() => {
+                      setSection("session_logs");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <KeyRound size={17} />
+                    <span>Logs Sesiones</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </nav>
+        <div className="sidebar-bottom">
+          <button
+            type="button"
+            className={`sidebar-user ${activeSection === "profile" ? "active" : ""}`}
+            onClick={() => {
+              setSection("profile");
+              setConfigurationOpen(false);
+              setMenuOpen(false);
+            }}
+            title="Mis datos"
+          >
+            <span>{(adminProfile?.nombre ? adminProfile.nombre.slice(0, 2) : "AD").toUpperCase()}</span>
+            <div>
+              <strong>{adminProfile?.nombre || "Administrador"}</strong>
+              <small>{adminProfile?.rol?.nombre || "Sesión activa"}</small>
+            </div>
+          </button>
+          <button className="logout-button" onClick={logout}>
+            <LogOut size={18} />
+            Cerrar sesión
+          </button>
+        </div>
+      </aside>
+
+      {menuOpen && <div className="sidebar-backdrop d-lg-none" onClick={() => setMenuOpen(false)} />}
+      <button
+        className="icon-button admin-mobile-menu d-lg-none"
+        type="button"
+        onClick={() => setMenuOpen(true)}
+        aria-label="Abrir menú"
+      >
+        <Menu size={21} />
+      </button>
+
+      {activeSection === "vendedor_ventas_realizadas" ? (
+        <section className="admin-workspace">
+          <VendedorVentasRealizadas onOpenGenerarVenta={openGenerarVentaModal} isVendedor={isVendedor} />
+        </section>
+      ) : activeSection === "summary" ? (
+        <section className="admin-workspace">
+          <AdminSalesDashboard />
+        </section>
+      ) : activeSection === "products" ? (
+        <section className="admin-workspace">
+          <ProductManager categories={categories} />
+        </section>
+      ) : activeSection === "orders" ? (
+        <section className="admin-workspace">
+          <AdminOrderManager />
+        </section>
+      ) : activeSection === "credits" ? (
+        <section className="admin-workspace">
+          <CreditManager />
+        </section>
+      ) : activeSection === "publicidad" ? (
+        <section className="admin-workspace">
+          <PublicidadManager />
+        </section>
+      ) : activeSection === "profile" ? (
+        <section className="admin-workspace">
+          <AdminAccount onProfileUpdated={(p) => setAdminProfile(p)} />
+        </section>
+      ) : activeSection === "notification_logs" ? (
+        <section className="admin-workspace">
+          <NotificationLogs />
+        </section>
+      ) : activeSection === "session_logs" ? (
+        <section className="admin-workspace">
+          <SessionLogs />
+        </section>
+      ) : activeSection === "users" ? (
+        <section className="admin-workspace">
+          <UserManager />
+        </section>
+      ) : activeSection === "customers" ? (
+        <section className="admin-workspace">
+          <CustomerManager />
+        </section>
+      ) : activeSection === "settings" ? (
+        <section className="admin-workspace">
+          <SystemSettings />
+        </section>
+      ) : activeSection === "commercial_settings" ? (
+        <section className="admin-workspace">
+          <CommercialSettings />
+        </section>
+      ) : (
+        <>
+          <section className="admin-workspace">
+            <header className="admin-topbar">
+              <div className="topbar-title">
+                <p className="eyebrow mb-1">CATALOGO</p>
+                <h1>Categorías</h1>
+              </div>
+              <div className="topbar-actions">
+                <span className="topbar-date d-none d-sm-inline">Gestión de Categoría</span>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => document.getElementById("category-name")?.focus()}
+                >
+                  <Plus size={18} />
+                  Nueva categoría
+                </button>
+                <StockAlertBell />
+              </div>
+            </header>
+            <div className="admin-content">
+              <section className="admin-summary">
+                <div>
+                  <p className="eyebrow">INVENTARIO</p>
+                  <h2>Organiza tu Categoría</h2>
+                  <p>Las categorías agrupan los productos visibles para tus clientes.</p>
+                </div>
+                <div className="summary-metric">
+                  <span>{categories.length}</span>
+                  <small>Categorías registradas</small>
+                </div>
+              </section>
+              <section className="content-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Listado de categorías</h2>
+                    <p>Administra la clasificación de tu catálogo.</p>
+                  </div>
+                  <span className="panel-count">{categories.length} registros</span>
+                </div>
+                <form className="category-form" onSubmit={createCategory}>
+                  <div>
+                    <label htmlFor="category-name" className="visually-hidden">
+                      Nombre de categoría
+                    </label>
+                    <input
+                      id="category-name"
+                      className="form-control"
+                      placeholder="Escribe una nueva categoría"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      maxLength="120"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="category-create-comision" className="visually-hidden">
+                      % Comisión Vendedor
+                    </label>
+                    <div className="input-group">
+                      <input
+                        id="category-create-comision"
+                        className="form-control"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="% Comis."
+                        value={createComision}
+                        onChange={(event) => setCreateComision(event.target.value)}
+                        title="% Comisión Vendedor"
+                      />
+                      <span className="input-group-text">%</span>
+                    </div>
+                  </div>
+                  <button className="btn btn-primary">
+                    <Plus size={18} />
+                    Agregar
+                  </button>
+                </form>
+                {notice && (
+                  <div
+                    className="alert alert-success alert-dismissible fade show mt-3 mb-0 category-notice"
+                    role="alert"
+                  >
+                    <CheckCircle2 size={18} />
+                    {notice}
+                    <button
+                      type="button"
+                      className="btn-close"
+                      aria-label="Cerrar"
+                      onClick={() => setNotice("")}
+                    />
+                  </div>
+                )}
+                {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
+                {loading ? (
+                  <p className="mt-4 text-secondary">Cargando categorías...</p>
+                ) : (
+                  <div className="category-table mt-4">
+                    <div className="category-table-head">
+                      <span>Orden</span>
+                      <span>Categoría</span>
+                      <span>Porcentaje</span>
+                      <span>% Com. Vendedor</span>
+                      <span>Catálogo Público</span>
+                      <span>Estado</span>
+                      <span>Acciones</span>
+                    </div>
+                    {categories.length ? (
+                      categories.map((category) => (
+                        <div className="category-row" key={category.id}>
+                          <span className="category-order-badge">{category.orden ?? 0}</span>
+                          <div className="category-name">
+                            <span className="category-icon">
+                              <Boxes size={18} />
+                            </span>
+                            <strong>{category.nombre}</strong>
+                          </div>
+                          <span className="category-percentage">
+                            {category.usa_porcentaje_cliente ? "Cliente" : `${Number(category.porcentaje)}%`}
+                          </span>
+                          <span className="category-commission">{Number(category.comision_porcentaje ?? 0)}%</span>
+                          <span className={category.en_catalogo_publico ? "status-active" : "status-inactive"}>
+                            {category.en_catalogo_publico ? "Sí" : "No"}
+                          </span>
+                          <span className={category.activo ? "status-active" : "status-inactive"}>
+                            {category.activo ? "Activa" : "Inactiva"}
+                          </span>
+                          <button
+                            className="icon-button category-edit"
+                            onClick={() => openEdit(category)}
+                            aria-label={`Editar ${category.nombre}`}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-secondary p-4 mb-0">
+                        Aún no hay categorías. Agrega la primera para comenzar.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+          </section>
+          {editingCategory && (
+            <div className="modal-backdrop-custom" role="presentation">
+              <form
+                className="category-modal"
+                onSubmit={updateCategory}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="edit-category-title"
+              >
+                <header>
+                  <div>
+                    <p className="eyebrow">CATEGORIA</p>
+                    <h2 id="edit-category-title">Editar categoría</h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => setEditingCategory(null)}
+                    aria-label="Cerrar edición"
+                  >
+                    <X size={19} />
+                  </button>
+                </header>
+                <div className="modal-body-custom">
+                  <label htmlFor="edit-category-name" className="form-label">
+                    Nombre
+                  </label>
+                  <input
+                    id="edit-category-name"
+                    className="form-control"
+                    value={editName}
+                    onChange={(event) => setEditName(event.target.value)}
+                    maxLength="120"
+                    required
+                    autoFocus
+                  />
+                  <div className="mt-3">
+                    <label htmlFor="edit-category-order" className="form-label">
+                      Orden
+                    </label>
+                    <input
+                      id="edit-category-order"
+                      className="form-control"
+                      type="number"
+                      step="1"
+                      value={editOrden}
+                      onChange={(event) => setEditOrden(event.target.value)}
+                      required
+                    />
+                    <small className="form-text">
+                      Número para definir la posición de la categoría en los listados y catálogo.
+                    </small>
+                  </div>
+                  <div className="mt-3">
+                    <label htmlFor="edit-category-comision" className="form-label">
+                      % Comisión Vendedor
+                    </label>
+                    <div className="input-group">
+                      <input
+                        id="edit-category-comision"
+                        className="form-control"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={editComisionPorcentaje}
+                        onChange={(event) => setEditComisionPorcentaje(event.target.value)}
+                        required
+                      />
+                      <span className="input-group-text">%</span>
+                    </div>
+                    <small className="form-text">
+                      Porcentaje de comisión para el vendedor en los productos de esta categoría.
+                    </small>
+                  </div>
+                  <div className="status-toggle">
+                    <div>
+                      <strong>Usar porcentaje del cliente</strong>
+                      <small>Aplica el porcentaje configurado para el cliente.</small>
+                    </div>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={editUsesCustomerPercentage}
+                        onChange={(event) => setEditUsesCustomerPercentage(event.target.checked)}
+                      />
+                      <span />
+                    </label>
+                  </div>
+                  {!editUsesCustomerPercentage && (
+                    <div className="mt-3">
+                      <label htmlFor="edit-category-percentage" className="form-label">
+                        Porcentaje de la categoría
+                      </label>
+                      <input
+                        id="edit-category-percentage"
+                        className="form-control"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={editPercentage}
+                        onChange={(event) => setEditPercentage(event.target.value)}
+                        required
+                      />
+                      <small className="form-text">
+                        Se suma al precio base de los productos de esta categoría.
+                      </small>
+                    </div>
+                  )}
+                  <div className="status-toggle">
+                    <div>
+                      <strong>Mostrar en catálogo público</strong>
+                      <small>Determina si la categoría es visible para los clientes.</small>
+                    </div>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={editEnCatalogoPublico}
+                        onChange={(event) => setEditEnCatalogoPublico(event.target.checked)}
+                      />
+                      <span />
+                    </label>
+                  </div>
+                  <div className="status-toggle">
+                    <div>
+                      <strong>Estado de la categoría</strong>
+                      <small>Las categorías inactivas no aparecen al cliente.</small>
+                    </div>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={editActive}
+                        onChange={(event) => setEditActive(event.target.checked)}
+                      />
+                      <span />
+                    </label>
+                  </div>
+                </div>
+                <footer>
+                  <button
+                    type="button"
+                    className="btn btn-light"
+                    onClick={() => setEditingCategory(null)}
+                  >
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" disabled={saving}>
+                    {saving ? "Guardando..." : <><Save size={17} />Guardar cambios</>}
+                  </button>
+                </footer>
+              </form>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Modal ¿A qué cliente se generará la venta? */}
+      {modalGenerarVentaOpen && (
+        <div className="modal-backdrop-custom" role="presentation">
+          <div
+            className="category-modal"
+            style={{ maxWidth: "560px", width: "95%" }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-generar-venta-title"
+          >
+            <header className="d-flex justify-content-between align-items-center border-bottom p-3">
+              <div>
+                <p className="eyebrow mb-1">MIS VENTAS</p>
+                <h2 className="fs-5 mb-0" id="modal-generar-venta-title">
+                  ¿A qué cliente se generará la venta?
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setModalGenerarVentaOpen(false)}
+                aria-label="Cerrar modal"
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <form onSubmit={handleStartVendorSale}>
+              <div className="modal-body-custom p-4">
+                <div className="alert alert-info py-2 px-3 mb-3 small d-flex align-items-center gap-2">
+                  <ShoppingBag size={18} className="flex-shrink-0" />
+                  <span>
+                    Comprarás como si fueras este cliente registrado, aplicando sus descuentos y condiciones, y la venta quedará registrada a tu nombre de vendedor.
+                  </span>
+                </div>
+
+                <div className="mb-3">
+                  <label htmlFor="client-search-filter" className="form-label small fw-bold text-secondary">
+                    Filtrar cliente por nombre o RUT
+                  </label>
+                  <div className="search-field w-100">
+                    <Search size={16} />
+                    <input
+                      id="client-search-filter"
+                      type="search"
+                      className="form-control"
+                      placeholder="Escribe para buscar..."
+                      value={clientFilter}
+                      onChange={(e) => setClientFilter(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label htmlFor="select-cliente-venta" className="form-label fw-bold">
+                    Razón Social y (RUT):
+                  </label>
+                  <select
+                    id="select-cliente-venta"
+                    className="form-select form-select-lg"
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    required
+                  >
+                    <option value="">-- Selecciona un cliente --</option>
+                    {filteredVendedorClients.map((cli) => (
+                      <option key={cli.id} value={cli.id}>
+                        {cli.nombre || "Sin razón social"} ({cli.rut || "Sin RUT"})
+                      </option>
+                    ))}
+                  </select>
+                  <small className="form-text text-muted">
+                    Mostrando {filteredVendedorClients.length} de {vendedorClients.length} clientes activos.
+                  </small>
+                </div>
+              </div>
+
+              <footer className="border-top p-3 d-flex justify-content-end gap-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setModalGenerarVentaOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary d-inline-flex align-items-center gap-1"
+                  disabled={!selectedClientId || startingSale}
+                >
+                  {startingSale ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-1" role="status" />
+                      Cargando tienda...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingBag size={17} />
+                      Ingresar a Comprar
+                    </>
+                  )}
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
+    </main>
+  );
 }
 
 function ShopLegacy({ customer }) {
@@ -1898,7 +2635,7 @@ function CustomerAccount({ customer, tab, onTabChange, onProfileUpdated, onLogou
   return <main className="customer-portal"><aside className="customer-sidebar"><div className="customer-brand"><BrandMark /><strong>Distribuidora Tridente</strong></div><p className="sidebar-label">MENU PRINCIPAL</p><nav className="customer-nav"><span className="customer-nav-title"><ClipboardList size={19} />Pedidos</span><button type="button" onClick={() => onTabChange("orders")}><ShoppingBag size={17} />Volver a pedidos</button><span className="customer-nav-title account-nav-title"><Users size={19} />Mis datos</span><div className="customer-submenu"><button className={tab === "personal" ? "active" : ""} type="button" onClick={() => onTabChange("personal")}><Users size={16} />Personal</button><button className={tab === "addresses" ? "active" : ""} type="button" onClick={() => onTabChange("addresses")}><MapPin size={16} />Direcciones</button><button className={tab === "password" ? "active" : ""} type="button" onClick={() => onTabChange("password")}><Settings size={16} />Cambiar contraseña</button></div></nav><div className="customer-profile"><span>{(profile.nombre || profile.rut || "CL").slice(0, 2).toUpperCase()}</span><div><strong>{profile.nombre || "Cliente"}</strong><small>Sesión activa</small></div></div><button className="logout-button" onClick={onLogout}><LogOut size={18} />Cerrar sesión</button></aside><section className="customer-workspace"><header className="customer-portal-header"><div><p className="eyebrow">MIS DATOS</p><h1>{tab === "personal" ? "Personal" : tab === "addresses" ? "Direcciones" : "Cambiar contraseña"}</h1></div></header><div className="customer-content">{notice && <div className="alert alert-success">{notice}</div>}{error && <div className="alert alert-danger">{error}</div>}{content}</div></section></main>;
 }
 
-function Shop({ customer, onLogout, onProfileUpdated }) {
+function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendorMode }) {
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [categories, setCategories] = useState([]);
@@ -2444,12 +3181,29 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
       setSection("history");
       await Promise.all([loadHistory(), loadProducts()]);
       Swal.close();
-      Swal.fire({
-        icon: "success",
-        title: "Pedido enviado",
-        text: `Tu pedido fue registrado correctamente. Código: ${orderCode}`,
-        confirmButtonText: "Aceptar",
-      });
+      if (vendorSession) {
+        Swal.fire({
+          icon: "success",
+          title: "Venta registrada con éxito",
+          html: `<p>El pedido fue generado correctamente para <strong>${customer.nombre || customer.rut || "el cliente"}</strong>.</p><p class="text-muted">Código de pedido: <strong>${orderCode}</strong></p><p class="mt-2 text-success fw-bold">Comisión calculada y registrada en Ventas Realizadas.</p>`,
+          showCancelButton: true,
+          confirmButtonText: "Ver Ventas Realizadas",
+          cancelButtonText: "Seguir comprando",
+          confirmButtonColor: "#0d6efd",
+          cancelButtonColor: "#6c757d",
+        }).then((result) => {
+          if (result.isConfirmed && onExitVendorMode) {
+            onExitVendorMode("vendedor_ventas_realizadas");
+          }
+        });
+      } else {
+        Swal.fire({
+          icon: "success",
+          title: "Pedido enviado",
+          text: `Tu pedido fue registrado correctamente. Código: ${orderCode}`,
+          confirmButtonText: "Aceptar",
+        });
+      }
     } catch (requestError) {
       setError(requestError.response?.data?.detail ?? "No fue posible enviar el pedido.");
       Swal.close();
@@ -2485,51 +3239,84 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
   }, [section]);
 
   if (section === "profile") {
-    return <CustomerProfile customer={customer} onProfileUpdated={onProfileUpdated} onBack={() => setSection("create")} onOrders={() => setSection("history")} onLogout={onLogout} />;
+    return (
+      <CustomerProfile
+        customer={customer}
+        onProfileUpdated={onProfileUpdated}
+        onBack={() => setSection("create")}
+        onOrders={() => setSection("history")}
+        onLogout={vendorSession ? () => onExitVendorMode && onExitVendorMode() : onLogout}
+      />
+    );
   }
 
   const total = cart.reduce((sum, item) => sum + Number(item.unit_price ?? item.precio_cliente ?? item.precio) * item.quantity, 0);
   const activeAddresses = customer.direcciones?.filter((address) => address.activo) ?? [];
   return (
-    <main className="customer-portal">
-      <aside className="customer-sidebar">
-        <div className="customer-brand">
-          <span className="brand-mark">DT</span>
-          <strong>Distribuidora Tridente</strong>
-        </div>
-        <p className="sidebar-label">MENU PRINCIPAL</p>
-        <nav className="customer-nav">
-          <span className="customer-nav-title">
-            <ClipboardList size={19} />
-            Pedidos
-          </span>
-          <button
-            className={section === "create" ? "active" : ""}
-            onClick={() => {
-              setSection("create");
-              setError("");
-            }}
-          >
-            <ShoppingBag size={17} />
-            Realizar pedido
-          </button>
-          <button className={section === "history" ? "active" : ""} onClick={openHistory}>
-            <ClipboardList size={17} />
-            Pedidos históricos
-          </button>
-        </nav>
-        <div className="customer-profile">
-          <span>{(customer.nombre || customer.rut || customer.celular || "CL").slice(0, 2).toUpperCase()}</span>
-          <div>
-            <strong>{customer.nombre || "Cliente"}</strong>
-            <small>Sesión activa</small>
+    <>
+      {vendorSession && (
+        <div className="vendor-mode-banner">
+          <div className="vendor-mode-banner-info">
+            <span className="badge bg-warning text-dark fw-bold">MODO VENDEDOR</span>
+            <span>
+              Generando venta para: <strong>{customer.nombre || customer.rut || "Cliente"}</strong>
+              {customer.rut ? ` (${customer.rut})` : ""}
+            </span>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-sm btn-light d-inline-flex align-items-center gap-1 shadow-sm fw-semibold"
+              onClick={() => onExitVendorMode && onExitVendorMode()}
+            >
+              <LogOut size={15} />
+              Volver a Panel Vendedor
+            </button>
           </div>
         </div>
-        <button className="logout-button" onClick={onLogout}>
-          <LogOut size={18} />
-          Cerrar sesión
-        </button>
-      </aside>
+      )}
+      <main className="customer-portal">
+        <aside className="customer-sidebar">
+          <div className="customer-brand">
+            <span className="brand-mark">DT</span>
+            <strong>Distribuidora Tridente</strong>
+          </div>
+          <p className="sidebar-label">MENU PRINCIPAL</p>
+          <nav className="customer-nav">
+            <span className="customer-nav-title">
+              <ClipboardList size={19} />
+              Pedidos
+            </span>
+            <button
+              className={section === "create" ? "active" : ""}
+              onClick={() => {
+                setSection("create");
+                setError("");
+              }}
+            >
+              <ShoppingBag size={17} />
+              Realizar pedido
+            </button>
+            <button className={section === "history" ? "active" : ""} onClick={openHistory}>
+              <ClipboardList size={17} />
+              Pedidos históricos
+            </button>
+          </nav>
+          <div className="customer-profile">
+            <span>{(customer.nombre || customer.rut || customer.celular || "CL").slice(0, 2).toUpperCase()}</span>
+            <div>
+              <strong>{customer.nombre || "Cliente"}</strong>
+              <small>Sesión activa</small>
+            </div>
+          </div>
+          <button
+            className="logout-button"
+            onClick={vendorSession ? () => onExitVendorMode && onExitVendorMode() : onLogout}
+          >
+            <LogOut size={18} />
+            {vendorSession ? "Volver a Panel" : "Cerrar sesión"}
+          </button>
+        </aside>
       <section className="customer-workspace">
         <header className="customer-portal-header">
           <div>
@@ -2787,6 +3574,7 @@ function Shop({ customer, onLogout, onProfileUpdated }) {
         </div>
       </section>
     </main>
+    </>
   );
 
 }
@@ -2844,6 +3632,8 @@ function App() {
   const [view, setView] = useState(
     initialSession?.role === "admin" ? "admin-dashboard" : "customer-access"
   );
+  const [vendorSaleSession, setVendorSaleSession] = useState(null);
+  const [adminInitialSection, setAdminInitialSection] = useState(null);
 
   useEffect(() => {
     if (initialSession?.role === "customer" && initialSession.token) {
@@ -2863,13 +3653,29 @@ function App() {
     setAdminToken(null);
     setCustomerToken(null);
     setCustomer(null);
+    setVendorSaleSession(null);
     setView("customer-access");
   }, []);
 
   useSessionInactivity({
-    active: Boolean(customer) || view === "admin-dashboard",
+    active: Boolean(customer) || Boolean(vendorSaleSession) || view === "admin-dashboard",
     onLogout: handleInactivityLogout,
   });
+
+  const handleStartVendorSale = (saleData) => {
+    setCustomerToken(saleData.token);
+    setVendorSaleSession(saleData);
+  };
+
+  const handleExitVendorMode = (targetSection = "vendedor_ventas_realizadas") => {
+    if (vendorSaleSession?.adminToken) {
+      setAdminToken(vendorSaleSession.adminToken);
+    }
+    setCustomerToken(null);
+    setVendorSaleSession(null);
+    setAdminInitialSection(targetSection);
+    setView("admin-dashboard");
+  };
 
   const cleanPath = window.location.pathname.toLowerCase().replace(/\/+$/, "") || "/";
   const isPublicCatalogRoute = cleanPath === "/public/catalogo";
@@ -2881,8 +3687,29 @@ function App() {
 
   if (isPublicCatalogRoute) return <PublicCatalog />;
   if (isPublicPublicidadesRoute) return <PublicPublicidades />;
+  if (vendorSaleSession) {
+    return (
+      <Shop
+        customer={vendorSaleSession.customer}
+        vendorSession={vendorSaleSession}
+        onProfileUpdated={(updatedCustomer) =>
+          setVendorSaleSession((prev) => ({ ...prev, customer: updatedCustomer }))
+        }
+        onLogout={() => handleExitVendorMode()}
+        onExitVendorMode={handleExitVendorMode}
+      />
+    );
+  }
   if (customer) return <Shop customer={customer} onProfileUpdated={setCustomer} onLogout={() => { clearSessionStorage(); setCustomerToken(null); setCustomer(null); }} />;
-  if (view === "admin-dashboard") return <AdminDashboard onLogout={() => { clearSessionStorage(); setAdminToken(null); setView("customer-access"); }} />;
+  if (view === "admin-dashboard") {
+    return (
+      <AdminDashboard
+        initialSection={adminInitialSection}
+        onLogout={() => { clearSessionStorage(); setAdminToken(null); setView("customer-access"); }}
+        onStartVendorSale={handleStartVendorSale}
+      />
+    );
+  }
   if (view === "admin-access") return <AdminAccess onLogin={() => setView("admin-dashboard")} onCustomerAccess={() => setView("customer-access")} />;
   return <Access onCustomerLogin={setCustomer} onAdminLogin={() => setView("admin-dashboard")} />;
 }
