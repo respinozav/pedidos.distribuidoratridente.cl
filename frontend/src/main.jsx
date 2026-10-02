@@ -2699,7 +2699,13 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
       setOtherText("");
       setComments("");
       setSubmitting(false);
+      return;
     }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -2769,12 +2775,13 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
 
   return (
     <div className="modal-backdrop-custom" onClick={() => !submitting && onClose()}>
-      <section
+      <form
         className="category-modal product-modal focus-group-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="focus-group-title"
         onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
       >
         <header className="focus-group-header">
           <div className="focus-group-title-group">
@@ -2794,15 +2801,14 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
           </button>
         </header>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body-custom">
-            <div className="focus-group-survey-card">
-              <div className="focus-group-survey-header">
-                <h3 className="focus-group-survey-title">
-                  ¿Qué productos te gustaría que incorporáramos a nuestro catálogo?{" "}
-                  <span className="focus-group-survey-sub">Marca todos los que te interesen.</span>
-                </h3>
-              </div>
+        <div className="modal-body-custom">
+          <div className="focus-group-survey-card">
+            <div className="focus-group-survey-header">
+              <h3 className="focus-group-survey-title">
+                ¿Qué productos te gustaría que incorporáramos a nuestro catálogo?{" "}
+                <span className="focus-group-survey-sub">Marca todos los que te interesen.</span>
+              </h3>
+            </div>
 
               <div className="focus-group-options-list" role="group" aria-label="Opciones de catálogo">
                 {FOCUS_GROUP_SURVEY_OPTIONS.map((opt, index) => {
@@ -2915,8 +2921,7 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
               )}
             </button>
           </footer>
-        </form>
-      </section>
+      </form>
     </div>
   );
 }
@@ -2925,6 +2930,15 @@ function StockNoticeModal({ product, customer, onClose, onConfirm }) {
   const [notifyCheck, setNotifyCheck] = useState(true);
   const [email, setEmail] = useState(customer?.correo || "");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!product) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [product]);
 
   if (!product) return null;
 
@@ -2959,12 +2973,13 @@ function StockNoticeModal({ product, customer, onClose, onConfirm }) {
 
   return (
     <div className="modal-backdrop-custom" onClick={() => !submitting && onClose()}>
-      <section
+      <form
         className="category-modal product-modal stock-notice-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="stock-notice-title"
         onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
       >
         <header className="stock-notice-header">
           <div className="stock-notice-title-group">
@@ -2986,8 +3001,7 @@ function StockNoticeModal({ product, customer, onClose, onConfirm }) {
           </button>
         </header>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body-custom">
+        <div className="modal-body-custom">
             {/* Tarjeta del producto seleccionado */}
             <div className="stock-notice-product-card d-flex align-items-center gap-3 p-3 mb-3 rounded-3" style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}>
               <div
@@ -3090,8 +3104,7 @@ function StockNoticeModal({ product, customer, onClose, onConfirm }) {
               )}
             </button>
           </footer>
-        </form>
-      </section>
+      </form>
     </div>
   );
 }

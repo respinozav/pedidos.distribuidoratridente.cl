@@ -176,19 +176,20 @@ button, input { font: inherit; }
 .category-edit { height: 34px; width: 34px; }
 .category-notice { align-items: center; display: flex; gap: .55rem; }
 .category-notice .btn-close { margin-left: auto; }
-.modal-backdrop-custom { align-items: center; background: rgb(16 42 67 / 50%); display: flex; inset: 0; justify-content: center; padding: 1rem; position: fixed; z-index: 1050; }
+.modal-backdrop-custom { align-items: center; background: rgb(16 42 67 / 50%); display: flex; inset: 0; justify-content: center; padding: 1rem; position: fixed; z-index: 1050; overflow-y: auto; overscroll-behavior: contain; }
 .admin-app:has(.modal-backdrop-custom) .admin-content .alert-danger { left: 50%; max-width: min(650px, calc(100vw - 2rem)); position: fixed; top: 1rem; transform: translateX(-50%); width: 100%; z-index: 1051; }
 .admin-app:has(.modal-backdrop-custom) .admin-content .alert-success { left: 50%; max-width: min(650px, calc(100vw - 2rem)); position: fixed; top: 1rem; transform: translateX(-50%); width: 100%; z-index: 1051; }
 .admin-app:has(.order-detail-modal) .admin-content .alert-success, .admin-app:has(.order-detail-modal) .admin-content .alert-danger { display: none; }
 .order-detail-notice { align-items: center; display: flex; justify-content: space-between; margin-bottom: 1rem; }
-.category-modal { background: #fff; border-radius: 8px; box-shadow: 0 20px 50px rgb(16 42 67 / 30%); display: flex; flex-direction: column; max-height: calc(100dvh - 2rem); max-width: 510px; overflow: hidden; width: 100%; }
+.category-modal { background: #fff; border-radius: 8px; box-shadow: 0 20px 50px rgb(16 42 67 / 30%); display: flex; flex-direction: column; max-height: calc(100dvh - 2rem); max-height: calc(100vh - 2rem); max-width: 510px; overflow: hidden; width: 100%; }
+.category-modal > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; height: 100%; width: 100%; }
 .product-modal { max-width: 690px; }
 .order-detail-modal { max-height: calc(100dvh - 2rem); }
 .category-modal header, .category-modal footer { align-items: center; display: flex; flex-shrink: 0; justify-content: space-between; padding: 1rem 1.25rem; }
 .category-modal header { border-bottom: 1px solid var(--line); }
 .category-modal header h2 { font-size: 1.05rem; font-weight: 750; margin: 0; }
 .category-modal .eyebrow { margin-bottom: .2rem; }
-.modal-body-custom { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 1.25rem; }
+.modal-body-custom { flex: 1 1 auto; min-height: 0; overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 1.25rem; }
 .category-modal .modal-body-custom p { color: var(--muted); font-size: .8rem; line-height: 1.45; }
 .category-modal .form-label { color: var(--navy); font-size: .82rem; font-weight: 650; margin-bottom: .25rem; }
 .category-modal .form-control, .category-modal .form-select { font-size: .84rem; }
@@ -2464,16 +2465,41 @@ button, input { font: inherit; }
 /* Modal Focus Group */
 /* Modal Focus Group */
 .focus-group-modal {
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: calc(100dvh - 2rem) !important;
+  max-height: calc(100vh - 2rem) !important;
   max-width: 640px;
   width: 96%;
+  overflow: hidden !important;
 }
 
 .focus-group-header {
+  flex-shrink: 0;
   border-bottom: 1px solid var(--line);
   padding: 1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.focus-group-modal .modal-body-custom {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.focus-group-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background: #ffffff;
 }
 
 .focus-group-title-group h2 {
@@ -2711,14 +2737,19 @@ button, input { font: inherit; }
 
 /* Estilos de Modal y Notificación de Stock Agotado */
 .stock-notice-modal {
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: calc(100dvh - 2rem) !important;
+  max-height: calc(100vh - 2rem) !important;
   max-width: 540px;
   width: 95%;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: hidden !important;
   box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.25);
 }
 
 .stock-notice-header {
+  flex-shrink: 0;
   border-bottom: 1px solid var(--line);
   padding: 1.15rem 1.35rem;
   display: flex;
@@ -2726,6 +2757,18 @@ button, input { font: inherit; }
   justify-content: space-between;
   gap: 1rem;
   background: #ffffff;
+}
+
+.stock-notice-modal .modal-body-custom {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stock-notice-modal footer {
+  flex-shrink: 0;
 }
 
 .stock-notice-title-group h2 {
