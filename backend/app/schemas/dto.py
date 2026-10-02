@@ -588,6 +588,29 @@ class GenericCarteraResponse(BaseModel):
     actualizados: int = 1
 
 
+class AvisoStockInput(BaseModel):
+    producto_id: UUID
+    correo: EmailStr
+
+
+class AvisoStockOutput(ORMModel):
+    id: UUID
+    cliente_id: UUID
+    producto_id: UUID
+    correo: str
+    estado: str
+    notificado_at: datetime | None = None
+    created_at: datetime
+
+
+class AvisoStockPendienteItem(BaseModel):
+    producto_id: UUID
+    estado: str
+    correo: str
+    created_at: datetime
+
+
+
 
 
 

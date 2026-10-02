@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Boxes, Briefcase, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Bell, Boxes, Briefcase, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -2921,6 +2921,181 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
   );
 }
 
+function StockNoticeModal({ product, customer, onClose, onConfirm }) {
+  const [notifyCheck, setNotifyCheck] = useState(true);
+  const [email, setEmail] = useState(customer?.correo || "");
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!product) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!notifyCheck) {
+      Swal.fire({
+        icon: "info",
+        title: "Aviso de stock",
+        text: "Debes marcar la casilla para que podamos avisarte por correo cuando exista stock.",
+        confirmButtonColor: "#146cce",
+      });
+      return;
+    }
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      Swal.fire({
+        icon: "warning",
+        title: "Correo requerido",
+        text: "Por favor ingresa un correo electrónico válido para enviarte el aviso.",
+        confirmButtonColor: "#146cce",
+      });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onConfirm(product.id, cleanEmail);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop-custom" onClick={() => !submitting && onClose()}>
+      <section
+        className="category-modal product-modal stock-notice-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stock-notice-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="stock-notice-header">
+          <div className="stock-notice-title-group">
+            <span className="eyebrow d-flex align-items-center gap-1 text-warning-emphasis">
+              <AlertCircle size={15} className="text-warning" /> AVISO DE STOCK
+            </span>
+            <h2 id="stock-notice-title">
+              En este momento no tenemos stock, ¿quieres que te avisemos cuando exista stock?
+            </h2>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            aria-label="Cerrar ventana"
+          >
+            <X size={19} />
+          </button>
+        </header>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body-custom">
+            {/* Tarjeta del producto seleccionado */}
+            <div className="stock-notice-product-card d-flex align-items-center gap-3 p-3 mb-3 rounded-3" style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+              <div
+                className="stock-notice-img-box d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
+                style={{ width: "64px", height: "64px", background: "#ffffff", border: "1px solid #cbd5e1" }}
+              >
+                {productImageSource(product.imagen_url) ? (
+                  <img src={productImageSource(product.imagen_url)} alt={product.nombre} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                ) : (
+                  <Package size={28} className="text-muted" />
+                )}
+              </div>
+              <div className="flex-grow-1 min-w-0">
+                <span className="badge bg-danger-subtle text-danger border border-danger-subtle mb-1" style={{ fontSize: "0.75rem" }}>
+                  Sin stock disponible
+                </span>
+                <h4 className="text-truncate mb-1" style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a" }}>
+                  {product.nombre}
+                </h4>
+                <small className="text-muted" style={{ fontSize: "0.82rem" }}>
+                  Código: <span className="font-monospace fw-semibold">{product.codigo}</span>
+                </small>
+              </div>
+            </div>
+
+            {/* Checkbox solicitado por el usuario */}
+            <div className="stock-notice-check-card p-3 rounded-3 mb-3" style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+              <label className="d-flex align-items-start gap-2 mb-0" style={{ cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  className="form-check-input mt-1"
+                  style={{ width: "1.25rem", height: "1.25rem", cursor: "pointer", flexShrink: 0 }}
+                  checked={notifyCheck}
+                  onChange={(e) => setNotifyCheck(e.target.checked)}
+                  disabled={submitting}
+                />
+                <div>
+                  <span style={{ fontSize: "0.94rem", fontWeight: 650, color: "#1e3a8a", display: "block", lineHeight: 1.35 }}>
+                    Sí, deseo que me avisen automáticamente por correo cuando el producto vuelva a tener más de 1 en stock.
+                  </span>
+                  <small style={{ color: "#3b82f6", display: "block", marginTop: "4px", fontSize: "0.8rem" }}>
+                    Nuestro sistema te enviará una notificación instantánea al momento en que haya reposición disponible.
+                  </small>
+                </div>
+              </label>
+            </div>
+
+            {/* Campo de Correo Electrónico del cliente */}
+            {notifyCheck && (
+              <div className="mb-2">
+                <label className="form-label fw-semibold" style={{ fontSize: "0.88rem", color: "#334155" }} htmlFor="stock-notice-email">
+                  Correo electrónico para la notificación:
+                </label>
+                <div className="input-group">
+                  <span className="input-group-text bg-white text-muted">
+                    <Mail size={16} />
+                  </span>
+                  <input
+                    id="stock-notice-email"
+                    type="email"
+                    className="form-control"
+                    placeholder="ejemplo@correo.cl"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+                <small className="text-muted" style={{ fontSize: "0.78rem" }}>
+                  Recibirás el aviso en esta casilla cuando el stock supere 1 unidad.
+                </small>
+              </div>
+            )}
+          </div>
+
+          <footer className="d-flex justify-content-end gap-2 p-3 border-top" style={{ background: "#ffffff" }}>
+            <button
+              type="button"
+              className="btn btn-light"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary d-flex align-items-center gap-2"
+              disabled={submitting || !notifyCheck}
+            >
+              {submitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Bell size={16} />
+                  Avisarme cuando exista stock
+                </>
+              )}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendorMode }) {
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
@@ -2938,6 +3113,55 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [suggestionModalOpen, setSuggestionModalOpen] = useState(false);
+  const [stockNoticeProduct, setStockNoticeProduct] = useState(null);
+  const [pendingStockNotices, setPendingStockNotices] = useState([]);
+
+  // Cargar avisos de stock pendientes de este cliente
+  useEffect(() => {
+    async function loadPendingStockNotices() {
+      try {
+        const { data } = await api.get("/cliente/avisos-stock/pendientes");
+        if (Array.isArray(data)) {
+          setPendingStockNotices(data);
+        }
+      } catch {
+        // Silencioso
+      }
+    }
+    if (customer?.id) {
+      loadPendingStockNotices();
+    }
+  }, [customer?.id]);
+
+  function handleOpenStockNotice(product) {
+    setStockNoticeProduct(product);
+  }
+
+  async function handleConfirmStockNotice(productId, email) {
+    try {
+      await api.post("/cliente/avisos-stock", {
+        producto_id: productId,
+        correo: email,
+      });
+      setPendingStockNotices((prev) => [...new Set([...prev, productId])]);
+      setStockNoticeProduct(null);
+      Swal.fire({
+        icon: "success",
+        title: "¡Aviso programado!",
+        html: `Te notificaremos automáticamente a <b>${email}</b> apenas el producto vuelva a tener más de 1 unidad en stock.`,
+        confirmButtonColor: "#146cce",
+        confirmButtonText: "Entendido",
+      });
+    } catch (err) {
+      const detail = err.response?.data?.detail || "No fue posible registrar la solicitud de aviso.";
+      Swal.fire({
+        icon: "error",
+        title: "Error al registrar aviso",
+        text: detail,
+        confirmButtonColor: "#146cce",
+      });
+    }
+  }
 
   async function loadPublicidades() {
     try {
@@ -3300,6 +3524,11 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   }
 
   async function add(product) {
+    if (Number(product.cantidad) <= 0) {
+      handleOpenStockNotice(product);
+      return;
+    }
+
     const selection = await promptProductPackaging(product);
     if (!selection) return;
 
@@ -3350,11 +3579,31 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       });
     } catch (err) {
       const detail = err.response?.data?.detail || "No fue posible agregar el producto al carro.";
-      Swal.fire("Stock no disponible", detail, "warning");
+      if (detail.toLowerCase().includes("stock")) {
+        Swal.fire({
+          icon: "warning",
+          title: "Stock no disponible",
+          text: detail,
+          showCancelButton: true,
+          confirmButtonText: "Avisarme cuando exista stock",
+          cancelButtonText: "Cerrar",
+          confirmButtonColor: "#146cce",
+        }).then((res) => {
+          if (res.isConfirmed) {
+            handleOpenStockNotice(product);
+          }
+        });
+      } else {
+        Swal.fire("Stock no disponible", detail, "warning");
+      }
     }
   }
 
   async function handleAddFromBanner(product, qty = 1) {
+    if (Number(product.cantidad) <= 0) {
+      handleOpenStockNotice(product);
+      return;
+    }
     await add(product);
   }
 
@@ -3693,43 +3942,74 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                   </div>
 
                   <div className="product-grid">
-                    {products.map((product) => (
-                      <article className="product" key={product.id}>
-                        <div className="product-image">
-                          {productImageSource(product.imagen_url) ? (
-                            <img src={productImageSource(product.imagen_url)} alt={product.nombre} />
-                          ) : (
-                            <Package size={30} />
-                          )}
-                        </div>
-                        <div className="product-meta">
-                          {product.categoria?.nombre ? (
-                            <span className="product-category-badge" title={product.categoria.nombre}>
-                              {product.categoria.nombre}
-                            </span>
-                          ) : (
-                            <span />
-                          )}
-                          <small className="product-code">
-                            {product.codigo}
-                            {product.tiene_caja && product.cantidad_caja ? ` · Caja x${product.cantidad_caja}` : ""}
-                          </small>
-                        </div>
-                        <h2>{product.nombre}</h2>
-                        <div className="mt-auto d-flex flex-column">
-                          <strong>{money.format(product.precio_cliente ?? product.precio)} <span style={{ fontSize: "0.8rem", fontWeight: "normal", color: "#64748b" }}>/ un.</span></strong>
-                          {product.tiene_caja && product.cantidad_caja ? (
-                            <small style={{ color: "#0d6efd", fontWeight: 600, marginTop: "2px" }}>
-                              Caja x{product.cantidad_caja}: {money.format(product.precio_caja_cliente ?? product.precio_caja ?? ((product.precio_cliente ?? product.precio) * product.cantidad_caja))}
+                    {products.map((product) => {
+                      const isOutOfStock = Number(product.cantidad) <= 0;
+                      const isNoticePending = pendingStockNotices.includes(product.id);
+
+                      return (
+                        <article className={`product ${isOutOfStock ? "product-out-of-stock" : ""}`} key={product.id}>
+                          <div className="product-image position-relative">
+                            {productImageSource(product.imagen_url) ? (
+                              <img src={productImageSource(product.imagen_url)} alt={product.nombre} />
+                            ) : (
+                              <Package size={30} />
+                            )}
+                            {isOutOfStock && (
+                              <span className="stock-depleted-overlay-badge">
+                                Sin stock
+                              </span>
+                            )}
+                          </div>
+                          <div className="product-meta">
+                            {product.categoria?.nombre ? (
+                              <span className="product-category-badge" title={product.categoria.nombre}>
+                                {product.categoria.nombre}
+                              </span>
+                            ) : (
+                              <span />
+                            )}
+                            <small className="product-code">
+                              {product.codigo}
+                              {product.tiene_caja && product.cantidad_caja ? ` · Caja x${product.cantidad_caja}` : ""}
                             </small>
-                          ) : null}
-                        </div>
-                        <button className="btn btn-outline-primary mt-3" onClick={() => add(product)}>
-                          <Plus size={17} />
-                          Agregar
-                        </button>
-                      </article>
-                    ))}
+                          </div>
+                          <h2>{product.nombre}</h2>
+                          <div className="mt-auto d-flex flex-column">
+                            <strong>{money.format(product.precio_cliente ?? product.precio)} <span style={{ fontSize: "0.8rem", fontWeight: "normal", color: "#64748b" }}>/ un.</span></strong>
+                            {product.tiene_caja && product.cantidad_caja ? (
+                              <small style={{ color: "#0d6efd", fontWeight: 600, marginTop: "2px" }}>
+                                Caja x{product.cantidad_caja}: {money.format(product.precio_caja_cliente ?? product.precio_caja ?? ((product.precio_cliente ?? product.precio) * product.cantidad_caja))}
+                              </small>
+                            ) : null}
+                          </div>
+                          {isOutOfStock ? (
+                            <button
+                              className={`btn ${isNoticePending ? "btn-outline-success" : "btn-outline-warning"} mt-3 d-flex align-items-center justify-content-center gap-1`}
+                              type="button"
+                              onClick={() => handleOpenStockNotice(product)}
+                              title={isNoticePending ? "Aviso programado. Te avisaremos cuando haya stock." : "¿Quieres que te avisemos cuando exista stock?"}
+                            >
+                              {isNoticePending ? (
+                                <>
+                                  <Check size={16} />
+                                  Aviso registrado
+                                </>
+                              ) : (
+                                <>
+                                  <Bell size={16} />
+                                  Avisarme stock
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <button className="btn btn-outline-primary mt-3" onClick={() => add(product)}>
+                              <Plus size={17} />
+                              Agregar
+                            </button>
+                          )}
+                        </article>
+                      );
+                    })}
                   </div>
 
                   {totalProducts > PAGE_SIZE && (
@@ -3890,6 +4170,14 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         isOpen={suggestionModalOpen}
         onClose={() => setSuggestionModalOpen(false)}
         customer={customer}
+      />
+    )}
+    {stockNoticeProduct && (
+      <StockNoticeModal
+        product={stockNoticeProduct}
+        customer={customer}
+        onClose={() => setStockNoticeProduct(null)}
+        onConfirm={handleConfirmStockNotice}
       />
     )}
     </>

@@ -48,6 +48,8 @@ from app.schemas.dto import (
     AddressOutput,
     AdminPasswordUpdate,
     AdminProfileUpdate,
+    AvisoStockInput,
+    AvisoStockOutput,
     CategoryInput,
     CategoryOutput,
     CreditOutput,
@@ -115,6 +117,11 @@ from app.services.notifications import (
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_box_price, customer_product_price
 from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
+from app.services.stock_notifications import (
+    obtener_avisos_pendientes_cliente,
+    procesar_avisos_stock_disponible,
+    registrar_aviso_stock,
+)
 from app.schemas.cart import (
     AdminActiveCartOutput,
     CartItemInput,
@@ -684,6 +691,11 @@ def create_product(payload: ProductInput, database: DatabaseSession, _: AdminUse
     entity = Repository(Producto, database).add(Producto(**payload.model_dump()))
     database.commit()
     invalidate_catalog_cache()
+    if entity.cantidad > 1 and entity.activo and not entity.eliminado_at:
+        try:
+            procesar_avisos_stock_disponible(database, producto_id=entity.id)
+        except Exception as e:
+            logger.warning("Error al procesar avisos de stock en create_product: %s", e)
     return entity
 
 
@@ -698,6 +710,11 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
     Repository(Producto, database).update(entity, payload.model_dump())
     database.commit()
     invalidate_catalog_cache()
+    if entity.cantidad > 1 and entity.activo and not entity.eliminado_at:
+        try:
+            procesar_avisos_stock_disponible(database, producto_id=entity.id)
+        except Exception as e:
+            logger.warning("Error al procesar avisos de stock en update_product: %s", e)
     return entity
 
 
@@ -829,6 +846,35 @@ def clear_customer_cart(
     current_customer: CustomerUser,
 ) -> None:
     CartService(database).clear_cart(current_customer.id)
+
+
+# =========================================================================
+# RUTAS DE AVISOS DE STOCK (CLIENTE)
+# =========================================================================
+@router.post("/cliente/avisos-stock", response_model=AvisoStockOutput, tags=["Avisos de Stock"])
+def post_aviso_stock(
+    payload: AvisoStockInput,
+    database: DatabaseSession,
+    current_customer: CustomerUser,
+) -> AvisoStockOutput:
+    product = database.get(Producto, payload.producto_id)
+    if not product or product.eliminado_at or not product.activo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Producto no encontrado o inactivo")
+    aviso = registrar_aviso_stock(
+        database=database,
+        cliente_id=current_customer.id,
+        producto_id=payload.producto_id,
+        correo=payload.correo,
+    )
+    return AvisoStockOutput.model_validate(aviso, from_attributes=True)
+
+
+@router.get("/cliente/avisos-stock/pendientes", response_model=list[UUID], tags=["Avisos de Stock"])
+def get_avisos_stock_pendientes(
+    database: DatabaseSession,
+    current_customer: CustomerUser,
+) -> list[UUID]:
+    return obtener_avisos_pendientes_cliente(database, current_customer.id)
 
 
 # =========================================================================

@@ -1,4 +1,5 @@
 from app.models.entities import (
+    AvisoStockCliente,
     Categoria,
     Cliente,
     DetallePedido,
@@ -17,6 +18,7 @@ from app.models.entities import (
 from app.models.system_settings import SystemSettings
 
 __all__ = [
+    "AvisoStockCliente",
     "Categoria",
     "Cliente",
     "DetallePedido",

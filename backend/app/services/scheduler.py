@@ -15,6 +15,7 @@ from app.core.database import SessionLocal
 from app.models.entities import ConfiguracionAvisos
 from app.services.cart_service import CartService
 from app.services.cobranzas import procesar_avisos_cobranza_smtp
+from app.services.stock_notifications import procesar_avisos_stock_disponible
 
 logger = logging.getLogger(__name__)
 CHILE_TZ = ZoneInfo("America/Santiago")
@@ -54,6 +55,12 @@ async def cobranzas_scheduler_loop() -> None:
                 carritos_expirados = CartService.expire_inactive_carts(db)
                 if carritos_expirados > 0:
                     logger.info("Job de Carrito: Se eliminaron %s carritos inactivos y se devolvió su stock.", carritos_expirados)
+
+            # Verificación periódica de avisos de reposición de stock (cuando producto.cantidad > 1)
+            with SessionLocal() as db:
+                avisos_notificados = procesar_avisos_stock_disponible(db)
+                if avisos_notificados > 0:
+                    logger.info("Job de Avisos de Stock: Se notificaron %s solicitudes de clientes.", avisos_notificados)
 
         except asyncio.CancelledError:
             logger.info("Scheduler de cobranzas cancelado.")

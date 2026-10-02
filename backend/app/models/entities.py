@@ -400,3 +400,30 @@ class DetalleVentaVendedor(Base):
     producto: Mapped[Producto | None] = relationship()
     categoria: Mapped[Categoria | None] = relationship()
 
+
+class AvisoStockCliente(Base):
+    __tablename__ = "avisos_stock_cliente"
+    __table_args__ = (
+        Index("ix_avisos_stock_cliente_producto_estado", "producto_id", "estado"),
+        Index("ix_avisos_stock_cliente_cliente_id", "cliente_id"),
+        Index("ix_avisos_stock_cliente_estado", "estado"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clientes.id", ondelete="CASCADE"), index=True
+    )
+    producto_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("productos.id", ondelete="CASCADE"), index=True
+    )
+    correo: Mapped[str] = mapped_column(String(255))
+    estado: Mapped[str] = mapped_column(String(30), default="PENDIENTE")
+    notificado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    cliente: Mapped[Cliente] = relationship()
+    producto: Mapped[Producto] = relationship()
+
