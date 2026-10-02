@@ -210,7 +210,7 @@ export default function AdminCarteraManager() {
       <header className="admin-topbar">
         <div className="topbar-title">
           <p className="eyebrow mb-1">FUERZA DE VENTA</p>
-          <h1>Asignación de Cartera</h1>
+          <h1>Cartera Cliente</h1>
         </div>
         <div className="topbar-actions">
           <button

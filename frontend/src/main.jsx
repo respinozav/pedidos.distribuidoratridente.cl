@@ -1750,7 +1750,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   const allNavigation = [
     [LayoutDashboard, "Dashboard", "summary", true],
     [TrendingUp, "Ventas", "admin_ventas", true],
-    [Briefcase, "Asignación de cartera", "cartera", true],
+    [Briefcase, "Cartera Cliente", "cartera", true],
     [FolderTree, "Categorías", "categories", true],
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
