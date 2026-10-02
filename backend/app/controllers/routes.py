@@ -94,6 +94,11 @@ from app.schemas.dto import (
     VentasAdminResumenOutput,
     ProductSuggestionInput,
     ProductSuggestionOutput,
+    AsignacionCarteraInput,
+    AsignacionCarteraMasivaInput,
+    ClienteCarteraItem,
+    ResumenCarteraOutput,
+    GenericCarteraResponse,
 )
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
@@ -1529,5 +1534,197 @@ def list_admin_ventas(
         vendedores_disponibles=vendedores_disponibles,
         items=[VentaVendedorOutput.model_validate(v, from_attributes=True) for v in ventas],
     )
+
+
+# =========================================================================
+# RUTAS DE ASIGNACIÓN DE CARTERA (CLIENTES A VENDEDORES)
+# =========================================================================
+@router.get("/admin/cartera", response_model=ResumenCarteraOutput, tags=["Admin - Cartera"])
+def list_admin_cartera(
+    database: DatabaseSession,
+    _: SuperAdminUser,
+    vendedor_id: UUID | None = None,
+    search: str | None = None,
+    estado_asignacion: str | None = None,
+) -> ResumenCarteraOutput:
+    """Obtiene el resumen y listado de la cartera de clientes asignados a vendedores."""
+    # 1. Obtener todos los clientes activos
+    stmt_clientes = (
+        select(Cliente)
+        .options(selectinload(Cliente.vendedor))
+        .where(Cliente.activo.is_(True), Cliente.eliminado_at.is_(None))
+        .order_by(Cliente.nombre.asc())
+    )
+    todos_clientes = list(database.scalars(stmt_clientes))
+
+    # 2. Vendedores activos disponibles
+    vendedores_db = list(
+        database.scalars(
+            select(Usuario)
+            .join(Rol)
+            .where(Rol.nombre == "VENDEDOR", Usuario.activo.is_(True))
+            .order_by(Usuario.nombre.asc())
+        )
+    )
+    vendedores_disponibles = [
+        VendedorSimpleOutput(id=u.id, nombre=u.nombre, correo=u.correo)
+        for u in vendedores_db
+    ]
+
+    # 3. Métricas generales sobre la totalidad de clientes activos
+    total_clientes = len(todos_clientes)
+    clientes_asignados = sum(1 for c in todos_clientes if c.vendedor_id is not None)
+    clientes_sin_asignar = total_clientes - clientes_asignados
+    vendedores_con_cartera = len(set(c.vendedor_id for c in todos_clientes if c.vendedor_id is not None))
+
+    # 4. Estadísticas de ventas/comisiones por cliente
+    from sqlalchemy import func
+    ventas_stats = (
+        database.query(
+            VentaVendedor.cliente_id,
+            func.count(VentaVendedor.id).label("pedidos"),
+            func.sum(VentaVendedor.comision_total).label("comisiones"),
+        )
+        .group_by(VentaVendedor.cliente_id)
+        .all()
+    )
+    ventas_map: dict[UUID, tuple[int, Decimal]] = {
+        row.cliente_id: (row.pedidos, row.comisiones or Decimal("0.00"))
+        for row in ventas_stats
+    }
+
+    # 5. Filtrar clientes según parámetros
+    clientes_filtrados = todos_clientes
+    if estado_asignacion == "asignados":
+        clientes_filtrados = [c for c in clientes_filtrados if c.vendedor_id is not None]
+    elif estado_asignacion == "sin_asignar":
+        clientes_filtrados = [c for c in clientes_filtrados if c.vendedor_id is None]
+
+    if vendedor_id:
+        clientes_filtrados = [c for c in clientes_filtrados if c.vendedor_id == vendedor_id]
+
+    if search and search.strip():
+        q = search.strip().lower()
+        clientes_filtrados = [
+            c
+            for c in clientes_filtrados
+            if (c.nombre and q in c.nombre.lower())
+            or (c.rut and q in c.rut.lower())
+            or (c.correo and q in c.correo.lower())
+            or (c.celular and q in c.celular.lower())
+            or (c.vendedor and c.vendedor.nombre and q in c.vendedor.nombre.lower())
+        ]
+
+    items = []
+    for c in clientes_filtrados:
+        peds, coms = ventas_map.get(c.id, (0, Decimal("0.00")))
+        items.append(
+            ClienteCarteraItem(
+                id=c.id,
+                rut=c.rut,
+                nombre=c.nombre,
+                correo=c.correo,
+                celular=c.celular,
+                activo=c.activo,
+                vendedor_id=c.vendedor_id,
+                vendedor_nombre=c.vendedor.nombre if c.vendedor else None,
+                vendedor_correo=c.vendedor.correo if c.vendedor else None,
+                total_pedidos=peds,
+                total_comisiones_generadas=coms,
+            )
+        )
+
+    return ResumenCarteraOutput(
+        total_clientes=total_clientes,
+        clientes_asignados=clientes_asignados,
+        clientes_sin_asignar=clientes_sin_asignar,
+        vendedores_con_cartera=vendedores_con_cartera,
+        vendedores_disponibles=vendedores_disponibles,
+        items=items,
+    )
+
+
+@router.put("/admin/cartera/asignar", response_model=GenericCarteraResponse, tags=["Admin - Cartera"])
+def asignar_cliente_cartera(
+    payload: AsignacionCarteraInput,
+    database: DatabaseSession,
+    _: SuperAdminUser,
+) -> GenericCarteraResponse:
+    """Asigna o reasigna un cliente a un vendedor de la cartera."""
+    cliente = database.get(Cliente, payload.cliente_id)
+    if not cliente or cliente.eliminado_at:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado")
+
+    if payload.vendedor_id:
+        vendedor = database.get(Usuario, payload.vendedor_id)
+        if not vendedor or not vendedor.activo:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendedor no encontrado o inactivo")
+        cliente.vendedor_id = vendedor.id
+        database.commit()
+        nombre_cliente = cliente.nombre or cliente.rut or "Cliente"
+        return GenericCarteraResponse(
+            success=True,
+            mensaje=f"{nombre_cliente} asignado exitosamente a {vendedor.nombre}.",
+        )
+    else:
+        cliente.vendedor_id = None
+        database.commit()
+        nombre_cliente = cliente.nombre or cliente.rut or "Cliente"
+        return GenericCarteraResponse(
+            success=True,
+            mensaje=f"{nombre_cliente} desasignado de la cartera.",
+        )
+
+
+@router.put("/admin/cartera/desasignar/{cliente_id}", response_model=GenericCarteraResponse, tags=["Admin - Cartera"])
+def desasignar_cliente_cartera(
+    cliente_id: UUID,
+    database: DatabaseSession,
+    _: SuperAdminUser,
+) -> GenericCarteraResponse:
+    """Desasigna un cliente de la cartera de su vendedor."""
+    cliente = database.get(Cliente, cliente_id)
+    if not cliente or cliente.eliminado_at:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado")
+    cliente.vendedor_id = None
+    database.commit()
+    nombre_cliente = cliente.nombre or cliente.rut or "Cliente"
+    return GenericCarteraResponse(
+        success=True,
+        mensaje=f"{nombre_cliente} desasignado de la cartera.",
+    )
+
+
+@router.put("/admin/cartera/asignar-masivo", response_model=GenericCarteraResponse, tags=["Admin - Cartera"])
+def asignar_masivo_cartera(
+    payload: AsignacionCarteraMasivaInput,
+    database: DatabaseSession,
+    _: SuperAdminUser,
+) -> GenericCarteraResponse:
+    """Asignación masiva de múltiples clientes a un vendedor (o desasignación si vendedor_id es None)."""
+    if not payload.cliente_ids:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes seleccionar al menos un cliente")
+
+    vendedor_nombre = None
+    if payload.vendedor_id:
+        vendedor = database.get(Usuario, payload.vendedor_id)
+        if not vendedor or not vendedor.activo:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendedor no encontrado o inactivo")
+        vendedor_nombre = vendedor.nombre
+
+    stmt = select(Cliente).where(Cliente.id.in_(payload.cliente_ids), Cliente.eliminado_at.is_(None))
+    clientes = list(database.scalars(stmt))
+    for c in clientes:
+        c.vendedor_id = payload.vendedor_id
+    database.commit()
+
+    count = len(clientes)
+    msg = (
+        f"{count} cliente{'s' if count != 1 else ''} asignado{'s' if count != 1 else ''} a {vendedor_nombre}."
+        if vendedor_nombre
+        else f"{count} cliente{'s' if count != 1 else ''} desasignado{'s' if count != 1 else ''} de la cartera."
+    )
+    return GenericCarteraResponse(success=True, actualizados=count, mensaje=msg)
+
 
 

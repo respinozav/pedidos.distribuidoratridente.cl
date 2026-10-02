@@ -123,6 +123,10 @@ class OrderService:
             self.database.add(initial_state)
             if hasattr(self.database, "flush"):
                 self.database.flush()
+        # Si no viene vendedor_id explícito (ej. el cliente realiza el pedido desde su portal),
+        # se utiliza el vendedor asignado en su cartera para que reciba las comisiones
+        effective_vendedor_id = vendedor_id or customer.vendedor_id
+
         order = Pedido(
             cliente_id=customer_id,
             direccion_id=address.id,
@@ -130,11 +134,11 @@ class OrderService:
             subtotal=subtotal,
             total=subtotal,
             detalles=details,
-            vendedor_id=vendedor_id,
+            vendedor_id=effective_vendedor_id,
         )
         self.database.add(order)
 
-        if vendedor_id:
+        if effective_vendedor_id:
             detalles_venta: list[DetalleVentaVendedor] = []
             comision_acumulada = Decimal("0.00")
             for detail in details:
@@ -158,7 +162,7 @@ class OrderService:
                 comision_acumulada += monto
 
             venta_vendedor = VentaVendedor(
-                vendedor_id=vendedor_id,
+                vendedor_id=effective_vendedor_id,
                 pedido=order,
                 cliente_id=customer_id,
                 total_venta=subtotal,

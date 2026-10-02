@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Boxes, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Boxes, Briefcase, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -16,6 +16,7 @@ import StockAlertBell from "./components/admin/StockAlertBell";
 import PublicPublicidades from "./pages/public/PublicPublicidades";
 import VendedorVentasRealizadas from "./pages/admin/VendedorVentasRealizadas";
 import AdminVentasManager from "./pages/admin/AdminVentasManager";
+import AdminCarteraManager from "./pages/admin/AdminCarteraManager";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
@@ -1749,6 +1750,7 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
   const allNavigation = [
     [LayoutDashboard, "Dashboard", "summary", true],
     [TrendingUp, "Ventas", "admin_ventas", true],
+    [Briefcase, "Asignación de cartera", "cartera", true],
     [FolderTree, "Categorías", "categories", true],
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
@@ -1936,6 +1938,10 @@ function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
       ) : activeSection === "admin_ventas" ? (
         <section className="admin-workspace">
           <AdminVentasManager />
+        </section>
+      ) : activeSection === "cartera" ? (
+        <section className="admin-workspace">
+          <AdminCarteraManager />
         </section>
       ) : activeSection === "products" ? (
         <section className="admin-workspace">

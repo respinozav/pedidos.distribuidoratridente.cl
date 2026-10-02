@@ -132,6 +132,7 @@ class CustomerInput(BaseModel):
     nombre: str | None = Field(default=None, max_length=180)
     celular: str | None = Field(default=None, max_length=30)
     correo: EmailStr | None = None
+    vendedor_id: UUID | None = None
     porcentaje: Decimal = Field(default=0, ge=0, le=100, max_digits=5, decimal_places=2)
     dias_credito: int = Field(default=0, ge=0, le=365)
     activo: bool = True
@@ -148,6 +149,7 @@ class CustomerInput(BaseModel):
 
 class CustomerOutput(CustomerInput, ORMModel):
     id: UUID
+    vendedor_id: UUID | None = None
     direcciones: list[AddressOutput] = []
 
 
@@ -542,6 +544,49 @@ class ProductSuggestionOutput(BaseModel):
     success: bool
     mensaje: str
     destinatarios_notificados: int = 0
+
+
+# =========================================================================
+# ASIGNACIÓN DE CARTERA (CLIENTES A VENDEDORES)
+# =========================================================================
+class AsignacionCarteraInput(BaseModel):
+    cliente_id: UUID
+    vendedor_id: UUID | None = None
+
+
+class AsignacionCarteraMasivaInput(BaseModel):
+    cliente_ids: list[UUID]
+    vendedor_id: UUID | None = None
+
+
+class ClienteCarteraItem(ORMModel):
+    id: UUID
+    rut: str | None = None
+    nombre: str | None = None
+    correo: str | None = None
+    celular: str | None = None
+    activo: bool = True
+    vendedor_id: UUID | None = None
+    vendedor_nombre: str | None = None
+    vendedor_correo: str | None = None
+    total_pedidos: int = 0
+    total_comisiones_generadas: Decimal = Decimal("0.00")
+
+
+class ResumenCarteraOutput(BaseModel):
+    total_clientes: int
+    clientes_asignados: int
+    clientes_sin_asignar: int
+    vendedores_con_cartera: int
+    vendedores_disponibles: list[VendedorSimpleOutput] = []
+    items: list[ClienteCarteraItem] = []
+
+
+class GenericCarteraResponse(BaseModel):
+    success: bool
+    mensaje: str
+    actualizados: int = 1
+
 
 
 

@@ -102,6 +102,8 @@ class Cliente(AuditMixin, Base):
     dias_credito: Mapped[int] = mapped_column(Integer, default=0)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     eliminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    vendedor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True, index=True)
+    vendedor: Mapped["Usuario | None"] = relationship(foreign_keys=[vendedor_id])
     direcciones: Mapped[list["Direccion"]] = relationship(back_populates="cliente")
     pedidos: Mapped[list["Pedido"]] = relationship(back_populates="cliente")
     creditos: Mapped[list["Credito"]] = relationship(back_populates="cliente")
