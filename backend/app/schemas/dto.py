@@ -532,7 +532,9 @@ class VentasAdminResumenOutput(BaseModel):
 
 
 class ProductSuggestionInput(BaseModel):
-    producto: str = Field(min_length=2, max_length=255)
+    opciones: list[str] = Field(default_factory=list)
+    otro: str | None = Field(default=None, max_length=500)
+    producto: str | None = Field(default=None, max_length=255)
     comentarios: str | None = Field(default=None, max_length=1500)
 
 

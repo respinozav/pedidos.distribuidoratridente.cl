@@ -461,15 +461,22 @@ def submit_product_suggestion(
     current_customer: CustomerUser,
 ) -> ProductSuggestionOutput:
     """Registra una sugerencia de producto del cliente (Focus Group) y envía notificación por correo a los administradores."""
-    producto_limpio = payload.producto.strip()
-    if not producto_limpio:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes ingresar el nombre del producto que deseas sugerir.")
-
+    opciones = [opt.strip() for opt in payload.opciones if opt and opt.strip()]
+    otro_limpio = payload.otro.strip() if payload.otro else None
+    producto_limpio = payload.producto.strip() if payload.producto else None
     comentarios_limpio = payload.comentarios.strip() if payload.comentarios else None
+
+    if not opciones and not otro_limpio and not producto_limpio:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Debes seleccionar al menos una opción o indicar un producto en 'Otro'.",
+        )
 
     result = send_product_suggestion_notification(
         database=database,
         customer=current_customer,
+        opciones=opciones,
+        otro=otro_limpio,
         producto=producto_limpio,
         comentarios=comentarios_limpio,
     )

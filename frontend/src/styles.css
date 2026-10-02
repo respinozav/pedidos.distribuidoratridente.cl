@@ -2462,8 +2462,10 @@ button, input { font: inherit; }
 }
 
 /* Modal Focus Group */
+/* Modal Focus Group */
 .focus-group-modal {
-  max-width: 540px;
+  max-width: 640px;
+  width: 96%;
 }
 
 .focus-group-header {
@@ -2475,42 +2477,165 @@ button, input { font: inherit; }
 }
 
 .focus-group-title-group h2 {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 750;
   color: var(--navy);
   margin: 0;
 }
 
-.focus-group-intro {
-  align-items: flex-start;
-  background: #f8fafc;
+/* Tarjeta y lista de encuesta Focus Group */
+.focus-group-survey-card {
+  background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-left: 4px solid #0284c7;
-  border-radius: 8px;
-  display: flex;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  padding: 1.25rem 1.35rem;
+  margin-bottom: 0.5rem;
 }
 
-.focus-group-intro-icon {
-  color: #0284c7;
-  flex-shrink: 0;
-  margin-top: 2px;
+.focus-group-survey-header {
+  margin-bottom: 1.1rem;
 }
 
-.focus-group-intro-text strong {
+.focus-group-survey-title {
   color: #0f172a;
-  display: block;
-  font-size: 0.88rem;
-  margin-bottom: 0.25rem;
-}
-
-.focus-group-intro-text p {
-  color: #475569;
-  font-size: 0.82rem;
+  font-size: 1.05rem;
+  font-weight: 750;
   line-height: 1.45;
   margin: 0;
+}
+
+.focus-group-survey-sub {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.focus-group-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.focus-group-option-row {
+  align-items: flex-start;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  position: relative;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.focus-group-option-row:hover {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.focus-group-option-row.is-selected {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.focus-group-native-checkbox {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.focus-group-custom-box {
+  align-items: center;
+  background: #ffffff;
+  border: 2px solid #64748b;
+  border-radius: 4px;
+  color: #ffffff;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 20px;
+  justify-content: center;
+  margin-top: 1.5px;
+  transition: all 0.15s ease;
+  width: 20px;
+}
+
+.focus-group-option-row:hover .focus-group-custom-box {
+  border-color: #0284c7;
+}
+
+.focus-group-option-row.is-selected .focus-group-custom-box {
+  background: #0284c7;
+  border-color: #0284c7;
+}
+
+.focus-group-option-label {
+  color: #1e293b;
+  font-size: 0.93rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.focus-group-option-row.is-selected .focus-group-option-label {
+  color: #0c4a6e;
+  font-weight: 600;
+}
+
+/* Fila de opción Otro */
+.focus-group-other-row {
+  align-items: center;
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.focus-group-other-check-label {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.75rem;
+  margin: 0;
+  user-select: none;
+}
+
+.focus-group-other-text-label {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.focus-group-other-input-wrap {
+  display: flex;
+  flex: 1 1 240px;
+  margin-left: 0.25rem;
+}
+
+.focus-group-other-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid #94a3b8;
+  border-radius: 0;
+  color: #0f172a;
+  font-size: 0.93rem;
+  font-weight: 500;
+  outline: none;
+  padding: 2px 4px;
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+
+.focus-group-other-input:focus {
+  border-bottom: 2px solid #0284c7;
+}
+
+.focus-group-other-input::placeholder {
+  color: #94a3b8;
+  font-size: 0.86rem;
+  font-style: italic;
 }
 
 .focus-group-client-info {
@@ -2570,6 +2695,17 @@ button, input { font: inherit; }
   .focus-group-modal {
     max-width: 100%;
     margin: 0.5rem;
+  }
+  .focus-group-survey-title {
+    font-size: 0.95rem;
+  }
+  .focus-group-option-label {
+    font-size: 0.86rem;
+  }
+  .focus-group-other-input-wrap {
+    flex-basis: 100%;
+    margin-left: 2rem;
+    margin-top: 0.25rem;
   }
 }
 

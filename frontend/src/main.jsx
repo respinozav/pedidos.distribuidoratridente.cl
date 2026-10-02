@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Boxes, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -2669,14 +2669,28 @@ function FocusGroupButton({ onClick, className = "" }) {
   );
 }
 
+const FOCUS_GROUP_SURVEY_OPTIONS = [
+  "Vasos de plástico, bolsas de papel y otros desechables",
+  "Snacks y comida húmeda para perros, comida para perros y gatos",
+  "Comida mexicana (tortillas de tacos, burritos, sazonador)",
+  "Salsa de tomates y pastas",
+  "Aderezos",
+  "Artículos de aseo e higiene",
+  "Alimentos enlatados (atún, champiñones u otros)",
+];
+
 function FocusGroupModal({ isOpen, onClose, customer }) {
-  const [product, setProduct] = useState("");
+  const [selectedOptions, setSelectedOptions] = useState([]);
+  const [otherChecked, setOtherChecked] = useState(false);
+  const [otherText, setOtherText] = useState("");
   const [comments, setComments] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
-      setProduct("");
+      setSelectedOptions([]);
+      setOtherChecked(false);
+      setOtherText("");
       setComments("");
       setSubmitting(false);
     }
@@ -2684,14 +2698,34 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
 
   if (!isOpen) return null;
 
+  function toggleOption(opt) {
+    setSelectedOptions((prev) =>
+      prev.includes(opt) ? prev.filter((item) => item !== opt) : [...prev, opt]
+    );
+  }
+
+  function handleOtherCheckboxToggle() {
+    setOtherChecked((prev) => !prev);
+  }
+
+  function handleOtherTextChange(val) {
+    setOtherText(val);
+    if (val.trim() && !otherChecked) {
+      setOtherChecked(true);
+    }
+  }
+
+  const isOtherActive = otherChecked || Boolean(otherText.trim());
+  const hasSelections = selectedOptions.length > 0 || Boolean(otherText.trim());
+
   async function handleSubmit(e) {
     e.preventDefault();
-    const cleanProduct = product.trim();
-    if (!cleanProduct) {
+    const cleanOther = otherText.trim();
+    if (!hasSelections) {
       Swal.fire({
         icon: "warning",
-        title: "Campo requerido",
-        text: "Por favor indica el producto que quisieras que vendiéramos.",
+        title: "Selecciona una opción",
+        text: "Por favor marca al menos una de las opciones o escribe tu sugerencia en 'Otro'.",
         confirmButtonColor: "#146cce",
       });
       return;
@@ -2700,15 +2734,17 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
     setSubmitting(true);
     try {
       await api.post("/cliente/sugerencia-producto", {
-        producto: cleanProduct,
+        opciones: selectedOptions,
+        otro: cleanOther || null,
         comentarios: comments.trim() || null,
       });
 
       onClose();
+      const count = selectedOptions.length + (cleanOther ? 1 : 0);
       Swal.fire({
         icon: "success",
-        title: "¡Muchas gracias por tu sugerencia!",
-        html: `Hemos recibido tu solicitud para <b>${cleanProduct}</b>.<br/><br/>Se ha notificado al equipo de administración para evaluar su pronta incorporación al catálogo.`,
+        title: "¡Muchas gracias por tus respuestas!",
+        html: `Hemos registrado tu selección (${count} producto${count > 1 ? "s" : ""}).<br/><br/>Se ha notificado al equipo de administración para evaluar su pronta incorporación al catálogo de <b>Distribuidora Tridente</b>.`,
         confirmButtonColor: "#146cce",
         confirmButtonText: "Entendido",
       });
@@ -2754,48 +2790,80 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body-custom">
-            <div className="focus-group-intro">
-              <div className="focus-group-intro-icon">
-                <Sparkles size={22} />
+            <div className="focus-group-survey-card">
+              <div className="focus-group-survey-header">
+                <h3 className="focus-group-survey-title">
+                  4. ¿Qué productos te gustaría que incorporáramos a nuestro catálogo?{" "}
+                  <span className="focus-group-survey-sub">Marca todos los que te interesen.</span>
+                </h3>
               </div>
-              <div className="focus-group-intro-text">
-                <strong>¡Tu opinión nos ayuda a crecer!</strong>
-                <p>
-                  Cuéntanos qué producto, marca o formato te gustaría encontrar en nuestro catálogo. Tu sugerencia llegará directamente a los administradores de <strong>Distribuidora Tridente</strong>.
-                </p>
+
+              <div className="focus-group-options-list" role="group" aria-label="Opciones de catálogo">
+                {FOCUS_GROUP_SURVEY_OPTIONS.map((opt, index) => {
+                  const isChecked = selectedOptions.includes(opt);
+                  return (
+                    <label
+                      key={index}
+                      className={`focus-group-option-row ${isChecked ? "is-selected" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="focus-group-native-checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleOption(opt)}
+                        disabled={submitting}
+                      />
+                      <span className="focus-group-custom-box" aria-hidden="true">
+                        {isChecked && <Check size={14} strokeWidth={3.2} />}
+                      </span>
+                      <span className="focus-group-option-label">{opt}</span>
+                    </label>
+                  );
+                })}
+
+                {/* Opción Otro: */}
+                <div className={`focus-group-option-row focus-group-other-row ${isOtherActive ? "is-selected" : ""}`}>
+                  <label className="focus-group-other-check-label">
+                    <input
+                      type="checkbox"
+                      className="focus-group-native-checkbox"
+                      checked={isOtherActive}
+                      onChange={handleOtherCheckboxToggle}
+                      disabled={submitting}
+                    />
+                    <span className="focus-group-custom-box" aria-hidden="true">
+                      {isOtherActive && <Check size={14} strokeWidth={3.2} />}
+                    </span>
+                    <span className="focus-group-option-label focus-group-other-text-label">Otro:</span>
+                  </label>
+                  <div className="focus-group-other-input-wrap">
+                    <input
+                      type="text"
+                      className="focus-group-other-input"
+                      value={otherText}
+                      onChange={(e) => handleOtherTextChange(e.target.value)}
+                      placeholder="Escribe aquí otro producto..."
+                      maxLength={255}
+                      disabled={submitting}
+                      onFocus={() => {
+                        if (!otherChecked) setOtherChecked(true);
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="mb-3">
-              <label htmlFor="focus-product-input" className="form-label">
-                ¿Qué producto quisieras que vendiéramos? <span className="text-danger">*</span>
-              </label>
-              <input
-                id="focus-product-input"
-                type="text"
-                className="form-control"
-                placeholder="Ej: Salsa de Tomate Pomarola 1 Kg, Cerveza Corona 330cc..."
-                value={product}
-                onChange={(e) => setProduct(e.target.value)}
-                maxLength={255}
-                required
-                disabled={submitting}
-                autoFocus
-              />
-              <div className="form-text">
-                Indica el nombre, marca o tipo de producto que necesitas para tu negocio o despensa.
-              </div>
-            </div>
-
-            <div className="mb-3">
-              <label htmlFor="focus-comments-input" className="form-label">
-                Presentación, formato o comentarios <span className="text-muted fw-normal">(Opcional)</span>
+            {/* Comentarios o sugerencias adicionales */}
+            <div className="mt-3">
+              <label htmlFor="focus-comments-input" className="form-label text-muted small fw-semibold">
+                Comentarios, formatos o marcas preferidas <span className="fw-normal">(Opcional)</span>:
               </label>
               <textarea
                 id="focus-comments-input"
-                className="form-control"
-                rows={3}
-                placeholder="Ej: Me gustaría comprarlo por caja de 12 o 24 unidades, aprecio precios mayoristas, etc."
+                className="form-control form-control-sm"
+                rows={2}
+                placeholder="Ej: Formato familiar, cajas de 24 un., marcas específicas, etc."
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
                 maxLength={1000}
@@ -2803,11 +2871,11 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
               />
             </div>
 
-            <div className="focus-group-client-info">
+            <div className="focus-group-client-info mt-3">
               <div className="d-flex align-items-center gap-2">
                 <User size={15} className="text-primary flex-shrink-0" />
                 <span className="small text-muted">
-                  Sugerencia emitida por: <strong className="text-dark">{customer?.nombre || customer?.rut || "Cliente"}</strong>
+                  Respuesta emitida por: <strong className="text-dark">{customer?.nombre || customer?.rut || "Cliente"}</strong>
                   {customer?.correo ? ` (${customer.correo})` : ""}
                 </span>
               </div>
@@ -2826,17 +2894,17 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
             <button
               className="btn btn-primary d-inline-flex align-items-center gap-2"
               type="submit"
-              disabled={submitting || !product.trim()}
+              disabled={submitting || !hasSelections}
             >
               {submitting ? (
                 <>
                   <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
-                  Enviando sugerencia...
+                  Enviando respuestas...
                 </>
               ) : (
                 <>
                   <Send size={15} />
-                  Enviar a Administradores
+                  Enviar respuestas
                 </>
               )}
             </button>
