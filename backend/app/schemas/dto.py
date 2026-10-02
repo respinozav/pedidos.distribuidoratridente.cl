@@ -531,4 +531,16 @@ class VentasAdminResumenOutput(BaseModel):
     items: list[VentaVendedorOutput] = []
 
 
+class ProductSuggestionInput(BaseModel):
+    producto: str = Field(min_length=2, max_length=255)
+    comentarios: str | None = Field(default=None, max_length=1500)
+
+
+class ProductSuggestionOutput(BaseModel):
+    success: bool
+    mensaje: str
+    destinatarios_notificados: int = 0
+
+
+
 

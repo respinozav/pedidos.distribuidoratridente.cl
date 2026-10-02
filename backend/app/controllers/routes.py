@@ -92,6 +92,8 @@ from app.schemas.dto import (
     ResumenComisionVendedorItem,
     VendedorSimpleOutput,
     VentasAdminResumenOutput,
+    ProductSuggestionInput,
+    ProductSuggestionOutput,
 )
 from app.api.endpoints.system_settings import router as system_settings_router
 from app.api.endpoints.whatsapp import router as whatsapp_router
@@ -101,6 +103,7 @@ from app.services.notifications import (
     dispatch_order_notifications_in_background,
     notify_customer_password_changed,
     notify_user_password_changed,
+    send_product_suggestion_notification,
     send_publicidad_campaign,
 )
 
@@ -445,6 +448,32 @@ def update_customer_profile_address(
     Repository(Direccion, database).update(address, values)
     database.commit()
     return address
+
+
+@router.post(
+    "/cliente/sugerencia-producto",
+    response_model=ProductSuggestionOutput,
+    tags=["Perfil cliente", "Sugerencias"],
+)
+def submit_product_suggestion(
+    payload: ProductSuggestionInput,
+    database: DatabaseSession,
+    current_customer: CustomerUser,
+) -> ProductSuggestionOutput:
+    """Registra una sugerencia de producto del cliente (Focus Group) y envía notificación por correo a los administradores."""
+    producto_limpio = payload.producto.strip()
+    if not producto_limpio:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debes ingresar el nombre del producto que deseas sugerir.")
+
+    comentarios_limpio = payload.comentarios.strip() if payload.comentarios else None
+
+    result = send_product_suggestion_notification(
+        database=database,
+        customer=current_customer,
+        producto=producto_limpio,
+        comentarios=comentarios_limpio,
+    )
+    return ProductSuggestionOutput(**result)
 
 
 @router.get("/categorias", response_model=list[CategoryOutput], tags=["Categorias"])

@@ -10,6 +10,7 @@ import tests.test_vendedor_role as tvend
 import tests.test_producto_notificar_stock as tpns
 import tests.test_negative_stock_order as tnso
 import tests.test_publicidad_email as tpe
+import tests.test_product_suggestion as tps
 
 
 class MonkeyPatch:
@@ -81,7 +82,11 @@ def main():
     tpe.test_publicidad_email_dto()
     tpe.test_publicidad_html_builder()
     tpe.test_send_publicidad_campaign_isolated_bcc()
-    print(">>> ALL 27 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    tps.test_build_product_suggestion_email_html()
+    tps.test_send_product_suggestion_notification_success()
+    tps.test_send_product_suggestion_no_admins()
+    tps.test_route_submit_product_suggestion()
+    print(">>> ALL 31 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

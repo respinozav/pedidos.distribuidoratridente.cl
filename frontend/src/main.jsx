@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Settings, ShoppingBag, SlidersHorizontal, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -2651,6 +2651,203 @@ function CustomerAccount({ customer, tab, onTabChange, onProfileUpdated, onLogou
   return <main className="customer-portal"><aside className="customer-sidebar"><div className="customer-brand"><BrandMark /><strong>Distribuidora Tridente</strong></div><p className="sidebar-label">MENU PRINCIPAL</p><nav className="customer-nav"><span className="customer-nav-title"><ClipboardList size={19} />Pedidos</span><button type="button" onClick={() => onTabChange("orders")}><ShoppingBag size={17} />Volver a pedidos</button><span className="customer-nav-title account-nav-title"><Users size={19} />Mis datos</span><div className="customer-submenu"><button className={tab === "personal" ? "active" : ""} type="button" onClick={() => onTabChange("personal")}><Users size={16} />Personal</button><button className={tab === "addresses" ? "active" : ""} type="button" onClick={() => onTabChange("addresses")}><MapPin size={16} />Direcciones</button><button className={tab === "password" ? "active" : ""} type="button" onClick={() => onTabChange("password")}><Settings size={16} />Cambiar contraseña</button></div></nav><div className="customer-profile"><span>{(profile.nombre || profile.rut || "CL").slice(0, 2).toUpperCase()}</span><div><strong>{profile.nombre || "Cliente"}</strong><small>Sesión activa</small></div></div><button className="logout-button" onClick={onLogout}><LogOut size={18} />Cerrar sesión</button></aside><section className="customer-workspace"><header className="customer-portal-header"><div><p className="eyebrow">MIS DATOS</p><h1>{tab === "personal" ? "Personal" : tab === "addresses" ? "Direcciones" : "Cambiar contraseña"}</h1></div></header><div className="customer-content">{notice && <div className="alert alert-success">{notice}</div>}{error && <div className="alert alert-danger">{error}</div>}{content}</div></section></main>;
 }
 
+function FocusGroupButton({ onClick, className = "" }) {
+  return (
+    <button
+      type="button"
+      className={`btn-focus-group ${className}`}
+      onClick={onClick}
+      title="¿Qué producto quisieras que vendiéramos? - Participa en nuestro Focus Group"
+      aria-label="¿Qué producto quisieras que vendiéramos?"
+    >
+      <span className="focus-group-sparkle-pill">
+        <Sparkles size={15} />
+      </span>
+      <span className="focus-group-tag">Focus Group</span>
+      <span className="focus-group-text">¿Qué producto quisieras que vendiéramos?</span>
+      <span className="focus-group-text-mobile">¿Qué producto buscas?</span>
+    </button>
+  );
+}
+
+function FocusGroupModal({ isOpen, onClose, customer }) {
+  const [product, setProduct] = useState("");
+  const [comments, setComments] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setProduct("");
+      setComments("");
+      setSubmitting(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const cleanProduct = product.trim();
+    if (!cleanProduct) {
+      Swal.fire({
+        icon: "warning",
+        title: "Campo requerido",
+        text: "Por favor indica el producto que quisieras que vendiéramos.",
+        confirmButtonColor: "#146cce",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.post("/cliente/sugerencia-producto", {
+        producto: cleanProduct,
+        comentarios: comments.trim() || null,
+      });
+
+      onClose();
+      Swal.fire({
+        icon: "success",
+        title: "¡Muchas gracias por tu sugerencia!",
+        html: `Hemos recibido tu solicitud para <b>${cleanProduct}</b>.<br/><br/>Se ha notificado al equipo de administración para evaluar su pronta incorporación al catálogo.`,
+        confirmButtonColor: "#146cce",
+        confirmButtonText: "Entendido",
+      });
+    } catch (err) {
+      const detail = err.response?.data?.detail || "No fue posible registrar tu sugerencia. Inténtalo nuevamente.";
+      Swal.fire({
+        icon: "error",
+        title: "Error al enviar",
+        text: detail,
+        confirmButtonColor: "#146cce",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop-custom" onClick={() => !submitting && onClose()}>
+      <section
+        className="category-modal product-modal focus-group-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="focus-group-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="focus-group-header">
+          <div className="focus-group-title-group">
+            <span className="eyebrow d-flex align-items-center gap-1">
+              <Sparkles size={14} /> FOCUS GROUP • DISTRIBUIDORA TRIDENTE
+            </span>
+            <h2 id="focus-group-title">¿Qué producto quisieras que vendiéramos?</h2>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            aria-label="Cerrar ventana"
+          >
+            <X size={19} />
+          </button>
+        </header>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body-custom">
+            <div className="focus-group-intro">
+              <div className="focus-group-intro-icon">
+                <Sparkles size={22} />
+              </div>
+              <div className="focus-group-intro-text">
+                <strong>¡Tu opinión nos ayuda a crecer!</strong>
+                <p>
+                  Cuéntanos qué producto, marca o formato te gustaría encontrar en nuestro catálogo. Tu sugerencia llegará directamente a los administradores de <strong>Distribuidora Tridente</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <label htmlFor="focus-product-input" className="form-label">
+                ¿Qué producto quisieras que vendiéramos? <span className="text-danger">*</span>
+              </label>
+              <input
+                id="focus-product-input"
+                type="text"
+                className="form-control"
+                placeholder="Ej: Salsa de Tomate Pomarola 1 Kg, Cerveza Corona 330cc..."
+                value={product}
+                onChange={(e) => setProduct(e.target.value)}
+                maxLength={255}
+                required
+                disabled={submitting}
+                autoFocus
+              />
+              <div className="form-text">
+                Indica el nombre, marca o tipo de producto que necesitas para tu negocio o despensa.
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <label htmlFor="focus-comments-input" className="form-label">
+                Presentación, formato o comentarios <span className="text-muted fw-normal">(Opcional)</span>
+              </label>
+              <textarea
+                id="focus-comments-input"
+                className="form-control"
+                rows={3}
+                placeholder="Ej: Me gustaría comprarlo por caja de 12 o 24 unidades, aprecio precios mayoristas, etc."
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                maxLength={1000}
+                disabled={submitting}
+              />
+            </div>
+
+            <div className="focus-group-client-info">
+              <div className="d-flex align-items-center gap-2">
+                <User size={15} className="text-primary flex-shrink-0" />
+                <span className="small text-muted">
+                  Sugerencia emitida por: <strong className="text-dark">{customer?.nombre || customer?.rut || "Cliente"}</strong>
+                  {customer?.correo ? ` (${customer.correo})` : ""}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <footer className="focus-group-footer">
+            <button
+              className="btn btn-light"
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary d-inline-flex align-items-center gap-2"
+              type="submit"
+              disabled={submitting || !product.trim()}
+            >
+              {submitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                  Enviando sugerencia...
+                </>
+              ) : (
+                <>
+                  <Send size={15} />
+                  Enviar a Administradores
+                </>
+              )}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendorMode }) {
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
@@ -2667,6 +2864,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [suggestionModalOpen, setSuggestionModalOpen] = useState(false);
 
   async function loadPublicidades() {
     try {
@@ -3339,7 +3537,10 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
             <p className="eyebrow">PEDIDOS</p>
             <h1>{section === "create" ? "Realizar pedido" : "Pedidos históricos"}</h1>
           </div>
-          <span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span>
+          <div className="customer-header-right">
+            <FocusGroupButton onClick={() => setSuggestionModalOpen(true)} />
+            <span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span>
+          </div>
         </header>
         <div className="customer-content">
           {error && <div className="alert alert-danger">{error}</div>}
@@ -3353,6 +3554,27 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                   />
                 </div>
               )}
+              <div
+                className="focus-group-banner mb-3"
+                onClick={() => setSuggestionModalOpen(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSuggestionModalOpen(true); }}
+              >
+                <div className="focus-group-banner-content">
+                  <div className="focus-group-banner-icon">
+                    <Sparkles size={18} />
+                  </div>
+                  <div className="focus-group-banner-text">
+                    <span className="focus-group-banner-badge">Focus Group</span>
+                    <strong>¿No encuentras lo que buscas?</strong>
+                    <span className="text-secondary">¿Qué producto quisieras que vendiéramos? Haz clic aquí y cuéntanos.</span>
+                  </div>
+                </div>
+                <button type="button" className="btn btn-sm btn-outline-primary focus-group-banner-btn">
+                  Sugerir producto →
+                </button>
+              </div>
               <div className="row g-4">
                 <section className="col-xl-8">
                   <div className="row g-2 align-items-center mb-3">
@@ -3590,6 +3812,13 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         </div>
       </section>
     </main>
+    {suggestionModalOpen && (
+      <FocusGroupModal
+        isOpen={suggestionModalOpen}
+        onClose={() => setSuggestionModalOpen(false)}
+        customer={customer}
+      />
+    )}
     </>
   );
 

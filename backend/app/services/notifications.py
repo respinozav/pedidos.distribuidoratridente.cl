@@ -19,12 +19,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from fastapi import HTTPException
 from app.core.config import get_settings
-from app.models.entities import Cliente, Pedido, PedidoNotificacionLog, Publicidad, Rol, Usuario
+from app.models.entities import Cliente, LogCorreo, Pedido, PedidoNotificacionLog, Publicidad, Rol, Usuario
 
 logger = logging.getLogger(__name__)
 LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "logo_tridente.png"
@@ -1354,3 +1354,298 @@ def send_publicidad_campaign(
         "fallidos": fallidos,
         "detalles": detalles,
     }
+
+
+def build_product_suggestion_email_html(
+    customer: Cliente,
+    producto: str,
+    comentarios: str | None = None,
+    database: Session | None = None,
+) -> str:
+    tz = _get_system_timezone(database)
+    now_str = datetime.now(tz).strftime("%d/%m/%Y %H:%M:%S")
+
+    cust_nombre = html.escape(customer.nombre or "Cliente sin nombre")
+    cust_rut = html.escape(customer.rut or "No especificado")
+    cust_correo = html.escape(customer.correo or "No especificado")
+    cust_celular = html.escape(customer.celular or "No especificado")
+    producto_escaped = html.escape(producto)
+    comentarios_escaped = html.escape(comentarios) if comentarios else ""
+
+    comentarios_html = f"""
+    <div style="margin-top:16px;background-color:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:14px 16px;">
+      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Comentarios / Formato Solicitado:</div>
+      <div style="font-size:14px;color:#1e293b;line-height:1.5;white-space:pre-wrap;">{comentarios_escaped}</div>
+    </div>
+    """ if comentarios_escaped else """
+    <div style="margin-top:16px;background-color:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:10px 14px;color:#94a3b8;font-size:13px;font-style:italic;">
+      Sin comentarios adicionales especificados por el cliente.
+    </div>
+    """
+
+    return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nueva Sugerencia de Producto - Focus Group</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f1f5f9;table-layout:fixed;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:620px;background-color:#ffffff;border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;box-shadow:0 6px 16px rgba(0,0,0,0.06);">
+          
+          <!-- Encabezado Institucional -->
+          <tr>
+            <td style="background-color:#102a43;padding:24px 30px;border-bottom:1px solid #0b1e36;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td width="46" style="vertical-align:middle;padding-right:12px;">
+                    <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="40" height="40" style="display:block;border:0;outline:none;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <div style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Distribuidora Tridente</div>
+                    <div style="font-size:11px;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.8px;margin-top:2px;">Focus Group • Sugerencia de Producto</div>
+                  </td>
+                  <td align="right" style="vertical-align:middle;">
+                    <span style="display:inline-block;background-color:#0284c7;color:#ffffff;font-size:10px;font-weight:800;padding:4px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px;">
+                      💡 Sugerencia
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Cuerpo -->
+          <tr>
+            <td style="padding:28px 30px;">
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#334155;">
+                Estimados Administradores,
+              </p>
+              <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#475569;">
+                Un cliente ha enviado una nueva solicitud a través del módulo <strong>Focus Group</strong> (<em>"¿Qué producto quisieras que vendiéramos?"</em>) en el portal de clientes:
+              </p>
+
+              <!-- Card Producto Sugerido -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);border:2px solid #38bdf8;border-radius:12px;margin-bottom:24px;overflow:hidden;">
+                <tr>
+                  <td style="padding:20px 22px;">
+                    <div style="font-size:11px;font-weight:800;color:#0284c7;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">
+                      PRODUCTO / ARTÍCULO SOLICITADO
+                    </div>
+                    <div style="font-size:20px;font-weight:800;color:#0c4a6e;line-height:1.3;">
+                      {producto_escaped}
+                    </div>
+                    {comentarios_html}
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Datos del Cliente -->
+              <div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
+                <div style="font-size:12px;font-weight:800;color:#1e293b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">
+                  Información del Cliente
+                </div>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-size:13px;line-height:1.8;color:#334155;">
+                  <tr>
+                    <td width="130" style="color:#64748b;font-weight:600;">Nombre:</td>
+                    <td style="font-weight:700;color:#0f172a;">{cust_nombre}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#64748b;font-weight:600;">RUT:</td>
+                    <td>{cust_rut}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#64748b;font-weight:600;">Correo:</td>
+                    <td><a href="mailto:{cust_correo}" style="color:#0284c7;text-decoration:none;">{cust_correo}</a></td>
+                  </tr>
+                  <tr>
+                    <td style="color:#64748b;font-weight:600;">Teléfono/Celular:</td>
+                    <td>{cust_celular}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#64748b;font-weight:600;">Fecha de Envío:</td>
+                    <td style="color:#64748b;">{now_str} (Chile)</td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- Call to Action -->
+              <div style="text-align:center;margin-top:10px;margin-bottom:10px;">
+                <a href="https://pedidos.distribuidoratridente.cl" style="display:inline-block;background-color:#102a43;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;padding:11px 24px;border-radius:8px;">
+                  Ir al Panel de Administración →
+                </a>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f8fafc;padding:18px 30px;border-top:1px solid #e2e8f0;text-align:center;">
+              <p style="font-size:11px;color:#94a3b8;margin:0;">
+                Este correo fue generado automáticamente por el portal de clientes de <strong>Distribuidora Tridente</strong>.<br/>
+                Para gestionar o evaluar la incorporación de este producto, ingresa a la administración.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_product_suggestion_notification(
+    database: Session,
+    customer: Cliente,
+    producto: str,
+    comentarios: str | None = None,
+) -> dict:
+    """Envía un correo a todos los usuarios con rol ADMINISTRADOR con la sugerencia de producto del cliente."""
+    admins = database.scalars(
+        select(Usuario)
+        .join(Rol)
+        .where(
+            func.upper(Rol.nombre) == "ADMINISTRADOR",
+            Usuario.activo.is_(True),
+        )
+    ).all()
+
+    admin_emails = [
+        u.correo.strip()
+        for u in admins
+        if u.correo and "@" in u.correo and u.correo.strip()
+    ]
+
+    cust_label = customer.nombre or customer.rut or "Cliente"
+    asunto = f"💡 Focus Group: Sugerencia de Producto - {producto[:50]} | {cust_label}"
+
+    if not admin_emails:
+        logger.warning("No hay usuarios activos con rol ADMINISTRADOR con correo para notificar la sugerencia.")
+        log_entry = LogCorreo(
+            cliente_id=customer.id,
+            destinatario="Sin Administradores",
+            tipo="SUGERENCIA_PRODUCTO",
+            asunto=asunto,
+            cuerpo_enviado=f"Producto: {producto}\nComentarios: {comentarios or ''}",
+            estado="OMITIDO",
+        )
+        database.add(log_entry)
+        database.commit()
+        return {
+            "success": True,
+            "mensaje": "Sugerencia registrada exitosamente.",
+            "destinatarios_notificados": 0,
+        }
+
+    smtp_config = _get_smtp_settings(database)
+    if not smtp_config.get("configured") or not smtp_config.get("host"):
+        logger.warning("SMTP no configurado al procesar sugerencia de producto del cliente %s", customer.id)
+        log_entry = LogCorreo(
+            cliente_id=customer.id,
+            destinatario=", ".join(admin_emails),
+            tipo="SUGERENCIA_PRODUCTO",
+            asunto=asunto,
+            cuerpo_enviado=f"Producto: {producto}\nComentarios: {comentarios or ''}",
+            estado="OMITIDO",
+        )
+        database.add(log_entry)
+        database.commit()
+        return {
+            "success": True,
+            "mensaje": "Sugerencia registrada exitosamente.",
+            "destinatarios_notificados": 0,
+        }
+
+    host = str(smtp_config.get("host"))
+    port = int(smtp_config.get("port") or 465)
+    username = str(smtp_config.get("username") or "")
+    password = str(smtp_config.get("password") or "")
+    from_name = str(smtp_config.get("from_name") or "Distribuidora Tridente")
+    from_email = str(smtp_config.get("from_email") or username)
+
+    html_content = build_product_suggestion_email_html(
+        customer=customer,
+        producto=producto,
+        comentarios=comentarios,
+        database=database,
+    )
+    plain_content = (
+        f"Nueva Sugerencia de Producto (Focus Group)\n\n"
+        f"Producto sugerido: {producto}\n"
+        f"Comentarios: {comentarios or 'Sin comentarios'}\n\n"
+        f"Datos del Cliente:\n"
+        f"- Nombre: {customer.nombre or 'N/A'}\n"
+        f"- RUT: {customer.rut or 'N/A'}\n"
+        f"- Correo: {customer.correo or 'N/A'}\n"
+        f"- Teléfono: {customer.celular or 'N/A'}\n\n"
+        f"Distribuidora Tridente"
+    )
+
+    dest_str = ", ".join(admin_emails)
+
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = asunto
+        msg["From"] = f"{from_name} <{from_email}>"
+        msg["To"] = dest_str
+        msg.set_content(plain_content)
+        msg.add_alternative(html_content, subtype="html")
+
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=20) as smtp:
+                if username and password:
+                    smtp.login(username, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=20) as smtp:
+                smtp.ehlo()
+                if smtp.has_extn("starttls"):
+                    smtp.starttls()
+                    smtp.ehlo()
+                if username and password:
+                    smtp.login(username, password)
+                smtp.send_message(msg)
+
+        log_entry = LogCorreo(
+            cliente_id=customer.id,
+            destinatario=dest_str,
+            tipo="SUGERENCIA_PRODUCTO",
+            asunto=asunto,
+            cuerpo_enviado=f"Producto: {producto}\nComentarios: {comentarios or ''}",
+            estado="ENVIADO",
+        )
+        database.add(log_entry)
+        database.commit()
+
+        logger.info("Correo de sugerencia de producto enviado a administradores (%s)", dest_str)
+        return {
+            "success": True,
+            "mensaje": "Sugerencia enviada correctamente a los administradores.",
+            "destinatarios_notificados": len(admin_emails),
+        }
+    except Exception as e:
+        logger.exception("Error al enviar correo de sugerencia de producto a administradores: %s", e)
+        try:
+            log_entry = LogCorreo(
+                cliente_id=customer.id,
+                destinatario=dest_str,
+                tipo="SUGERENCIA_PRODUCTO",
+                asunto=asunto,
+                cuerpo_enviado=f"Producto: {producto}\nComentarios: {comentarios or ''}\nError: {str(e)}",
+                estado="FALLIDO",
+            )
+            database.add(log_entry)
+            database.commit()
+        except Exception:
+            database.rollback()
+
+        return {
+            "success": True,
+            "mensaje": "Sugerencia registrada exitosamente.",
+            "destinatarios_notificados": 0,
+        }
