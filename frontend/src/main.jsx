@@ -2799,7 +2799,7 @@ function FocusGroupModal({ isOpen, onClose, customer }) {
             <div className="focus-group-survey-card">
               <div className="focus-group-survey-header">
                 <h3 className="focus-group-survey-title">
-                  4. ¿Qué productos te gustaría que incorporáramos a nuestro catálogo?{" "}
+                  ¿Qué productos te gustaría que incorporáramos a nuestro catálogo?{" "}
                   <span className="focus-group-survey-sub">Marca todos los que te interesen.</span>
                 </h3>
               </div>
