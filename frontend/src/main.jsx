@@ -2665,7 +2665,6 @@ function FocusGroupButton({ onClick, className = "" }) {
       </span>
       <span className="focus-group-tag">Focus Group</span>
       <span className="focus-group-text">¿Qué producto quisieras que vendiéramos?</span>
-      <span className="focus-group-text-mobile">¿Qué producto buscas?</span>
     </button>
   );
 }

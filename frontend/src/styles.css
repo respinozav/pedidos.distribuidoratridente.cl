@@ -2388,10 +2388,6 @@ button, input { font: inherit; }
   text-transform: uppercase;
 }
 
-.focus-group-text-mobile {
-  display: none;
-}
-
 /* Banner de sugerencia en catálogo */
 .focus-group-banner {
   align-items: center;
@@ -2533,27 +2529,43 @@ button, input { font: inherit; }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .focus-group-text {
-    display: none;
+  .customer-portal-header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    min-height: auto;
+    padding: 0.75rem 1rem;
   }
-  .focus-group-text-mobile {
-    display: inline;
+  .customer-header-right {
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
-  .focus-group-banner-btn {
-    display: none;
+  .btn-focus-group {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.8rem;
+    white-space: normal;
+    text-align: left;
   }
 }
 
 @media (max-width: 575px) {
+  .customer-portal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    min-height: auto;
+  }
   .customer-header-right {
+    width: 100%;
+    justify-content: flex-start;
     gap: 0.5rem;
   }
   .btn-focus-group {
-    font-size: 0.75rem;
-    padding: 0.35rem 0.65rem;
-  }
-  .focus-group-tag {
-    display: none;
+    font-size: 0.76rem;
+    padding: 0.35rem 0.75rem;
+    white-space: normal;
+    text-align: left;
+    width: 100%;
   }
   .focus-group-modal {
     max-width: 100%;
