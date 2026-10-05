@@ -15,8 +15,7 @@ export default function CommercialSettings() {
   const [activeTab, setActiveTab] = useState("notificaciones");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+const [error, setError] = useState("");
   const [totalNotificacionesEnviadas, setTotalNotificacionesEnviadas] = useState(0);
   const [settings, setSettings] = useState({
     carro_compras_expira_horas: 24,
@@ -69,8 +68,7 @@ export default function CommercialSettings() {
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setLoading(true);
-    setNotice("");
-    setError("");
+setError("");
     try {
       const payload = {
         ...settings,
@@ -79,7 +77,7 @@ export default function CommercialSettings() {
           : 24,
       };
       await updateSettings(payload);
-      setNotice("Ajustes comerciales actualizados correctamente.");
+      Swal.fire({ icon: "success", title: "Ajustes comerciales actualizados correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
       Swal.fire({
         icon: "success",
         title: "Ajustes guardados",
@@ -163,13 +161,6 @@ export default function CommercialSettings() {
             </button>
           </div>
 
-          {notice && (
-            <div className="alert alert-success alert-dismissible fade show mb-4 category-notice" role="alert">
-              <CheckCircle2 size={18} />
-              <span>{notice}</span>
-              <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setNotice("")} />
-            </div>
-          )}
 
           {error && <div className="alert alert-danger mb-4">{error}</div>}
 

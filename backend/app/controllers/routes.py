@@ -562,7 +562,7 @@ def public_catalog(database: DatabaseSession) -> Response:
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="catalogo-distribuidora-tridente.pdf"'},
+        headers={"Content-Disposition": 'attachment; filename="catalogo-distribuidora-tridente.pdf"'},
     )
 
 
@@ -573,7 +573,7 @@ def full_catalog(database: DatabaseSession, _: AdminUser) -> Response:
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="full-catalogo-tridente.pdf"'},
+        headers={"Content-Disposition": 'attachment; filename="full-catalogo-tridente.pdf"'},
     )
 
 
@@ -1773,4 +1773,4 @@ def asignar_masivo_cartera(
     return GenericCarteraResponse(success=True, actualizados=count, mensaje=msg)
 
 
-
+

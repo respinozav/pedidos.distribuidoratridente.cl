@@ -329,8 +329,7 @@ export default function SystemSettings() {
   const [activeTab, setActiveTab] = useState("smtp");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+const [error, setError] = useState("");
   const [whatsappInfo, setWhatsappInfo] = useState(null);
   const [settings, setSettings] = useState({
     smtp_host: "",
@@ -410,8 +409,7 @@ export default function SystemSettings() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setNotice("");
-    setError("");
+setError("");
     try {
       const payload = {
         ...settings,
@@ -424,7 +422,7 @@ export default function SystemSettings() {
           : 24,
       };
       await updateSettings(payload);
-      setNotice("Ajustes actualizados correctamente.");
+      Swal.fire({ icon: "success", title: "Ajustes actualizados correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
       Swal.fire({
         icon: "success",
         title: "Ajustes guardados",
@@ -634,13 +632,6 @@ export default function SystemSettings() {
             </button>
           </div>
 
-          {notice && (
-            <div className="alert alert-success alert-dismissible fade show mb-4 category-notice" role="alert">
-              <CheckCircle2 size={18} />
-              <span>{notice}</span>
-              <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setNotice("")} />
-            </div>
-          )}
 
           {error && <div className="alert alert-danger mb-4">{error}</div>}
 

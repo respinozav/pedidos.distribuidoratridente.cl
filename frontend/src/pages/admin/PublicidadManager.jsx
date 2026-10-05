@@ -41,8 +41,7 @@ export default function PublicidadManager() {
   const [publicidades, setPublicidades] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Modal State
@@ -420,10 +419,10 @@ export default function PublicidadManager() {
 
       if (editingId) {
         await api.put(`/admin/publicidades/${editingId}`, payload);
-        setNotice("Banner publicitario actualizado correctamente.");
+        Swal.fire({ icon: "success", title: "Banner publicitario actualizado correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
       } else {
         await api.post("/admin/publicidades", payload);
-        setNotice("Banner publicitario creado exitosamente.");
+        Swal.fire({ icon: "success", title: "Banner publicitario creado exitosamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
       }
 
       setIsModalOpen(false);
@@ -543,13 +542,6 @@ export default function PublicidadManager() {
         </section>
 
         {/* NOTICES & ALERTS */}
-        {notice && (
-          <div className="alert alert-success alert-dismissible fade show mt-3 mb-0" role="alert">
-            <CheckCircle2 size={18} />
-            {notice}
-            <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setNotice("")} />
-          </div>
-        )}
         {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
 
         {/* TABLA LISTADO */}

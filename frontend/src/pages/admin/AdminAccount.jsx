@@ -11,8 +11,7 @@ export default function AdminAccount({ onProfileUpdated }) {
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+const [error, setError] = useState("");
 
   async function loadProfile() {
     try {
@@ -40,8 +39,7 @@ export default function AdminAccount({ onProfileUpdated }) {
   async function handleSaveProfile(e) {
     e.preventDefault();
     setError("");
-    setNotice("");
-    try {
+try {
       setSavingProfile(true);
       const { data } = await api.put("/admin/perfil", {
         nombre: form.nombre.trim(),
@@ -51,7 +49,7 @@ export default function AdminAccount({ onProfileUpdated }) {
       if (onProfileUpdated) {
         onProfileUpdated(data);
       }
-      setNotice("Tus datos personales fueron actualizados correctamente.");
+      Swal.fire({ icon: "success", title: "Tus datos personales fueron actualizados correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
       Swal.fire({
         icon: "success",
         title: "Datos actualizados",
@@ -75,8 +73,7 @@ export default function AdminAccount({ onProfileUpdated }) {
   async function handleChangePassword(e) {
     e.preventDefault();
     setError("");
-    setNotice("");
-    if (!passwordForm.new_password || passwordForm.new_password.length < 8) {
+if (!passwordForm.new_password || passwordForm.new_password.length < 8) {
       setError("La nueva contraseña debe tener al menos 8 caracteres.");
       return;
     }
@@ -87,7 +84,7 @@ export default function AdminAccount({ onProfileUpdated }) {
         new_password: passwordForm.new_password,
       });
       setPasswordForm({ current_password: "", new_password: "" });
-      setNotice("Contraseña actualizada exitosamente.");
+      Swal.fire({ icon: "success", title: "Contraseña actualizada exitosamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
       Swal.fire({
         icon: "success",
         title: "Contraseña actualizada",
@@ -142,13 +139,6 @@ export default function AdminAccount({ onProfileUpdated }) {
           </div>
         </section>
 
-        {notice && (
-          <div className="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
-            <CheckCircle2 size={18} />
-            <span>{notice}</span>
-            <button type="button" className="btn-close ms-auto" aria-label="Cerrar" onClick={() => setNotice("")} />
-          </div>
-        )}
 
         {error && (
           <div className="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
