@@ -24,7 +24,7 @@ import logging
 from app.services.defontana_service import DefontanaService, dispatch_defontana_order_sync_in_background
 from app.services.notifications import _order_pdf, dispatch_order_notifications_in_background, notify_administrators_of_order
 from app.services.pricing import customer_product_box_price, customer_product_price
-from app.schemas.dto import OrderUpdateAdmin
+from app.schemas.dto import OrderCreate, OrderUpdateAdmin
 
 logger = logging.getLogger(__name__)
 
