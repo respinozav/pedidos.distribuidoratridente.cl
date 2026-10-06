@@ -288,11 +288,14 @@ class DefontanaService:
         """Envía el pedido a UpdateOrder en Defontana."""
         url = f"{self.base_url}/api/Order/UpdateOrder"
         headers = self._get_headers()
+        params = {}
+        if "number" in payload and payload["number"] is not None:
+            params["number"] = payload["number"]
         with httpx.Client(timeout=25.0) as client:
-            resp = client.post(url, json=payload, headers=headers)
+            resp = client.post(url, json=payload, params=params, headers=headers)
             if resp.status_code == 401:
                 headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
-                resp = client.post(url, json=payload, headers=headers)
+                resp = client.post(url, json=payload, params=params, headers=headers)
             if resp.status_code in (404, 405):
                 resp.raise_for_status()
             try:
@@ -514,18 +517,21 @@ class DefontanaService:
             
             has_afecto_folio = bool(order.folio_defontana_afecto)
             if has_afecto_folio:
-                body_afecto["folio"] = str(order.folio_defontana_afecto)
-                body_afecto["firstNumber"] = int(order.folio_defontana_afecto)
+                folio_num = int(order.folio_defontana_afecto)
+                body_afecto["number"] = folio_num
+                body_afecto["firstNumber"] = folio_num
+                body_afecto["folio"] = str(folio_num)
 
             try:
                 res_afecto = self.save_or_update_order(body_afecto, is_update=(is_update and has_afecto_folio))
                 if res_afecto.get("success", False):
-                    if res_afecto.get("folio"):
-                        order.folio_defontana_afecto = int(res_afecto["folio"])
+                    new_folio = res_afecto.get("folio") or res_afecto.get("number")
+                    if new_folio:
+                        order.folio_defontana_afecto = int(new_folio)
                     logger.info(
                         "Pedido %s: Factura 33 (Afecta) generada/actualizada con éxito en Defontana con folio %s",
                         order_id,
-                        res_afecto.get("folio") or order.folio_defontana_afecto,
+                        order.folio_defontana_afecto,
                     )
                 else:
                     err_msg = (
@@ -562,18 +568,21 @@ class DefontanaService:
             
             has_exento_folio = bool(order.folio_defontana)
             if has_exento_folio:
-                body_exento["folio"] = str(order.folio_defontana)
-                body_exento["firstNumber"] = int(order.folio_defontana)
+                folio_num = int(order.folio_defontana)
+                body_exento["number"] = folio_num
+                body_exento["firstNumber"] = folio_num
+                body_exento["folio"] = str(folio_num)
 
             try:
                 res_exento = self.save_or_update_order(body_exento, is_update=(is_update and has_exento_folio))
                 if res_exento.get("success", False):
-                    if res_exento.get("folio"):
-                        order.folio_defontana = int(res_exento["folio"])
+                    new_folio = res_exento.get("folio") or res_exento.get("number")
+                    if new_folio:
+                        order.folio_defontana = int(new_folio)
                     logger.info(
                         "Pedido %s: Factura 34 (Exenta) generada/actualizada con éxito en Defontana con folio %s",
                         order_id,
-                        res_exento.get("folio") or order.folio_defontana,
+                        order.folio_defontana,
                     )
                 else:
                     err_msg = (
