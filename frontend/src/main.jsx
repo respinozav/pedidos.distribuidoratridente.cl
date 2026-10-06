@@ -1011,6 +1011,100 @@ const [loading, setLoading] = useState(true);
   const [deliveryPayment, setDeliveryPayment] = useState(null);
   const [creditDays, setCreditDays] = useState("");
 
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [editingLines, setEditingLines] = useState([]);
+  const [productSearch, setProductSearch] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      setEditingLines([...(selectedOrder.detalles || [])]);
+      setIsEditingOrder(false);
+      setProductSearch("");
+      setSearchResults([]);
+    }
+  }, [selectedOrder]);
+
+  useEffect(() => {
+    if (productSearch.trim().length >= 2 && isEditingOrder) {
+      setIsSearching(true);
+      const delay = setTimeout(() => {
+        api.get("/productos", { params: { search: productSearch, page_size: 5 } })
+          .then(({ data }) => setSearchResults(data.items || data || []))
+          .catch(() => setSearchResults([]))
+          .finally(() => setIsSearching(false));
+      }, 500);
+      return () => clearTimeout(delay);
+    } else {
+      setSearchResults([]);
+    }
+  }, [productSearch, isEditingOrder]);
+
+  const addEditLine = (prod) => {
+    const existing = editingLines.find(l => l.producto_id === prod.id);
+    if (existing) {
+      setEditingLines(editingLines.map(l => l.producto_id === prod.id ? { ...l, cantidad: l.cantidad + 1, subtotal: (l.cantidad + 1) * l.precio_unitario } : l));
+    } else {
+      const price = prod.precio || 0;
+      setEditingLines([...editingLines, {
+        producto_id: prod.id,
+        nombre_producto: prod.nombre,
+        cantidad: 1,
+        precio_unitario: price,
+        subtotal: price,
+        tipo_empaque: "unidad",
+        cantidad_caja: prod.unidades_por_caja,
+        afecto: prod.afecto
+      }]);
+    }
+    setProductSearch("");
+    setSearchResults([]);
+  };
+
+  const removeEditLine = (index) => {
+    setEditingLines(editingLines.filter((_, i) => i !== index));
+  };
+
+  const changeEditLineQuantity = (index, delta) => {
+    setEditingLines(editingLines.map((l, i) => {
+      if (i === index) {
+        const newQ = Math.max(1, l.cantidad + delta);
+        return { ...l, cantidad: newQ, subtotal: newQ * l.precio_unitario };
+      }
+      return l;
+    }));
+  };
+
+  const saveOrderEdit = async () => {
+    if (!editingLines.length) return Swal.fire("Error", "El pedido no puede quedar vacío.", "warning");
+    setIsSavingEdit(true);
+    try {
+      const payload = {
+        productos: editingLines.map(l => ({
+          producto_id: l.producto_id,
+          cantidad: l.cantidad,
+          tipo_empaque: l.tipo_empaque || "unidad"
+        }))
+      };
+      const { data } = await api.put(`/pedidos/${selectedOrder.id}`, payload);
+      setOrders(current => current.map(o => o.id === data.id ? data : o));
+      setSelectedOrder(data);
+      setIsEditingOrder(false);
+      Swal.fire({ icon: "success", title: "Actualizado", text: "Pedido actualizado y sincronizado con Defontana.", timer: 2500, showConfirmButton: false });
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail ?? "No se pudo actualizar el pedido.";
+      Swal.fire({
+        icon: "error",
+        title: "Modificación no permitida",
+        text: errorMsg,
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   async function loadOrders() {
     try {
       const [{ data: ordersData }, { data: statesData }] = await Promise.all([api.get("/pedidos"), api.get("/estados")]);
@@ -1326,7 +1420,7 @@ const [loading, setLoading] = useState(true);
         )}
       </React.Fragment>
     );
-  })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{formatDateTime(selectedOrder.created_at)}</span>{selectedOrder.folio_defontana_afecto && <span className="badge bg-primary ms-1">Factura 33: #{selectedOrder.folio_defontana_afecto}</span>}{selectedOrder.folio_defontana && <span className="badge bg-secondary ms-1">Factura 34: #{selectedOrder.folio_defontana}</span>}</div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
+  })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><div className="d-flex align-items-center gap-3"><h2>Detalle del pedido</h2>{!isEditingOrder && (!["Despachado", "Entregado", "Cancelado"].includes(getOrderStateName(selectedOrder)) ? <button className="btn btn-outline-primary btn-sm d-flex align-items-center gap-1" type="button" onClick={() => setIsEditingOrder(true)}><Pencil size={14}/> Editar</button> : <span className="badge bg-light text-muted border py-1 px-2" title="No se puede modificar un pedido despachado, entregado o cancelado (Restricciones Defontana ERP)">No editable ({getOrderStateName(selectedOrder)})</span>)}</div></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{formatDateTime(selectedOrder.created_at)}</span>{selectedOrder.folio_defontana_afecto && <span className="badge bg-primary ms-1">Factura 33: #{selectedOrder.folio_defontana_afecto}</span>}{selectedOrder.folio_defontana && <span className="badge bg-secondary ms-1">Factura 34: #{selectedOrder.folio_defontana}</span>}</div>{isEditingOrder ? (<div className="order-edit-section mt-3"><div className="mb-3 position-relative"><label className="form-label text-secondary small mb-1">Agregar Producto</label><input className="form-control" placeholder="Buscar por nombre..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />{isSearching && <div className="position-absolute end-0 top-50 translate-middle-y me-3 mt-2"><RotateCcw size={14} className="animate-spin text-secondary" /></div>}{searchResults.length > 0 && (<div className="dropdown-menu show w-100 position-absolute shadow-sm" style={{ top: "100%", zIndex: 1050, maxHeight: "200px", overflowY: "auto" }}>{searchResults.map(prod => (<button key={prod.id} type="button" className="dropdown-item d-flex justify-content-between align-items-center py-2 border-bottom" onClick={() => addEditLine(prod)}><span><strong className="d-block text-truncate" style={{maxWidth: "280px"}}>{prod.nombre}</strong><small className="text-muted">{money.format(prod.precio || 0)}</small></span><Plus size={16} className="text-primary" /></button>))}</div>)}</div><div className="order-detail-lines mt-3"><div><span>Producto</span><span className="text-center">Cant.</span><span>Subtotal</span><span></span></div>{editingLines.map((line, idx) => (<div key={line.producto_id || idx} className="align-items-center"><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><div className="d-flex align-items-center gap-1 justify-content-center"><button className="btn btn-sm btn-light p-1" type="button" onClick={() => changeEditLineQuantity(idx, -1)}><Minus size={14}/></button><span style={{ minWidth: "20px", textAlign: "center" }}>{line.cantidad}</span><button className="btn btn-sm btn-light p-1" type="button" onClick={() => changeEditLineQuantity(idx, 1)}><Plus size={14}/></button></div><strong>{money.format(line.subtotal ?? 0)}</strong><button className="btn btn-sm btn-outline-danger p-1 border-0" type="button" onClick={() => removeEditLine(idx)}><Trash size={16}/></button></div>))}</div><div className="order-detail-total mt-3"><strong>Total Estimado</strong><strong>{money.format(editingLines.reduce((acc, l) => acc + (l.subtotal || 0), 0))}</strong></div><div className="d-flex gap-2 mt-4 justify-content-end"><button className="btn btn-light" type="button" onClick={() => { setIsEditingOrder(false); setEditingLines([...(selectedOrder.detalles || [])]); }}>Cancelar</button><button className="btn btn-primary d-flex align-items-center gap-2" type="button" disabled={isSavingEdit} onClick={saveOrderEdit}>{isSavingEdit ? <RotateCcw size={16} className="animate-spin" /> : <Save size={16} />} Guardar</button></div></div>) : (<><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div></>)}
 
 <div className="order-notifications-section mt-4 pt-3 border-top">
   <div className="d-flex justify-content-between align-items-center mb-2">

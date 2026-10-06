@@ -19,10 +19,13 @@ from app.models.entities import (
     VentaVendedor,
 )
 from app.repositories.base import Repository
-from app.schemas.dto import OrderCreate
-from app.services.defontana_service import dispatch_defontana_order_sync_in_background
+import logging
+
+from app.services.defontana_service import DefontanaService, dispatch_defontana_order_sync_in_background
 from app.services.notifications import _order_pdf, dispatch_order_notifications_in_background, notify_administrators_of_order
 from app.services.pricing import customer_product_box_price, customer_product_price
+
+logger = logging.getLogger(__name__)
 
 
 class OrderService:
@@ -125,7 +128,7 @@ class OrderService:
                 self.database.flush()
         # Si no viene vendedor_id explícito (ej. el cliente realiza el pedido desde su portal),
         # se utiliza el vendedor asignado en su cartera para que reciba las comisiones
-        effective_vendedor_id = vendedor_id or customer.vendedor_id
+        effective_vendedor_id = vendedor_id or getattr(customer, "vendedor_id", None)
 
         order = Pedido(
             cliente_id=customer_id,
@@ -176,6 +179,171 @@ class OrderService:
         dispatch_order_notifications_in_background(created_order.id, tipo="NUEVO_PEDIDO")
         dispatch_defontana_order_sync_in_background(created_order.id)
         return created_order
+
+    def update_admin(self, order_id: UUID, payload: OrderUpdateAdmin) -> Pedido:
+        order = self.database.scalar(
+            select(Pedido)
+            .options(
+                selectinload(Pedido.detalles),
+                selectinload(Pedido.venta_vendedor),
+                selectinload(Pedido.estado),
+                selectinload(Pedido.cliente),
+                selectinload(Pedido.direccion),
+            )
+            .where(Pedido.id == order_id)
+        )
+        if not order:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido no encontrado")
+        
+        estado_nombre = order.estado.nombre if order.estado else ""
+        if estado_nombre in {"Despachado", "Entregado", "Cancelado"}:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"No se puede modificar un pedido en estado '{estado_nombre}'. Las restricciones de Defontana y despacho no permiten editar pedidos despachados, entregados o cancelados.",
+            )
+
+        customer = self.database.get(Cliente, order.cliente_id)
+
+        # 1. Revertir stock de los detalles antiguos
+        for item in order.detalles:
+            prod = self.database.get(Producto, item.producto_id)
+            if prod:
+                factor = (item.cantidad_caja or 1) if item.tipo_empaque == "caja" else 1
+                prod.cantidad += item.cantidad * factor
+
+        # 2. Eliminar detalles antiguos y venta_vendedor antigua
+        for item in list(order.detalles):
+            self.database.delete(item)
+        if order.venta_vendedor:
+            self.database.delete(order.venta_vendedor)
+
+        self.database.flush()
+
+        # 3. Validar nuevos productos
+        product_ids = [line.producto_id for line in payload.productos]
+        products = {
+            product.id: product
+            for product in self.database.scalars(
+                select(Producto).options(selectinload(Producto.categoria)).where(Producto.id.in_(product_ids))
+            )
+        }
+        if len(products) != len(set(product_ids)):
+            self.database.rollback()
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Uno o mas productos no existen")
+
+        # 4. Calcular nuevos detalles, stock y subtotal
+        details: list[DetallePedido] = []
+        subtotal = Decimal("0")
+        for line in payload.productos:
+            product = products[line.producto_id]
+            if not product.activo:
+                self.database.rollback()
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Producto inactivo: {product.codigo}")
+
+            tipo_empaque = (line.tipo_empaque or "unidad").strip().lower()
+            if tipo_empaque == "caja":
+                applied_price = customer_product_box_price(product, customer)
+                if applied_price is None:
+                    applied_price = customer_product_price(product, customer)
+                    tipo_empaque = "unidad"
+                    cantidad_caja = None
+                    unidades_descontar = line.cantidad
+                else:
+                    cantidad_caja = product.cantidad_caja or 1
+                    unidades_descontar = line.cantidad * cantidad_caja
+            else:
+                applied_price = customer_product_price(product, customer)
+                tipo_empaque = "unidad"
+                cantidad_caja = None
+                unidades_descontar = line.cantidad
+
+            line_total = applied_price * line.cantidad
+            product.cantidad -= unidades_descontar
+            subtotal += line_total
+            details.append(
+                DetallePedido(
+                    pedido_id=order.id,
+                    producto_id=product.id,
+                    codigo_producto=product.codigo,
+                    nombre_producto=product.nombre,
+                    precio_unitario=applied_price,
+                    cantidad=line.cantidad,
+                    tipo_empaque=tipo_empaque,
+                    cantidad_caja=cantidad_caja,
+                    subtotal=line_total,
+                )
+            )
+
+        order.subtotal = subtotal
+        order.total = subtotal
+        if payload.direccion_id:
+            order.direccion_id = payload.direccion_id
+        
+        # Guardar nuevos detalles
+        self.database.add_all(details)
+
+        # 5. Volver a generar VentaVendedor
+        effective_vendedor_id = order.vendedor_id
+        if effective_vendedor_id:
+            detalles_venta: list[DetalleVentaVendedor] = []
+            comision_acumulada = Decimal("0.00")
+            for detail in details:
+                prod = products.get(detail.producto_id)
+                cat = prod.categoria if prod else None
+                pct = Decimal(str(cat.comision_porcentaje or 0)) if cat else Decimal("0.00")
+                monto = (detail.subtotal * (pct / Decimal("100"))).quantize(Decimal("0.01"))
+                detalles_venta.append(
+                    DetalleVentaVendedor(
+                        producto_id=detail.producto_id,
+                        categoria_id=cat.id if cat else None,
+                        nombre_producto=detail.nombre_producto,
+                        nombre_categoria=cat.nombre if cat else None,
+                        cantidad=detail.cantidad,
+                        precio_unitario=detail.precio_unitario,
+                        subtotal=detail.subtotal,
+                        comision_porcentaje=pct,
+                        comision_monto=monto,
+                    )
+                )
+                comision_acumulada += monto
+
+            venta_vendedor = VentaVendedor(
+                vendedor_id=effective_vendedor_id,
+                pedido_id=order.id,
+                cliente_id=order.cliente_id,
+                total_venta=subtotal,
+                comision_total=comision_acumulada,
+                detalles=detalles_venta,
+            )
+            self.database.add(venta_vendedor)
+
+        self.database.flush()
+
+        # 6. Sincronizar y validar con Defontana antes de confirmar cambios en este sistema
+        defontana_service = DefontanaService()
+        if defontana_service.is_configured():
+            _, defontana_err = defontana_service.sync_order(
+                order.id,
+                session=self.database,
+                auto_commit=False,
+                is_update=True,
+            )
+            if defontana_err:
+                # Si Defontana no acepta el cambio, NO persistir el cambio en este sistema
+                self.database.rollback()
+                logger.warning(
+                    "Defontana rechazó la modificación del pedido %s: %s",
+                    order_id,
+                    defontana_err,
+                )
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Defontana no aceptó la modificación del pedido: {defontana_err}",
+                )
+
+        # Si Defontana aceptó el cambio (o no está configurada), confirmar en base de datos
+        self.database.commit()
+        return self.get(order.id)
 
 
     def get(self, order_id: UUID) -> Pedido:

@@ -71,6 +71,7 @@ from app.schemas.dto import (
     OrderOutput,
     OrderStateOutput,
     OrderStatusUpdate,
+    OrderUpdateAdmin,
     PedidoNotificacionLogOutput,
     ProductInput,
     ProductOutput,
@@ -812,6 +813,12 @@ def customer_order_history(customer_id: UUID, database: DatabaseSession, current
 @router.get("/pedidos", response_model=list[OrderOutput], tags=["Pedidos"])
 def list_orders(database: DatabaseSession, _: AdminUser) -> list[object]:
     return OrderService(database).list_all()
+
+
+@router.put("/pedidos/{order_id}", response_model=OrderOutput, tags=["Pedidos"])
+def update_order_admin(order_id: UUID, payload: OrderUpdateAdmin, database: DatabaseSession, _: AdminUser) -> object:
+    return OrderService(database).update_admin(order_id, payload)
+
 
 
 # =========================================================================

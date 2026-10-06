@@ -12,6 +12,12 @@ def test_defontana_resolve_client_and_product():
         print("Defontana no configurada, omitiendo prueba de red.")
         return
 
+    try:
+        service.get_token()
+    except Exception as exc:
+        print(f"Credenciales de Defontana no operativas ({exc}), omitiendo prueba de red.")
+        return
+
     # Probar resolución de cliente por RUT
     client = service.resolve_client("77.673.176-5")
     assert client is not None, "Debería encontrar el cliente Todo Barato"
@@ -435,7 +441,8 @@ def test_defontana_create_client_mocked():
         captured_req = {"url": url, "json": json, "headers": headers}
         return MockResponse()
 
-    with patch("httpx.Client.post", side_effect=mock_post):
+    with patch("httpx.Client.post", side_effect=mock_post), \
+         patch.object(service, "get_token", return_value="fake-token"):
         result = service.create_client(cliente, direccion)
 
     assert result is not None

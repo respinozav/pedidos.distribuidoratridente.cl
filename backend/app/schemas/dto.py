@@ -266,6 +266,12 @@ class OrderCreate(BaseModel):
     productos: list[OrderLineInput] = Field(min_length=1)
 
 
+class OrderUpdateAdmin(BaseModel):
+    direccion_id: UUID | None = None
+    productos: list[OrderLineInput] = Field(min_length=1)
+
+
+
 class OrderLineOutput(ORMModel):
     producto_id: UUID
     codigo_producto: str

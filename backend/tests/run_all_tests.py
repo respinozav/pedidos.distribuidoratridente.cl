@@ -52,6 +52,9 @@ def main():
     tc.test_build_public_vs_full_catalog_cache_and_invalidation()
     try:
         to.test_create_creates_default_state_when_none_exists(mp)
+        to.test_update_admin_rejects_on_terminal_state(mp)
+        to.test_update_admin_rolls_back_when_defontana_rejects(mp)
+        to.test_update_admin_commits_when_defontana_accepts(mp)
     finally:
         mp.undo()
     tn.test_order_pdf_filename_generation()
