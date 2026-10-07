@@ -75,6 +75,8 @@ def main():
     td.test_defontana_order_mixed_afecto_and_exento()
     td.test_defontana_create_client_mocked()
     td.test_defontana_sync_order_creates_client_when_not_exists()
+    td.test_defontana_sync_product_existing()
+    td.test_defontana_sync_product_new()
     tap.test_admin_profile_workflow()
     tcol.test_colaborador_role_permissions()
     tvend.test_vendedor_role_and_category_commission()

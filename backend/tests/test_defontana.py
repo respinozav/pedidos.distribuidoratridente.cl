@@ -553,6 +553,82 @@ def test_defontana_sync_order_creates_client_when_not_exists():
     print("test_defontana_sync_order_creates_client_when_not_exists: OK")
 
 
+def test_defontana_sync_product_existing():
+    service = DefontanaService()
+    existing_product_data = {
+        "code": "44",
+        "name": "Encendedor Ronson Clearlite Transparente",
+        "unit": "UN",
+        "categoryID": 10,
+        "sellPrice": 3700.0,
+        "priceListDetail": [
+            {"priceListID": 1, "unitPrice": 3700.0},
+            {"priceListID": 2, "unitPrice": 3700.0},
+        ],
+    }
+
+    updated_payload = {}
+    price_list_updates = []
+
+    def mock_update(payload):
+        nonlocal updated_payload
+        updated_payload = payload
+        return {"success": True, "message": "Producto actualizado"}
+
+    def mock_save_pl(pl_id, code, price):
+        price_list_updates.append((pl_id, code, price))
+        return {"success": True}
+
+    with patch.object(service, "resolve_product", return_value=existing_product_data), \
+         patch.object(service, "update_product_defontana", side_effect=mock_update) as mock_upd, \
+         patch.object(service, "save_product_price_list", side_effect=mock_save_pl):
+
+        ok, err = service.sync_product(
+            code="44",
+            name="ENCENDEDOR RONSON CLEARLITE TRANSPARENTE",
+            price=Decimal("3701.00"),
+            category_name="ABARROTES",
+        )
+        assert ok is True
+        assert err is None
+        assert updated_payload["code"] == "44"
+        assert updated_payload["price"] == 3701.0
+        assert updated_payload["unit"] == "UN"
+        assert len(price_list_updates) == 2
+        assert price_list_updates[0] == (1, "44", 3701.0)
+        assert price_list_updates[1] == (2, "44", 3701.0)
+
+    print("test_defontana_sync_product_existing: OK")
+
+
+def test_defontana_sync_product_new():
+    service = DefontanaService()
+    saved_payload = {}
+
+    def mock_save(payload):
+        nonlocal saved_payload
+        saved_payload = payload
+        return {"success": True, "message": "Producto creado"}
+
+    with patch.object(service, "resolve_product", return_value=None), \
+         patch.object(service, "save_product", side_effect=mock_save), \
+         patch.object(service, "get_categories", return_value=[{"categoryID": 12, "description": "ABARROTES"}]):
+
+        ok, err = service.sync_product(
+            code="999",
+            name="PRODUCTO NUEVO",
+            price=Decimal("1500.00"),
+            category_name="ABARROTES",
+        )
+        assert ok is True
+        assert err is None
+        assert saved_payload["code"] == "999"
+        assert saved_payload["price"] == 1500.0
+        assert saved_payload["categoryID"] == 12
+
+    print("test_defontana_sync_product_new: OK")
+
+
 if __name__ == "__main__":
     test_defontana_save_order_mocked()
     test_defontana_item_packaging_rules()
@@ -562,4 +638,7 @@ if __name__ == "__main__":
     test_defontana_order_mixed_afecto_and_exento()
     test_defontana_create_client_mocked()
     test_defontana_sync_order_creates_client_when_not_exists()
+    test_defontana_sync_product_existing()
+    test_defontana_sync_product_new()
     print("TODOS LOS TESTS DE DEFONTANA PASARON EXITOSAMENTE!")
+

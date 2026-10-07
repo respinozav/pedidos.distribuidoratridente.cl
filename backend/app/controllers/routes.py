@@ -1,7 +1,10 @@
 from datetime import UTC, datetime
 from decimal import Decimal
+import logging
 from zoneinfo import ZoneInfo
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import String, cast, func, select
@@ -115,6 +118,7 @@ from app.services.notifications import (
     send_publicidad_campaign,
 )
 
+from app.services.defontana_service import DefontanaService
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_box_price, customer_product_price
 from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
@@ -689,6 +693,26 @@ def create_product(payload: ProductInput, database: DatabaseSession, _: AdminUse
     duplicate = database.scalar(select(Producto.id).where(func.lower(Producto.codigo) == payload.codigo.lower()))
     if duplicate:
         raise HTTPException(status.HTTP_409_CONFLICT, "El código de producto ya existe")
+
+    category = database.scalar(select(Categoria).where(Categoria.id == payload.categoria_id))
+    category_name = category.nombre if category else None
+
+    # Sincronizar producto con Defontana si está configurado
+    defontana_service = DefontanaService()
+    if defontana_service.is_configured():
+        ok, err = defontana_service.sync_product(
+            code=payload.codigo,
+            name=payload.nombre,
+            price=payload.precio,
+            category_name=category_name,
+        )
+        if not ok:
+            logger.error("Defontana rechazó la creación del producto %s: %s", payload.codigo, err)
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Defontana no aceptó la creación del producto: {err}",
+            )
+
     entity = Repository(Producto, database).add(Producto(**payload.model_dump()))
     database.commit()
     invalidate_catalog_cache()
@@ -708,6 +732,26 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
     duplicate = database.scalar(select(Producto.id).where(func.lower(Producto.codigo) == payload.codigo.lower(), Producto.id != product_id))
     if duplicate:
         raise HTTPException(status.HTTP_409_CONFLICT, "El código de producto ya existe")
+
+    category = database.scalar(select(Categoria).where(Categoria.id == payload.categoria_id))
+    category_name = category.nombre if category else None
+
+    # Sincronizar producto y precio con Defontana si está configurado
+    defontana_service = DefontanaService()
+    if defontana_service.is_configured():
+        ok, err = defontana_service.sync_product(
+            code=payload.codigo,
+            name=payload.nombre,
+            price=payload.precio,
+            category_name=category_name,
+        )
+        if not ok:
+            logger.error("Defontana rechazó la modificación del producto %s: %s", payload.codigo, err)
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Defontana no aceptó la modificación del producto: {err}",
+            )
+
     Repository(Producto, database).update(entity, payload.model_dump())
     database.commit()
     invalidate_catalog_cache()
@@ -717,6 +761,27 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
         except Exception as e:
             logger.warning("Error al procesar avisos de stock en update_product: %s", e)
     return entity
+
+
+@router.post("/productos/{product_id}/sync-defontana", tags=["Productos"])
+def sync_product_to_defontana(product_id: UUID, database: DatabaseSession, _: AdminUser):
+    entity = Repository(Producto, database).get(product_id)
+    if not entity or entity.eliminado_at:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Producto no encontrado")
+    category = database.scalar(select(Categoria).where(Categoria.id == entity.categoria_id))
+    category_name = category.nombre if category else None
+    defontana_service = DefontanaService()
+    if not defontana_service.is_configured():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Defontana no está configurada")
+    ok, err = defontana_service.sync_product(
+        code=entity.codigo,
+        name=entity.nombre,
+        price=entity.precio,
+        category_name=category_name,
+    )
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Defontana no aceptó la sincronización: {err}")
+    return {"message": f"Producto {entity.codigo} sincronizado exitosamente con Defontana", "success": True}
 
 
 @router.get("/clientes", response_model=list[CustomerOutput], tags=["Clientes"])

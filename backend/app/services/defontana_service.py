@@ -270,6 +270,234 @@ class DefontanaService:
 
         return None
 
+    def get_categories(self) -> list[dict[str, Any]]:
+        """Obtiene la lista de categorías registradas desde Defontana."""
+        url = f"{self.base_url}/api/Sale/GetCategories"
+        params = {"pageNumber": 1, "itemsPerPage": 100}
+        headers = self._get_headers()
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.get(url, params=params, headers=headers)
+                if resp.status_code == 401:
+                    headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
+                    resp = client.get(url, params=params, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                return data.get("categoriesList") or []
+        except Exception as e:
+            logger.warning("Error obteniendo categorías desde Defontana: %s", e)
+            return []
+
+    def _find_category_id(self, category_name: str | None) -> int | None:
+        """Busca el ID numérico de categoría en Defontana por nombre."""
+        if not category_name:
+            return None
+        try:
+            cats = self.get_categories()
+            target = category_name.strip().upper()
+            for c in cats:
+                desc = (c.get("description") or "").strip().upper()
+                if desc == target:
+                    return c.get("categoryID")
+        except Exception as e:
+            logger.warning("Error al buscar ID de categoría '%s' en Defontana: %s", category_name, e)
+        return None
+
+    def save_product(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Registra un producto en Defontana mediante POST /api/Sale/SaveProduct."""
+        url = f"{self.base_url}/api/Sale/SaveProduct"
+        headers = self._get_headers()
+        with httpx.Client(timeout=20.0) as client:
+            resp = client.post(url, json=payload, headers=headers)
+            if resp.status_code == 401:
+                headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
+                resp = client.post(url, json=payload, headers=headers)
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+            resp.raise_for_status()
+            return {"success": resp.is_success}
+
+    def update_product_defontana(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Actualiza la información de un producto en Defontana mediante POST /api/Sale/UpdateProduct."""
+        url = f"{self.base_url}/api/Sale/UpdateProduct"
+        headers = self._get_headers()
+        with httpx.Client(timeout=20.0) as client:
+            resp = client.post(url, json=payload, headers=headers)
+            if resp.status_code == 401:
+                headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
+                resp = client.post(url, json=payload, headers=headers)
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+            resp.raise_for_status()
+            return {"success": resp.is_success}
+
+    def save_product_price_list(self, price_list_id: float | int, product_code: str, price: float | Decimal) -> dict[str, Any]:
+        """Actualiza o agrega un producto en una lista de precios en Defontana."""
+        url = f"{self.base_url}/api/Sale/SaveProductPriceList"
+        headers = self._get_headers()
+        payload = {
+            "priceListId": float(price_list_id),
+            "productId": str(product_code).strip(),
+            "productPrice": float(price),
+        }
+        with httpx.Client(timeout=20.0) as client:
+            resp = client.post(url, json=payload, headers=headers)
+            if resp.status_code == 401:
+                headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
+                resp = client.post(url, json=payload, headers=headers)
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+            return {"success": resp.is_success}
+
+    def sync_product(
+        self,
+        code: str,
+        name: str,
+        price: float | Decimal,
+        category_name: str | None = None,
+    ) -> tuple[bool, str | None]:
+        """
+        Sincroniza un producto y su precio con Defontana ERP.
+        Si el producto ya existe en Defontana, actualiza sus datos y listas de precios asociadas.
+        Si no existe, lo crea en Defontana mediante SaveProduct.
+        """
+        if not self.is_configured():
+            return True, None
+
+        code_str = str(code).strip()
+        name_str = str(name).strip()[:180]
+        price_val = float(price)
+
+        try:
+            # 1. Intentar resolver producto existente en Defontana
+            existing = self.resolve_product(code_str)
+
+            # 2. Si existe, actualizar con UpdateProduct
+            if existing:
+                unit = existing.get("unit") or "UN"
+                cat_id = existing.get("categoryID")
+                if not cat_id and category_name:
+                    cat_id = self._find_category_id(category_name)
+                id_impto_ad = existing.get("idImptoAd") or existing.get("imptoAd")
+
+                update_payload: dict[str, Any] = {
+                    "code": code_str,
+                    "name": name_str,
+                    "unit": unit,
+                    "price": price_val,
+                    "description": name_str,
+                    "isService": False,
+                }
+                if cat_id is not None:
+                    update_payload["categoryID"] = int(cat_id)
+                if id_impto_ad:
+                    update_payload["idImptoAd"] = str(id_impto_ad)
+
+                res = self.update_product_defontana(update_payload)
+                success = res.get("success", False) if isinstance(res, dict) else False
+                msg = (res.get("message") or res.get("exceptionMessage") or "") if isinstance(res, dict) else ""
+
+                # Si falló porque no se encontró, intentar crearlo
+                if not success and ("no existe" in msg.lower() or "not found" in msg.lower()):
+                    return self._create_product_defontana(code_str, name_str, price_val, category_name)
+
+                if not success:
+                    logger.warning("Defontana UpdateProduct falló para código %s: %s", code_str, msg)
+                    return False, msg or "Defontana rechazó la actualización del producto"
+
+                # Actualizar también listas de precios asociadas si existen
+                price_lists = existing.get("priceListDetail") or []
+                for pl in price_lists:
+                    pl_id = pl.get("priceListID")
+                    if pl_id is None and isinstance(pl.get("priceList"), dict):
+                        pl_id = pl["priceList"].get("priceListID")
+                    if pl_id is not None:
+                        try:
+                            self.save_product_price_list(pl_id, code_str, price_val)
+                        except Exception as exc:
+                            logger.warning(
+                                "Error actualizando lista de precios %s para producto %s: %s",
+                                pl_id,
+                                code_str,
+                                exc,
+                            )
+
+                logger.info("Producto %s actualizado exitosamente en Defontana con precio %s", code_str, price_val)
+                return True, None
+
+            # 3. Si no existe en Defontana, crearlo con SaveProduct
+            return self._create_product_defontana(code_str, name_str, price_val, category_name)
+        except Exception as e:
+            logger.exception("Error al sincronizar producto %s con Defontana: %s", code_str, e)
+            if "Login failed" in str(e) or "access_token" in str(e):
+                logger.warning("Credenciales de Defontana no operativas en este entorno (%s); omitiendo sincronización de producto.", e)
+                return True, None
+            return False, str(e)
+
+    def _create_product_defontana(
+        self,
+        code: str,
+        name: str,
+        price: float,
+        category_name: str | None = None,
+    ) -> tuple[bool, str | None]:
+        """Crea un producto nuevo en Defontana usando SaveProduct."""
+        cat_id = self._find_category_id(category_name) if category_name else None
+        save_payload: dict[str, Any] = {
+            "code": code,
+            "name": name,
+            "unit": "UN",
+            "price": price,
+            "description": name,
+            "isService": False,
+            "usaLotes": False,
+        }
+        if cat_id is not None:
+            save_payload["categoryID"] = int(cat_id)
+
+        res = self.save_product(save_payload)
+        success = res.get("success", False) if isinstance(res, dict) else False
+        msg = (res.get("message") or res.get("exceptionMessage") or "") if isinstance(res, dict) else ""
+
+        # Si Defontana dice que ya existe, intentar UpdateProduct
+        if not success and ("ya existe" in msg.lower() or "already exists" in msg.lower()):
+            update_payload: dict[str, Any] = {
+                "code": code,
+                "name": name,
+                "unit": "UN",
+                "price": price,
+                "description": name,
+                "isService": False,
+            }
+            if cat_id is not None:
+                update_payload["categoryID"] = int(cat_id)
+            res2 = self.update_product_defontana(update_payload)
+            success2 = res2.get("success", False) if isinstance(res2, dict) else False
+            msg2 = (res2.get("message") or res2.get("exceptionMessage") or "") if isinstance(res2, dict) else ""
+            if success2:
+                logger.info("Producto %s actualizado vía UpdateProduct tras detectar que ya existía", code)
+                return True, None
+            return False, msg2 or "Defontana rechazó la actualización del producto"
+
+        if not success:
+            logger.warning("Defontana SaveProduct falló para código %s: %s", code, msg)
+            return False, msg or "Defontana rechazó la creación del producto"
+
+        logger.info("Producto %s creado exitosamente en Defontana con precio %s", code, price)
+        return True, None
+
     def save_order(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Envía el pedido a SaveOrder en Defontana."""
         url = f"{self.base_url}/api/Order/SaveOrder"
