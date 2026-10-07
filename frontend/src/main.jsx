@@ -1020,7 +1020,19 @@ const [loading, setLoading] = useState(true);
 
   const handleStartEditOrder = (order) => {
     setOrderToEdit(order);
-    setEditingLines([...(order.detalles || [])]);
+    setEditingLines(
+      (order.detalles || []).map((d) => {
+        const cantidad = Number(d.cantidad) || 1;
+        const precioUnitario = Number(d.precio_unitario) || 0;
+        const subtotal = Number(d.subtotal) || (cantidad * precioUnitario);
+        return {
+          ...d,
+          cantidad,
+          precio_unitario: precioUnitario,
+          subtotal,
+        };
+      })
+    );
     setProductSearch("");
     setSearchResults([]);
   };
@@ -1043,9 +1055,16 @@ const [loading, setLoading] = useState(true);
   const addEditLine = (prod) => {
     const existing = editingLines.find(l => l.producto_id === prod.id);
     if (existing) {
-      setEditingLines(editingLines.map(l => l.producto_id === prod.id ? { ...l, cantidad: l.cantidad + 1, subtotal: (l.cantidad + 1) * l.precio_unitario } : l));
+      setEditingLines(editingLines.map(l => {
+        if (l.producto_id === prod.id) {
+          const newQ = (Number(l.cantidad) || 0) + 1;
+          const unitPrice = Number(l.precio_unitario) || (Number(prod.precio) || 0);
+          return { ...l, cantidad: newQ, subtotal: newQ * unitPrice };
+        }
+        return l;
+      }));
     } else {
-      const price = prod.precio || 0;
+      const price = Number(prod.precio) || 0;
       setEditingLines([...editingLines, {
         producto_id: prod.id,
         nombre_producto: prod.nombre,
@@ -1068,8 +1087,9 @@ const [loading, setLoading] = useState(true);
   const changeEditLineQuantity = (index, delta) => {
     setEditingLines(editingLines.map((l, i) => {
       if (i === index) {
-        const newQ = Math.max(1, l.cantidad + delta);
-        return { ...l, cantidad: newQ, subtotal: newQ * l.precio_unitario };
+        const newQ = Math.max(1, (Number(l.cantidad) || 1) + delta);
+        const unitPrice = Number(l.precio_unitario) || 0;
+        return { ...l, cantidad: newQ, subtotal: newQ * unitPrice };
       }
       return l;
     }));
@@ -1514,7 +1534,7 @@ const [loading, setLoading] = useState(true);
                   >
                     <span>
                       <strong className="d-block text-truncate" style={{ maxWidth: "280px" }}>{prod.nombre}</strong>
-                      <small className="text-muted">{money.format(prod.precio || 0)}</small>
+                      <small className="text-muted">{money.format(Number(prod.precio) || 0)}</small>
                     </span>
                     <Plus size={16} className="text-primary" />
                   </button>
@@ -1544,7 +1564,7 @@ const [loading, setLoading] = useState(true);
                     <Plus size={14} />
                   </button>
                 </div>
-                <strong>{money.format(line.subtotal ?? 0)}</strong>
+                <strong>{money.format(Number(line.subtotal) || 0)}</strong>
                 <button className="btn btn-sm btn-outline-danger p-1 border-0" type="button" onClick={() => removeEditLine(idx)}>
                   <Trash2 size={16} />
                 </button>
@@ -1553,7 +1573,7 @@ const [loading, setLoading] = useState(true);
           </div>
           <div className="order-detail-total mt-3">
             <strong>Total Estimado</strong>
-            <strong>{money.format(editingLines.reduce((acc, l) => acc + (l.subtotal || 0), 0))}</strong>
+            <strong>{money.format(editingLines.reduce((acc, l) => acc + (Number(l.subtotal) || 0), 0))}</strong>
           </div>
         </div>
       </div>

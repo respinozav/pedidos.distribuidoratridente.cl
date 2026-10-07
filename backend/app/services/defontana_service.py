@@ -39,6 +39,10 @@ def _extract_defontana_error(exc: Exception) -> str:
                     return str(msg)
         except Exception:
             pass
+        if exc.response.status_code == 404:
+            return "El pedido o endpoint de actualización no fue encontrado en Defontana (HTTP 404). Defontana no permite modificar este documento."
+        if exc.response.status_code == 405:
+            return "Defontana no admite modificación para este tipo de documento vía API (HTTP 405)."
         if exc.response.text:
             text = exc.response.text.strip()
             if len(text) < 300:
@@ -296,32 +300,34 @@ class DefontanaService:
             if resp.status_code == 401:
                 headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
                 resp = client.post(url, json=payload, params=params, headers=headers)
-            if resp.status_code in (404, 405):
-                resp.raise_for_status()
+
+            if resp.status_code == 404 and params:
+                # Reintentar sin query params en caso de que el enrutamiento de Defontana solo espere el body
+                resp2 = client.post(url, json=payload, headers=headers)
+                if resp2.status_code != 404:
+                    resp = resp2
+
+            logger.info("Defontana UpdateOrder HTTP %s: %s", resp.status_code, resp.text[:500] if resp.text else "")
+
             try:
                 data = resp.json()
-                if isinstance(data, dict) and ("success" in data or "message" in data or "exceptionMessage" in data or "errors" in data):
+                if isinstance(data, dict):
                     return data
             except Exception:
                 pass
+
             resp.raise_for_status()
             return resp.json()
 
     def save_or_update_order(self, payload: dict[str, Any], is_update: bool = False) -> dict[str, Any]:
         """
         Envía el pedido a Defontana.
-        Si es actualización y tiene folio previo, intenta primero mediante POST /api/Order/UpdateOrder.
-        Si UpdateOrder retorna 404 o 405 (método no implementado en este tenant/versión),
-        recurre a POST /api/Order/SaveOrder.
+        Si es actualización y tiene folio previo, se comunica con UpdateOrder.
+        NUNCA recurre a SaveOrder cuando is_update=True para evitar duplicar
+        o crear pedidos adicionales en Defontana cuando se intenta modificar uno existente.
         """
         if is_update:
-            try:
-                return self.update_order(payload)
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code in (404, 405):
-                    logger.info("Endpoint /api/Order/UpdateOrder no disponible (%s), usando SaveOrder", exc.response.status_code)
-                    return self.save_order(payload)
-                raise
+            return self.update_order(payload)
         return self.save_order(payload)
 
     def sync_order(
@@ -537,7 +543,9 @@ class DefontanaService:
                     err_msg = (
                         res_afecto.get("message")
                         or res_afecto.get("exceptionMessage")
-                        or f"Error al emitir Factura 33: {res_afecto}"
+                        or res_afecto.get("description")
+                        or res_afecto.get("detail")
+                        or f"Defontana rechazó la modificación: {res_afecto}"
                     )
                     errors.append(f"Factura 33: {err_msg}")
                     sync_ok = False
@@ -588,7 +596,9 @@ class DefontanaService:
                     err_msg = (
                         res_exento.get("message")
                         or res_exento.get("exceptionMessage")
-                        or f"Error al emitir Factura 34: {res_exento}"
+                        or res_exento.get("description")
+                        or res_exento.get("detail")
+                        or f"Defontana rechazó la modificación: {res_exento}"
                     )
                     errors.append(f"Factura 34: {err_msg}")
                     sync_ok = False
