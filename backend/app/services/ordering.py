@@ -258,6 +258,10 @@ class OrderService:
                 cantidad_caja = None
                 unidades_descontar = line.cantidad
 
+            # Si el administrador envió un precio personalizado, usar ese en lugar del catálogo
+            if line.precio_unitario is not None:
+                applied_price = line.precio_unitario
+
             line_total = applied_price * line.cantidad
             product.cantidad -= unidades_descontar
             subtotal += line_total

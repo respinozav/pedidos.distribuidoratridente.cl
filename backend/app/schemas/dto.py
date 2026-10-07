@@ -251,6 +251,7 @@ class OrderLineInput(BaseModel):
     producto_id: UUID
     cantidad: int = Field(gt=0)
     tipo_empaque: str = Field(default="unidad")
+    precio_unitario: Decimal | None = None  # Precio override (solo para edición admin)
 
     @field_validator("tipo_empaque")
     @classmethod
@@ -259,6 +260,13 @@ class OrderLineInput(BaseModel):
         if val not in ("unidad", "caja"):
             raise ValueError("El tipo de empaque debe ser 'unidad' o 'caja'")
         return val
+
+    @field_validator("precio_unitario")
+    @classmethod
+    def validate_precio(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and value <= 0:
+            raise ValueError("El precio unitario debe ser mayor a 0")
+        return value
 
 
 class OrderCreate(BaseModel):

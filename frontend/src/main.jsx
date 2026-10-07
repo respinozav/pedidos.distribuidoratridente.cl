@@ -1107,17 +1107,33 @@ const [loading, setLoading] = useState(true);
     }));
   };
 
+  const changeEditLinePrice = (index, rawValue) => {
+    setEditingLines(editingLines.map((l, i) => {
+      if (i === index) {
+        const newPrice = rawValue === "" ? "" : rawValue;
+        const numPrice = Number(newPrice) || 0;
+        const q = Math.max(1, Number(l.cantidad) || 1);
+        return { ...l, precio_unitario: newPrice, subtotal: numPrice > 0 ? q * numPrice : 0 };
+      }
+      return l;
+    }));
+  };
+
   const saveOrderEdit = async () => {
     if (!editingLines.length) return Swal.fire("Error", "El pedido no puede quedar vacío.", "warning");
     if (!orderToEdit) return;
     setIsSavingEdit(true);
     try {
       const payload = {
-        productos: editingLines.map(l => ({
-          producto_id: l.producto_id,
-          cantidad: Math.max(1, Number(l.cantidad) || 1),
-          tipo_empaque: l.tipo_empaque || "unidad"
-        }))
+        productos: editingLines.map(l => {
+          const precioNum = Number(l.precio_unitario);
+          return {
+            producto_id: l.producto_id,
+            cantidad: Math.max(1, Number(l.cantidad) || 1),
+            tipo_empaque: l.tipo_empaque || "unidad",
+            ...(Number.isFinite(precioNum) && precioNum > 0 ? { precio_unitario: precioNum } : {})
+          };
+        })
       };
       const { data } = await api.put(`/pedidos/${orderToEdit.id}`, payload);
       setOrders(current => current.map(o => o.id === data.id ? data : o));
@@ -1554,10 +1570,11 @@ const [loading, setLoading] = useState(true);
               </div>
             )}
           </div>
-          <div className="order-detail-lines mt-3">
+          <div className="order-detail-lines mt-3 order-edit-lines">
             <div>
               <span>Producto</span>
               <span className="text-center">Cant.</span>
+              <span>Precio Unit.</span>
               <span>Subtotal</span>
               <span></span>
             </div>
@@ -1575,6 +1592,18 @@ const [loading, setLoading] = useState(true);
                   <button className="btn btn-sm btn-light p-1" type="button" onClick={() => changeEditLineQuantity(idx, 1)}>
                     <Plus size={14} />
                   </button>
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="form-control form-control-sm"
+                    style={{ width: "110px" }}
+                    value={line.precio_unitario}
+                    onChange={(e) => changeEditLinePrice(idx, e.target.value)}
+                    aria-label={`Precio unitario de ${line.nombre_producto}`}
+                  />
                 </div>
                 <strong>{money.format(Number.isFinite(Number(line.subtotal)) && Number(line.subtotal) > 0 ? Number(line.subtotal) : (Math.max(1, Number(line.cantidad) || 1) * (Number(line.precio_unitario) || 0)))}</strong>
                 <button className="btn btn-sm btn-outline-danger p-1 border-0" type="button" onClick={() => removeEditLine(idx)}>

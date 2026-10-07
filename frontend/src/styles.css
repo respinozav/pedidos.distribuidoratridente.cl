@@ -602,6 +602,8 @@ button, input { font: inherit; }
 .order-detail-lines > div { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) 68px 80px 100px 100px; padding: .75rem; }
 .order-detail-lines > div:first-child { background: #f8fafc; color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .04rem; text-transform: uppercase; }
 .order-detail-lines > div + div { border-top: 1px solid var(--line); }
+/* Modal de edición: 6 columnas con campo de precio editable */
+.order-edit-lines > div { grid-template-columns: minmax(0, 1fr) 80px 120px 90px 36px; }
 .order-detail-total { display: flex; justify-content: space-between; margin-top: 1rem; }
 .order-state-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .payment-choice { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1rem; }
