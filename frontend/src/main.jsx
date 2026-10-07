@@ -408,17 +408,39 @@ const [error, setError] = useState("");
     try {
       if (editingProduct) {
         await api.put(`/productos/${editingProduct.id}`, payload);
-        Swal.fire({ icon: "success", title: "Producto actualizado correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
+        Swal.fire({
+          icon: "success",
+          title: "Producto actualizado",
+          text: `El producto "${payload.nombre}" (${payload.codigo}) se actualizó correctamente en la app y en Defontana ERP.`,
+          timer: 3000,
+          timerProgressBar: true,
+          confirmButtonColor: "#1e3a8a",
+        });
       } else {
         await api.post("/productos", payload);
-        Swal.fire({ icon: "success", title: "Producto agregado correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
+        Swal.fire({
+          icon: "success",
+          title: "Producto creado",
+          text: `El producto "${payload.nombre}" (${payload.codigo}) fue registrado exitosamente en la app y en Defontana ERP.`,
+          timer: 3000,
+          timerProgressBar: true,
+          confirmButtonColor: "#1e3a8a",
+        });
       }
       setEditingProduct(null);
       setForm(emptyProduct);
       setError("");
       await loadProducts();
-    } catch {
-      setError("No fue posible guardar el producto. Revisa que el código no esté repetido.");
+    } catch (err) {
+      const errMsg = err?.response?.data?.detail || err?.message || "No fue posible guardar el producto. Revisa que el código no esté repetido.";
+      setError(errMsg);
+      Swal.fire({
+        icon: "error",
+        title: editingProduct ? "Error al actualizar producto" : "Error al crear producto",
+        text: errMsg,
+        confirmButtonText: "Entendido",
+        confirmButtonColor: "#dc2626",
+      });
     } finally {
       setSaving(false);
     }
@@ -645,18 +667,40 @@ const [error, setError] = useState("");
     try {
       if (product) {
         await api.put(`/productos/${product.id}`, payload);
-        Swal.fire({ icon: "success", title: "Producto actualizado correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
+        Swal.fire({
+          icon: "success",
+          title: "Producto actualizado",
+          text: `El producto "${payload.nombre}" (${payload.codigo}) se actualizó correctamente en la app y en Defontana ERP.`,
+          timer: 3000,
+          timerProgressBar: true,
+          confirmButtonColor: "#1e3a8a",
+        });
       } else {
         await api.post("/productos", payload);
-        Swal.fire({ icon: "success", title: "Producto agregado correctamente.", toast: true, position: "top-end", showConfirmButton: false, timer: 2500, timerProgressBar: true });
+        Swal.fire({
+          icon: "success",
+          title: "Producto creado",
+          text: `El producto "${payload.nombre}" (${payload.codigo}) fue registrado exitosamente en la app y en Defontana ERP.`,
+          timer: 3000,
+          timerProgressBar: true,
+          confirmButtonColor: "#1e3a8a",
+        });
       }
       setProduct(null);
       setForm(blankProduct);
       setError("");
       await loadProducts();
       window.dispatchEvent(new CustomEvent("stock-alert-refresh"));
-    } catch {
-      setError("No fue posible guardar el producto. Revisa sus datos y el código.");
+    } catch (err) {
+      const errMsg = err?.response?.data?.detail || err?.message || "No fue posible guardar el producto. Revisa sus datos y el código.";
+      setError(errMsg);
+      Swal.fire({
+        icon: "error",
+        title: product ? "Error al actualizar producto" : "Error al crear producto",
+        text: errMsg,
+        confirmButtonText: "Entendido",
+        confirmButtonColor: "#dc2626",
+      });
     } finally {
       setSaving(false);
     }
