@@ -13,7 +13,11 @@ from io import BytesIO
 import base64
 from typing import Tuple, Optional
 from PIL import Image, ImageChops
-import numpy as np
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 
 def detect_lateral_strip_divider(img: Image.Image) -> Optional[int]:
@@ -22,6 +26,9 @@ def detect_lateral_strip_divider(img: Image.Image) -> Optional[int]:
     (típica en catálogos de cigarrillos BAT).
     Retorna la coordenada X donde cortar, o None si no hay franja lateral.
     """
+    if np is None:
+        return None
+
     w, h = img.size
     if w < 150 or h < 150:
         return None
@@ -61,6 +68,9 @@ def detect_top_floating_badge(img: Image.Image) -> Optional[int]:
     (ej: 'ALKA MENTOL 12' o 'ALFAJOR PREMIUM 12' separados por un espacio en blanco del producto).
     Retorna la coordenada Y desde donde recortar hacia abajo.
     """
+    if np is None:
+        return None
+
     w, h = img.size
     if h < 120:
         return None
@@ -92,6 +102,9 @@ def detect_right_vertical_ribbon(img: Image.Image) -> Optional[int]:
     (ej: tira roja 'ALKA CEREZA 12' al lado derecho del producto agrupado).
     Retorna la coordenada X hasta donde recortar.
     """
+    if np is None:
+        return None
+
     w, h = img.size
     if w < 120:
         return None
@@ -154,28 +167,35 @@ def clean_and_square_image(
     else:
         img = img.convert("RGB")
 
-    # 4. Autocrop robusto contra ruido (mínimo 1% de la fila/columna no blanca)
-    arr = np.array(img)
-    w, h = img.size
-    non_white = np.any(arr < 240, axis=2)
-    row_frac = np.mean(non_white, axis=1)
-    col_frac = np.mean(non_white, axis=0)
-    active_y = np.where(row_frac > 0.01)[0]
-    active_x = np.where(col_frac > 0.01)[0]
+    # 4. Autocrop robusto (con numpy o fallback con pure Pillow)
+    if np is not None:
+        arr = np.array(img)
+        w, h = img.size
+        non_white = np.any(arr < 240, axis=2)
+        row_frac = np.mean(non_white, axis=1)
+        col_frac = np.mean(non_white, axis=0)
+        active_y = np.where(row_frac > 0.01)[0]
+        active_x = np.where(col_frac > 0.01)[0]
 
-    if len(active_y) and len(active_x):
-        y0, y1 = active_y[0], active_y[-1] + 1
-        x0, x1 = active_x[0], active_x[-1] + 1
-        pad_y = int((y1 - y0) * padding_pct)
-        pad_x = int((x1 - x0) * padding_pct)
-        pad = max(pad_x, pad_y)
-        crop_box = (
-            max(0, x0 - pad),
-            max(0, y0 - pad),
-            min(w, x1 + pad),
-            min(h, y1 + pad),
-        )
-        img = img.crop(crop_box)
+        if len(active_y) and len(active_x):
+            y0, y1 = active_y[0], active_y[-1] + 1
+            x0, x1 = active_x[0], active_x[-1] + 1
+            pad_y = int((y1 - y0) * padding_pct)
+            pad_x = int((x1 - x0) * padding_pct)
+            pad = max(pad_x, pad_y)
+            crop_box = (
+                max(0, x0 - pad),
+                max(0, y0 - pad),
+                min(w, x1 + pad),
+                min(h, y1 + pad),
+            )
+            img = img.crop(crop_box)
+    else:
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        diff = ImageChops.difference(img, bg)
+        bbox = diff.getbbox()
+        if bbox:
+            img = img.crop(bbox)
 
     # 5. Encuadre cuadrado centrado (1:1)
     max_side = max(img.width, img.height)
