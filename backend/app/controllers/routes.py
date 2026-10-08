@@ -122,6 +122,7 @@ from app.services.defontana_service import DefontanaService
 from app.services.ordering import OrderService
 from app.services.pricing import customer_product_box_price, customer_product_price
 from app.services.catalog import build_full_catalog_pdf, build_public_catalog_pdf, invalidate_catalog_cache
+from app.services.image_service import optimize_product_image_base64
 from app.services.stock_notifications import (
     obtener_avisos_pendientes_cliente,
     procesar_avisos_stock_disponible,
@@ -713,7 +714,11 @@ def create_product(payload: ProductInput, database: DatabaseSession, _: AdminUse
                 f"Defontana no aceptó la creación del producto: {err}",
             )
 
-    entity = Repository(Producto, database).add(Producto(**payload.model_dump()))
+    product_data = payload.model_dump()
+    if product_data.get("imagen_url"):
+        product_data["imagen_url"] = optimize_product_image_base64(product_data["imagen_url"])
+
+    entity = Repository(Producto, database).add(Producto(**product_data))
     database.commit()
     invalidate_catalog_cache()
     if entity.cantidad > 1 and entity.activo and not entity.eliminado_at:
@@ -752,7 +757,11 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
                 f"Defontana no aceptó la modificación del producto: {err}",
             )
 
-    Repository(Producto, database).update(entity, payload.model_dump())
+    update_data = payload.model_dump()
+    if update_data.get("imagen_url"):
+        update_data["imagen_url"] = optimize_product_image_base64(update_data["imagen_url"])
+
+    Repository(Producto, database).update(entity, update_data)
     database.commit()
     invalidate_catalog_cache()
     if entity.cantidad > 1 and entity.activo and not entity.eliminado_at:

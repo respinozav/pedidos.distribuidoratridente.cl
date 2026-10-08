@@ -32,6 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.entities import Categoria, Producto
+from app.services.image_service import clean_and_square_image
 
 LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "logo_tridente.png"
 PRODUCTS_PER_PAGE = 9
@@ -171,14 +172,11 @@ def _optimized_image_bytes(raw_bytes: bytes, target_size: int = 180, quality: in
 
     try:
         with PILImage.open(BytesIO(raw_bytes)) as image:
-            image = image.convert("RGB")
-            side = min(image.size)
-            left = (image.width - side) // 2
-            top = (image.height - side) // 2
-            image = image.crop((left, top, left + side, top + side))
-            image = image.resize((target_size, target_size), PILImage.Resampling.BILINEAR)
+            # Limpiar pestaña lateral y centrar cuadrado con fondo blanco
+            cleaned = clean_and_square_image(image, target_max_dim=target_size)
+            resized = cleaned.resize((target_size, target_size), PILImage.Resampling.BILINEAR)
             buffer = BytesIO()
-            image.save(buffer, format="JPEG", quality=quality)
+            resized.save(buffer, format="JPEG", quality=quality)
             result = buffer.getvalue()
             _IMAGE_CACHE[cache_key] = result
             return result

@@ -9,3 +9,5 @@ build/
 node_modules/
 frontend/dist/
 backend/.coverage
+backup/
+*.sql
