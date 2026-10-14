@@ -521,6 +521,40 @@ echo -e "${YELLOW}>> Recargando Nginx${NC}"
 sudo systemctl reload nginx
 
 ############################################
+# DIAGNÓSTICO DEL SISTEMA Y REPORTE
+############################################
+
+echo ""
+echo -e "${YELLOW}>> Ejecutando diagnóstico del backend...${NC}"
+echo "--- SYSTEMD UNITS RELACIONADAS ---"
+sudo systemctl list-units --type=service --all | grep -E "tridente|pedidos|distribuidora|api" || true
+
+echo "--- CONTENIDO SERVICE FILES ---"
+cat /etc/systemd/system/pedidos-tridente.service 2>/dev/null || true
+cat /etc/systemd/system/distribuidoratridente-api.service 2>/dev/null || true
+
+echo "--- ESTADO SERVICIOS ---"
+sudo systemctl status pedidos-tridente --no-pager -l 2>/dev/null || true
+sudo systemctl status distribuidoratridente-api --no-pager -l 2>/dev/null || true
+
+echo "--- ÚLTIMOS LOGS JOURNALCTL (pedidos-tridente) ---"
+sudo journalctl -u pedidos-tridente -n 50 --no-pager 2>/dev/null || true
+
+echo "--- ÚLTIMOS LOGS JOURNALCTL (distribuidoratridente-api) ---"
+sudo journalctl -u distribuidoratridente-api -n 50 --no-pager 2>/dev/null || true
+
+echo "--- PUERTOS EN ESCUCHA ---"
+sudo ss -tlpn 2>/dev/null || sudo netstat -tlpn 2>/dev/null || true
+
+echo "--- PRUEBA CURL INTERNA ---"
+curl -v http://127.0.0.1:8001/api/health 2>&1 || true
+curl -v http://127.0.0.1:8000/api/health 2>&1 || true
+
+echo "--- PUBLICANDO LOG EN NGINX ---"
+sudo cp "$LOG_FILE" "$NGINX_ROOT/deploy-debug.txt" 2>/dev/null || true
+sudo chmod 644 "$NGINX_ROOT/deploy-debug.txt" 2>/dev/null || true
+
+############################################
 # TIEMPO
 ############################################
 
