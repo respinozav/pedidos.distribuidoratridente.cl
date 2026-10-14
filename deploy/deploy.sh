@@ -112,6 +112,8 @@ NGINX_ROOT="/var/www/html/$PROJECT_NAME"
 echo ""
 echo -e "${YELLOW}>> Actualizando repositorio...${NC}"
 
+git reset --hard HEAD || true
+git clean -fd deploy/ || true
 git pull origin "$CURRENT_BRANCH"
 
 NEW_COMMIT=$(git rev-parse --short HEAD)

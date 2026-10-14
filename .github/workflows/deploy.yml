@@ -16,5 +16,7 @@ jobs:
           username: ${{ secrets.AWS_USERNAME }}
           key: ${{ secrets.AWS_PRIVATE_KEY }}
           script: |
-            cd /var/www/pedidos.distribuidoratridente.cl/deploy
+            cd /var/www/pedidos.distribuidoratridente.cl
+            git reset --hard HEAD
+            cd deploy
             bash deploy.sh
