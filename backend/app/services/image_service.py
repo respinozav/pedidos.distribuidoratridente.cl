@@ -12,12 +12,26 @@ Funcionalidades:
 from io import BytesIO
 import base64
 from typing import Tuple, Optional
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageFilter, ImageEnhance, ImageOps
 
 try:
     import numpy as np
 except ImportError:
     np = None
+
+
+# Reglas de estandarización visual por categoría
+CATEGORY_CONFIG = {
+    "BAT": {"fill_pct": 0.88, "fit_mode": "height"},
+    "MARLBORO": {"fill_pct": 0.88, "fit_mode": "height"},
+    "LATINOS": {"fill_pct": 0.88, "fit_mode": "height"},
+    "ATLAS": {"fill_pct": 0.88, "fit_mode": "height"},
+    "VAPORIZADORES": {"fill_pct": 0.88, "fit_mode": "height"},
+    "TABACOS": {"fill_pct": 0.86, "fit_mode": "max_side"},
+    "CONFITES": {"fill_pct": 0.86, "fit_mode": "max_side"},
+    "ABARROTES": {"fill_pct": 0.85, "fit_mode": "max_side"},
+    "TABAQUERIA": {"fill_pct": 0.85, "fit_mode": "max_side"},
+}
 
 
 def detect_lateral_strip_divider(img: Image.Image) -> Optional[int]:
@@ -130,14 +144,92 @@ def detect_right_vertical_ribbon(img: Image.Image) -> Optional[int]:
     return None
 
 
+def clean_background_to_white(img: Image.Image) -> Image.Image:
+    """
+    Limpia sombras suaves, fondos grisáceos y ruidos de compresión
+    convirtiéndolos en blanco puro (#FFFFFF) para un acabado de estudio profesional.
+    """
+    rgb = img.convert("RGB")
+    if np is not None:
+        arr = np.array(rgb)
+        max_c = np.max(arr, axis=2)
+        min_c = np.min(arr, axis=2)
+        # Píxeles casi blancos con baja saturación (sombras/ruido JPG alrededor del producto)
+        is_near_white = (min_c > 220) & ((max_c - min_c) < 25)
+        cleaned_arr = arr.copy()
+        cleaned_arr[is_near_white] = [255, 255, 255]
+        return Image.fromarray(cleaned_arr)
+    else:
+        # Fallback puro Pillow con autocontrast
+        return ImageOps.autocontrast(rgb, cutoff=2)
+
+
+def enhance_sharpness_and_clarity(img: Image.Image) -> Image.Image:
+    """
+    Aplica realce profesional de nitidez de alta definición sin crear halos ni ruido:
+    - Radio fino (1.0) para definir tipografías de empaques con máxima legibilidad.
+    - Threshold=3 para proteger gradientes y superficies lisas de motas o grano.
+    """
+    sharp = img.filter(ImageFilter.UnsharpMask(radius=1.0, percent=150, threshold=3))
+    sharp = ImageEnhance.Sharpness(sharp).enhance(1.20)
+    sharp = ImageEnhance.Color(sharp).enhance(1.08)
+    return sharp
+
+
+def stylize_cartoon_product_image(img: Image.Image) -> Image.Image:
+    """
+    Capa de visualización artística estilo ilustración digital / dibujo limpio y nítido:
+    - Convierte texturas fotográficas en planos lisos y limpios estilo vector / animación.
+    - Colores luminosos y vibrantes sin oscurecer ni quemar sombras.
+    - Máxima nitidez en textos, sellos y logos sin motas negras ni exceso de contraste.
+    - Fondo 100% blanco puro (#FFFFFF).
+    """
+    rgb = img.convert("RGB")
+    if np is not None:
+        arr = np.array(rgb)
+        is_bg = np.all(arr > 240, axis=2)
+
+        # 1. Suavizado de superficie para eliminar grano JPG y dar aspecto de ilustración vectorial
+        smooth = rgb.filter(ImageFilter.MedianFilter(size=3))
+
+        # 2. Colores alegres, luminosos y vibrantes (sin oscurecer ni quemar sombras)
+        bright = ImageEnhance.Brightness(smooth).enhance(1.05)
+        color = ImageEnhance.Color(bright).enhance(1.25)
+
+        # 3. Posterizado sutil (7 bits) para escalonado de ilustración vectorial sin saltos bruscos
+        poster = ImageOps.posterize(color, bits=7)
+
+        # 4. Ultra-nitidez de precisión en letras, bordes y logos (threshold=3 mantiene superficies limpias)
+        sharp = poster.filter(ImageFilter.UnsharpMask(radius=1.0, percent=190, threshold=3))
+        sharp = ImageEnhance.Sharpness(sharp).enhance(1.25)
+
+        # 5. Fondo 100% blanco puro garantizado
+        final_arr = np.array(sharp)
+        final_arr[is_bg] = [255, 255, 255]
+        return Image.fromarray(final_arr)
+    else:
+        # Fallback Pillow sin numpy
+        smooth = rgb.filter(ImageFilter.MedianFilter(size=3))
+        bright = ImageEnhance.Brightness(smooth).enhance(1.05)
+        color = ImageEnhance.Color(bright).enhance(1.25)
+        poster = ImageOps.posterize(color, bits=7)
+        sharp = poster.filter(ImageFilter.UnsharpMask(radius=1.0, percent=190, threshold=3))
+        return ImageEnhance.Sharpness(sharp).enhance(1.25)
+
+
+
 def clean_and_square_image(
     img: Image.Image,
     target_max_dim: int = 800,
-    padding_pct: float = 0.04
+    padding_pct: float = 0.02,
+    category_name: Optional[str] = None,
+    cartoon_mode: bool = False
 ) -> Image.Image:
     """
     Limpia franjas laterales (izq/der), etiquetas superiores,
-    recorta márgenes vacíos y encuadra en formato cuadrado 1:1 con fondo blanco.
+    blanquea el fondo a estudio blanco puro, recorta márgenes vacíos,
+    escala de forma estandarizada por categoría y mejora radicalmente la nitidez.
+    Si cartoon_mode es True, aplica la capa artística tipo dibujo animado.
     """
     # 1. Quitar franja lateral izquierda si existe
     crop_x_left = detect_lateral_strip_divider(img)
@@ -167,15 +259,18 @@ def clean_and_square_image(
     else:
         img = img.convert("RGB")
 
-    # 4. Autocrop robusto (con numpy o fallback con pure Pillow)
+    # 4. Limpieza de fondo a blanco puro
+    img = clean_background_to_white(img)
+
+    # 5. Autocrop ajustado al producto real
     if np is not None:
         arr = np.array(img)
         w, h = img.size
         non_white = np.any(arr < 240, axis=2)
         row_frac = np.mean(non_white, axis=1)
         col_frac = np.mean(non_white, axis=0)
-        active_y = np.where(row_frac > 0.01)[0]
-        active_x = np.where(col_frac > 0.01)[0]
+        active_y = np.where(row_frac > 0.005)[0]
+        active_x = np.where(col_frac > 0.005)[0]
 
         if len(active_y) and len(active_x):
             y0, y1 = active_y[0], active_y[-1] + 1
@@ -197,26 +292,57 @@ def clean_and_square_image(
         if bbox:
             img = img.crop(bbox)
 
-    # 5. Encuadre cuadrado centrado (1:1)
-    max_side = max(img.width, img.height)
-    square_canvas = Image.new("RGB", (max_side, max_side), (255, 255, 255))
-    offset = ((max_side - img.width) // 2, (max_side - img.height) // 2)
-    square_canvas.paste(img, offset)
+    # 6. Estandarización visual por categoría
+    cat_key = (category_name or "").upper().strip()
+    cfg = CATEGORY_CONFIG.get(cat_key, {"fill_pct": 0.86, "fit_mode": "max_side"})
+    fill_pct = cfg["fill_pct"]
+    fit_mode = cfg["fit_mode"]
 
-    # 6. Redimensionar si excede tamaño máximo razonable
-    if square_canvas.width > target_max_dim:
-        square_canvas = square_canvas.resize(
-            (target_max_dim, target_max_dim),
-            Image.Resampling.LANCZOS
-        )
+    prod_w, prod_h = img.size
+    aspect = prod_w / prod_h if prod_h > 0 else 1.0
+
+    if fit_mode == "height" and aspect < 1.1:
+        # Productos verticales (cajetillas, vapes) con altura estandarizada idéntica
+        new_h = int(target_max_dim * fill_pct)
+        new_w = max(1, int(new_h * aspect))
+        if new_w > target_max_dim * 0.92:
+            new_w = int(target_max_dim * 0.92)
+            new_h = int(new_w / aspect)
+    else:
+        # Productos generales (confites, bolsas, abarrotes) ajustados al lado mayor
+        max_dim = int(target_max_dim * fill_pct)
+        if prod_w >= prod_h:
+            new_w = max_dim
+            new_h = max(1, int(new_w / aspect))
+        else:
+            new_h = max_dim
+            new_w = max(1, int(new_h * aspect))
+
+    resized_prod = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    # 7. Realce de nitidez o capa artística tipo dibujo animado
+    if cartoon_mode:
+        sharp_prod = stylize_cartoon_product_image(resized_prod)
+    else:
+        sharp_prod = enhance_sharpness_and_clarity(resized_prod)
+
+    # 8. Montar sobre canvas cuadrado (1:1) con fondo blanco de estudio
+    square_canvas = Image.new("RGB", (target_max_dim, target_max_dim), (255, 255, 255))
+    offset = ((target_max_dim - new_w) // 2, (target_max_dim - new_h) // 2)
+    square_canvas.paste(sharp_prod, offset)
 
     return square_canvas
 
 
-def optimize_product_image_base64(raw_base64: str, quality: int = 85) -> str:
+def optimize_product_image_base64(
+    raw_base64: str,
+    quality: int = 90,
+    category_name: Optional[str] = None,
+    cartoon_mode: bool = False
+) -> str:
     """
-    Recibe un string base64 de imagen, la optimiza y normaliza
-    y retorna el base64 limpio.
+    Recibe un string base64 de imagen, la optimiza, normaliza por categoría,
+    mejora la nitidez y retorna el base64 limpio.
     """
     if not raw_base64 or not raw_base64.strip():
         return raw_base64
@@ -230,10 +356,12 @@ def optimize_product_image_base64(raw_base64: str, quality: int = 85) -> str:
     try:
         raw_bytes = base64.b64decode(clean_b64)
         with Image.open(BytesIO(raw_bytes)) as img:
-            processed = clean_and_square_image(img)
+            processed = clean_and_square_image(img, category_name=category_name, cartoon_mode=cartoon_mode)
             buffer = BytesIO()
             processed.save(buffer, format="JPEG", quality=quality, optimize=True)
             result_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
             return f"{prefix}{result_b64}" if prefix else result_b64
     except Exception:
         return raw_base64
+
+

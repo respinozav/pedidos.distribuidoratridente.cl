@@ -10,4 +10,8 @@ node_modules/
 frontend/dist/
 backend/.coverage
 backup/
+backend/backup/
 *.sql
+backend/assets/samples_*
+backend/assets/lab_*
+

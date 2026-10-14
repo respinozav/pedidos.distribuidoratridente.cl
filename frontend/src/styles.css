@@ -720,22 +720,35 @@ button, input { font: inherit; }
 }
 .product-image {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #edf2f7;
-  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
   color: var(--blue);
   display: flex;
-  height: 130px;
+  height: 135px;
   justify-content: center;
   margin-bottom: 0.75rem;
   overflow: hidden;
-  padding: 4px;
+  padding: 6px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
 }
-.product-image img {
+/* Capa de visualización estilo dibujo animado / ilustración clara y nítida */
+.product-image img,
+.product-thumb img,
+.stock-notice-img-box img,
+.cart-items-detail-card img {
   height: 100%;
   max-width: 100%;
   object-fit: contain;
   width: auto;
+  /* Estilo dibujo animado luminoso: claro, colores alegres y ultra nitidez sin oscurecer */
+  filter: brightness(1.08) contrast(1.06) saturate(1.22) drop-shadow(0 2px 5px rgba(15, 23, 42, 0.04));
+  image-rendering: -webkit-optimize-contrast;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.25s ease;
+}
+.product:hover .product-image img {
+  transform: scale(1.05) translateY(-2px);
+  filter: brightness(1.12) contrast(1.09) saturate(1.30) drop-shadow(0 6px 14px rgba(15, 23, 42, 0.09));
 }
 .product small {
   color: var(--muted);

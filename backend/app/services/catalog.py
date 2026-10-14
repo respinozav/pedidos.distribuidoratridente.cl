@@ -165,15 +165,25 @@ def _small_caps_markup(text: str, big_size: float, small_size: float) -> str:
     return " ".join(pieces)
 
 
-def _optimized_image_bytes(raw_bytes: bytes, target_size: int = 180, quality: int = 70) -> bytes:
-    cache_key = hashlib.md5(raw_bytes).hexdigest()
+def _optimized_image_bytes(
+    raw_bytes: bytes,
+    target_size: int = 180,
+    quality: int = 75,
+    category_name: str | None = None
+) -> bytes:
+    cache_key = hashlib.md5(raw_bytes + b"_cartoon_v1").hexdigest()
     if cache_key in _IMAGE_CACHE:
         return _IMAGE_CACHE[cache_key]
 
     try:
         with PILImage.open(BytesIO(raw_bytes)) as image:
-            # Limpiar pestaña lateral y centrar cuadrado con fondo blanco
-            cleaned = clean_and_square_image(image, target_max_dim=target_size)
+            # Aplicar capa de visualización artística tipo dibujo animado / cel-shaded al vuelo
+            cleaned = clean_and_square_image(
+                image,
+                target_max_dim=target_size,
+                category_name=category_name,
+                cartoon_mode=True
+            )
             resized = cleaned.resize((target_size, target_size), PILImage.Resampling.BILINEAR)
             buffer = BytesIO()
             resized.save(buffer, format="JPEG", quality=quality)
@@ -197,7 +207,8 @@ def _product_card(product: Producto, styles, show_price: bool = True) -> Table:
     if product.imagen_url:
         try:
             image_bytes = base64.b64decode(product.imagen_url)
-            optimized_bytes = _optimized_image_bytes(image_bytes)
+            cat_name = product.categoria.nombre if product.categoria else None
+            optimized_bytes = _optimized_image_bytes(image_bytes, category_name=cat_name)
             if optimized_bytes:
                 image_flowable = Image(BytesIO(optimized_bytes), width=30 * mm, height=30 * mm, kind="proportional")
         except (ValueError, OSError):
