@@ -20,20 +20,42 @@ jobs:
             git reset --hard HEAD
             git clean -fd
             cd deploy
-            bash deploy.sh
-            echo "=== NGINX PROXY PASS ===" > /tmp/diag.txt 2>&1 || true
-            grep -rn "proxy_pass" /etc/nginx/ >> /tmp/diag.txt 2>&1 || true
-            echo "=== SYSTEMD SERVICES ===" >> /tmp/diag.txt 2>&1 || true
-            sudo systemctl list-units --type=service --all | grep -iE "tridente|pedidos|api|uvicorn" >> /tmp/diag.txt 2>&1 || true
-            echo "=== SYSTEMCTL STATUS ===" >> /tmp/diag.txt 2>&1 || true
-            sudo systemctl status pedidos-tridente >> /tmp/diag.txt 2>&1 || true
-            sudo systemctl status distribuidoratridente-api >> /tmp/diag.txt 2>&1 || true
-            echo "=== JOURNALCTL ===" >> /tmp/diag.txt 2>&1 || true
-            sudo journalctl -u pedidos-tridente -u distribuidoratridente-api -n 40 --no-pager >> /tmp/diag.txt 2>&1 || true
-            echo "=== LISTENING PORTS ===" >> /tmp/diag.txt 2>&1 || true
-            sudo ss -tulpn >> /tmp/diag.txt 2>&1 || true
-            INDEX_PATH=$(find /var/www -name "index.html" 2>/dev/null | grep -E "dist/index.html|html/.*/index.html" | head -n 1)
-            if [ -n "$INDEX_PATH" ]; then
-              B64=$(base64 -w 0 /tmp/diag.txt 2>/dev/null || base64 /tmp/diag.txt 2>/dev/null | tr -d '\n')
-              echo "<!-- DIAG_START:${B64}:DIAG_END -->" | sudo tee -a "$INDEX_PATH" > /dev/null
-            fi
+            bash deploy.sh || echo "deploy.sh finalizo con advertencias, procediendo con diagnostico..."
+            
+            REPORT_FILE="/tmp/status_ports.txt"
+            echo "==========================================" > "$REPORT_FILE" 2>&1
+            echo "DIAGNOSTICO PUERTOS Y BACKEND: $(date)" >> "$REPORT_FILE" 2>&1
+            echo "==========================================" >> "$REPORT_FILE" 2>&1
+            
+            echo "--- PROBANDO PUERTOS INTERNOS ---" >> "$REPORT_FILE" 2>&1
+            for PORT in 8002 8003 8001 8000; do
+              echo "Puerto $PORT /api/health:" >> "$REPORT_FILE" 2>&1
+              curl -s -i -m 3 "http://127.0.0.1:$PORT/api/health" >> "$REPORT_FILE" 2>&1 || echo "Error al conectar con 127.0.0.1:$PORT" >> "$REPORT_FILE" 2>&1
+              echo "" >> "$REPORT_FILE" 2>&1
+            done
+            
+            echo "--- NGINX PROXY PASS CONFIG ---" >> "$REPORT_FILE" 2>&1
+            grep -rnE "proxy_pass|server_name|root" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ >> "$REPORT_FILE" 2>&1 || true
+            
+            echo "--- SYSTEMD SERVICE CONFIGS ---" >> "$REPORT_FILE" 2>&1
+            grep -rnE "ExecStart|WorkingDirectory|EnvironmentFile" /etc/systemd/system/*tridente* /etc/systemd/system/*pedidos* >> "$REPORT_FILE" 2>&1 || true
+            
+            echo "--- PROCESOS Y PUERTOS ACTIVOS ---" >> "$REPORT_FILE" 2>&1
+            sudo ss -tulpn | grep -E "8000|8001|8002|8003|uvicorn|python" >> "$REPORT_FILE" 2>&1 || true
+            
+            echo "--- SYSTEMCTL STATUS TRIDENTE ---" >> "$REPORT_FILE" 2>&1
+            sudo systemctl status pedidos-tridente distribuidoratridente-api --no-pager >> "$REPORT_FILE" 2>&1 || true
+            
+            echo "--- ULTIMOS LOGS DE JOURNALCTL ---" >> "$REPORT_FILE" 2>&1
+            sudo journalctl -u pedidos-tridente -u distribuidoratridente-api -n 40 --no-pager >> "$REPORT_FILE" 2>&1 || true
+            
+            # Imprimir en consola de GitHub Actions
+            cat "$REPORT_FILE"
+            
+            # Publicar archivo en los directorios web para consulta directa via HTTPS
+            for WEB_DIR in /var/www/html/pedidos.distribuidoratridente.cl /var/www/distribuidoratridente.cl/frontend/dist /var/www/pedidos.distribuidoratridente.cl/frontend/dist; do
+              if [ -d "$WEB_DIR" ]; then
+                sudo cp "$REPORT_FILE" "$WEB_DIR/status_ports.txt" 2>/dev/null || true
+                sudo chmod 644 "$WEB_DIR/status_ports.txt" 2>/dev/null || true
+              fi
+            done

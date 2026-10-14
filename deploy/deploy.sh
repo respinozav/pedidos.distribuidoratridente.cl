@@ -239,48 +239,98 @@ if [ "$IS_BACKEND" = true ]; then
     deactivate
 
     ########################################
-    # SYSTEMD
+    # SYSTEMD & PUERTOS
     ########################################
 
-    CANDIDATE_SERVICES=("pedidos-tridente" "distribuidoratridente-api")
+    echo ""
+    echo -e "${YELLOW}>> Detectando configuración de servicios y puertos...${NC}"
+
+    # Detectar archivos de servicio en /etc/systemd/system relacionados
+    DETECTED_SERVICES=()
+    if [ -d "/etc/systemd/system" ]; then
+        for svc_file in $(grep -slE "distribuidoratridente|pedidos-tridente|pedidos\.distribuidoratridente" /etc/systemd/system/*.service 2>/dev/null || true); do
+            svc_name=$(basename "$svc_file" .service)
+            DETECTED_SERVICES+=("$svc_name")
+            echo "Servicio encontrado en systemd: $svc_name ($svc_file)"
+            grep -E "ExecStart|WorkingDirectory|EnvironmentFile" "$svc_file" || true
+        done
+    fi
+
+    CANDIDATE_SERVICES=("pedidos-tridente" "distribuidoratridente-api" "tridente-api" "${DETECTED_SERVICES[@]}")
     if [ ! -z "$SERVICE_NAME" ]; then
         CANDIDATE_SERVICES=("$SERVICE_NAME" "${CANDIDATE_SERVICES[@]}")
     fi
 
-    echo "Reiniciando servicios systemd..."
-    for SVC in "${CANDIDATE_SERVICES[@]}"; do
-        if sudo systemctl list-unit-files "$SVC.service" &>/dev/null || sudo systemctl status "$SVC" &>/dev/null; then
+    # Deduplicar lista de servicios
+    UNIQUE_SERVICES=($(printf "%s\n" "${CANDIDATE_SERVICES[@]}" | sort -u))
+
+    echo "Recargando daemon de systemd..."
+    sudo systemctl daemon-reload || true
+
+    echo "Reiniciando servicios candidatos: ${UNIQUE_SERVICES[*]}..."
+    for SVC in "${UNIQUE_SERVICES[@]}"; do
+        if sudo systemctl list-unit-files "$SVC.service" &>/dev/null || [ -f "/etc/systemd/system/$SVC.service" ]; then
             echo "Reiniciando $SVC..."
             sudo systemctl restart "$SVC" || true
+            sleep 1
             sudo systemctl --no-pager --full status "$SVC" || true
         fi
     done
 
-    echo "Esperando 4 segundos a que el backend inicialice..."
+    echo "Esperando 4 segundos a que uvicorn inicie..."
     sleep 4
 
+    echo ""
+    echo -e "${YELLOW}>> Comprobando puertos 8002, 8003, 8001, 8000...${NC}"
+    PORTS=(8002 8003 8001 8000)
     HEALTH_OK=false
-    for i in {1..5}; do
-        if curl -s -f http://127.0.0.1:8001/api/health > /dev/null 2>&1; then
-            echo -e "${GREEN}¡Backend respondiendo OK en http://127.0.0.1:8001/api/health!${NC}"
+    ACTIVE_PORT=""
+
+    for P in "${PORTS[@]}"; do
+        echo -n "Probando puerto $P (/api/health): "
+        HTTP_CODE=$(curl -s -o /tmp/resp_$P.json -w "%{http_code}" "http://127.0.0.1:$P/api/health" 2>/dev/null || echo "000")
+        RESP_BODY=$(cat /tmp/resp_$P.json 2>/dev/null || echo "")
+        echo "HTTP $HTTP_CODE | Respuesta: $RESP_BODY"
+        if [ "$HTTP_CODE" = "200" ]; then
+            echo -e "${GREEN}¡Backend respondiendo OK en puerto $P!${NC}"
             HEALTH_OK=true
-            break
-        elif curl -s -f http://127.0.0.1:8000/api/health > /dev/null 2>&1; then
-            echo -e "${GREEN}¡Backend respondiendo OK en http://127.0.0.1:8000/api/health!${NC}"
-            HEALTH_OK=true
-            break
+            ACTIVE_PORT="$P"
         fi
-        sleep 1
     done
 
+    # Reintentos si aún no responde ninguno
     if [ "$HEALTH_OK" = false ]; then
-        echo -e "${RED}ADVERTENCIA: Backend no responde en 8001 ni 8000. Logs recientes:${NC}"
-        for SVC in "${CANDIDATE_SERVICES[@]}"; do
-            echo "=== Logs de $SVC ==="
-            sudo journalctl -u "$SVC" -n 35 --no-pager || true
+        echo "Reintentando verificación de puertos durante 8 segundos..."
+        for attempt in {1..8}; do
+            for P in "${PORTS[@]}"; do
+                HTTP_CODE=$(curl -s -o /tmp/resp_$P.json -w "%{http_code}" "http://127.0.0.1:$P/api/health" 2>/dev/null || echo "000")
+                if [ "$HTTP_CODE" = "200" ]; then
+                    echo -e "${GREEN}¡Backend respondiendo OK en puerto $P (intento $attempt)!${NC}"
+                    HEALTH_OK=true
+                    ACTIVE_PORT="$P"
+                    break 2
+                fi
+            done
+            sleep 1
         done
-        echo "=== Puertos locales en escucha ==="
-        sudo ss -tlpn 2>/dev/null || sudo netstat -tlpn 2>/dev/null || true
+    fi
+
+    echo ""
+    echo "=== Configuración Nginx proxy_pass ==="
+    grep -rnE "proxy_pass.*800[0-9]" /etc/nginx/ 2>/dev/null || true
+
+    echo ""
+    echo "=== Puertos escuchando actualmente en el sistema ==="
+    sudo ss -tulpn | grep -E "8000|8001|8002|8003|uvicorn|python" 2>/dev/null || true
+
+    if [ "$HEALTH_OK" = false ]; then
+        echo -e "${RED}ADVERTENCIA: Ningún puerto respondió 200 en /api/health.${NC}"
+        for SVC in "${UNIQUE_SERVICES[@]}"; do
+            echo "=== Últimos logs de $SVC ==="
+            sudo journalctl -u "$SVC" -n 35 --no-pager 2>/dev/null || true
+        done
+    else
+        echo -e "${GREEN}>>> Backend activo y saludable en puerto $ACTIVE_PORT <<<${NC}"
     fi
 
 fi
