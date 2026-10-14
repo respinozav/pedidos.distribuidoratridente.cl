@@ -4,7 +4,7 @@ from datetime import datetime, time
 from decimal import Decimal
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, Time, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -426,4 +426,46 @@ class AvisoStockCliente(Base):
 
     cliente: Mapped[Cliente] = relationship()
     producto: Mapped[Producto] = relationship()
+
+
+class IAChat(Base):
+    __tablename__ = "ia_chats"
+    __table_args__ = (
+        Index("ix_ia_chats_usuario_updated", "usuario_id", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    usuario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
+    )
+    titulo: Mapped[str] = mapped_column(String(255), default="Nueva conversación")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    usuario: Mapped[Usuario] = relationship()
+    mensajes: Mapped[list["IAMensaje"]] = relationship(
+        back_populates="chat", cascade="all, delete-orphan", order_by="IAMensaje.created_at.asc()"
+    )
+
+
+class IAMensaje(Base):
+    __tablename__ = "ia_mensajes"
+    __table_args__ = (
+        Index("ix_ia_mensajes_chat_created", "chat_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ia_chats.id", ondelete="CASCADE"), index=True
+    )
+    rol: Mapped[str] = mapped_column(String(20))
+    contenido: Mapped[str] = mapped_column(Text)
+    datos_estructurados: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
+    herramientas_usadas: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    chat: Mapped[IAChat] = relationship(back_populates="mensajes")
+
 

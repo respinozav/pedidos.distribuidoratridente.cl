@@ -35,6 +35,8 @@ from app.models.entities import (
     DetalleVentaVendedor,
     Direccion,
     Estado,
+    IAChat,
+    IAMensaje,
     Pedido,
     PedidoNotificacionLog,
     Producto,
@@ -46,6 +48,7 @@ from app.models.entities import (
 )
 from app.repositories.base import Repository
 from app.repositories.system_settings_repository import SystemSettingsRepository
+from app.services.agente_ia_service import AgenteIAService
 from app.schemas.dto import (
     AddressInput,
     AddressOutput,
@@ -58,6 +61,11 @@ from app.schemas.dto import (
     CreditOutput,
     CreditPaymentInput,
     CustomerCreate,
+    IAChatCreate,
+    IAChatDetailOutput,
+    IAChatOutput,
+    IAMensajeOutput,
+    IASendMessageInput,
     CustomerInput,
     CustomerLogin,
     CustomerOutput,
@@ -1852,6 +1860,103 @@ def asignar_masivo_cartera(
         else f"{count} cliente{'s' if count != 1 else ''} desasignado{'s' if count != 1 else ''} de la cartera."
     )
     return GenericCarteraResponse(success=True, actualizados=count, mensaje=msg)
+
+
+# ==============================================================================
+# AGENTE TRIDENTE IA (Endpoints de Chats y Asistente Conversacional)
+# ==============================================================================
+
+@router.get("/admin/ia/chats", response_model=list[IAChatOutput], tags=["Agente Tridente IA"])
+def list_ia_chats(
+    current_admin: SuperAdminUser,
+    database: DatabaseSession,
+) -> list[IAChat]:
+    """Lista las conversaciones del Agente Tridente IA asociadas al administrador actual."""
+    stmt = (
+        select(IAChat)
+        .where(IAChat.usuario_id == current_admin.id)
+        .order_by(IAChat.updated_at.desc())
+    )
+    return list(database.scalars(stmt))
+
+
+@router.post("/admin/ia/chats", response_model=IAChatOutput, tags=["Agente Tridente IA"])
+def create_ia_chat(
+    payload: IAChatCreate,
+    current_admin: SuperAdminUser,
+    database: DatabaseSession,
+) -> IAChat:
+    """Crea una nueva conversación para el Agente Tridente IA."""
+    chat = IAChat(
+        usuario_id=current_admin.id,
+        titulo=payload.titulo or "Nueva conversación",
+    )
+    database.add(chat)
+    database.commit()
+    database.refresh(chat)
+    return chat
+
+
+@router.get("/admin/ia/chats/{chat_id}", response_model=IAChatDetailOutput, tags=["Agente Tridente IA"])
+def get_ia_chat_detail(
+    chat_id: UUID,
+    current_admin: SuperAdminUser,
+    database: DatabaseSession,
+) -> IAChat:
+    """Obtiene el historial completo de mensajes de una conversación."""
+    stmt = (
+        select(IAChat)
+        .options(selectinload(IAChat.mensajes))
+        .where(IAChat.id == chat_id, IAChat.usuario_id == current_admin.id)
+    )
+    chat = database.scalar(stmt)
+    if not chat:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
+    return chat
+
+
+@router.delete("/admin/ia/chats/{chat_id}", tags=["Agente Tridente IA"])
+def delete_ia_chat(
+    chat_id: UUID,
+    current_admin: SuperAdminUser,
+    database: DatabaseSession,
+) -> dict[str, bool]:
+    """Elimina una conversación y todos sus mensajes."""
+    chat = database.scalar(
+        select(IAChat).where(IAChat.id == chat_id, IAChat.usuario_id == current_admin.id)
+    )
+    if not chat:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
+    database.delete(chat)
+    database.commit()
+    return {"success": True}
+
+
+@router.post("/admin/ia/chats/{chat_id}/mensajes", tags=["Agente Tridente IA"])
+def send_ia_chat_message(
+    chat_id: UUID,
+    payload: IASendMessageInput,
+    current_admin: SuperAdminUser,
+    database: DatabaseSession,
+) -> dict[str, Any]:
+    """
+    Envía un mensaje al Agente Tridente IA.
+    El backend orquesta la consulta a PostgREST / PostgreSQL mediante Function Calling con Gemini,
+    analiza stock/pedidos, extrae datos estructurados de gráficos y devuelve la respuesta.
+    """
+    servicio_ia = AgenteIAService(database, current_admin)
+    try:
+        resultado = servicio_ia.procesar_mensaje(chat_id, payload.mensaje)
+        return resultado
+    except ValueError as ve:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(ve))
+    except Exception as ex:
+        logger.error("Error al procesar mensaje con Agente Tridente IA: %s", str(ex), exc_info=True)
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Error al procesar mensaje con la IA: {str(ex)[:150]}"
+        )
+
 
 
 

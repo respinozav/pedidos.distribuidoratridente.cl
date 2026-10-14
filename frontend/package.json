@@ -12,9 +12,12 @@
     "@vitejs/plugin-react": "latest",
     "axios": "latest",
     "bootstrap": "^5.3.3",
+    "chart.js": "^4.5.1",
     "lucide-react": "^1.28.0",
     "react": "^19.0.0",
+    "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.0.0",
     "sweetalert2": "^11.26.25",
     "vite": "latest"

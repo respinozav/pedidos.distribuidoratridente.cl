@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     defontana_company_id: str = ""
     defontana_api_user: str = ""
     defontana_api_password: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    postgrest_url: str = "http://localhost:3000"
+    postgrest_schema: str = "bdtridente"
+    postgrest_token: str = ""
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[3] / ".env",

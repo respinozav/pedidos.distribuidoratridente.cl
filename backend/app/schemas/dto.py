@@ -624,6 +624,37 @@ class AvisoStockPendienteItem(BaseModel):
     created_at: datetime
 
 
+class IAChatCreate(BaseModel):
+    titulo: str | None = Field(default="Nueva conversación", max_length=255)
+
+
+class IAMensajeOutput(ORMModel):
+    id: UUID
+    chat_id: UUID
+    rol: str
+    contenido: str
+    datos_estructurados: dict | list | None = None
+    herramientas_usadas: list | None = None
+    created_at: datetime
+
+
+class IAChatOutput(ORMModel):
+    id: UUID
+    usuario_id: UUID
+    titulo: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class IAChatDetailOutput(IAChatOutput):
+    mensajes: list[IAMensajeOutput] = []
+
+
+class IASendMessageInput(BaseModel):
+    mensaje: str = Field(min_length=1, max_length=4000)
+
+
+
 
 
 
