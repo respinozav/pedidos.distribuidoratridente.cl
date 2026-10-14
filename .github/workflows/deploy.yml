@@ -35,7 +35,7 @@ jobs:
             done
             
             echo "--- NGINX PROXY PASS CONFIG ---" >> "$REPORT_FILE" 2>&1
-            grep -rnE "proxy_pass|server_name|root" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ >> "$REPORT_FILE" 2>&1 || true
+            sudo grep -rnE "proxy_pass|server_name|root" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ /etc/nginx/sites-available/ >> "$REPORT_FILE" 2>&1 || true
             
             echo "--- SYSTEMD SERVICE CONFIGS ---" >> "$REPORT_FILE" 2>&1
             grep -rnE "ExecStart|WorkingDirectory|EnvironmentFile" /etc/systemd/system/*tridente* /etc/systemd/system/*pedidos* >> "$REPORT_FILE" 2>&1 || true

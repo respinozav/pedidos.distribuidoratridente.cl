@@ -193,26 +193,18 @@ if [ "$IS_BACKEND" = true ]; then
     cd "$BACKEND_DIR"
 
     ########################################
-    # VIRTUAL ENVIRONMENT (.venv y venv)
+    # VIRTUAL ENVIRONMENT (venv y .venv)
     ########################################
 
-    ACTIVE_VENV=""
-    if [ -d "$BACKEND_DIR/.venv" ]; then
-        ACTIVE_VENV="$BACKEND_DIR/.venv"
-    elif [ -d "$BACKEND_DIR/venv" ]; then
-        ACTIVE_VENV="$BACKEND_DIR/venv"
-    else
-        echo "Creando entorno virtual..."
-        python3 -m venv "$BACKEND_DIR/.venv"
-        ACTIVE_VENV="$BACKEND_DIR/.venv"
+    ACTIVE_VENV="$BACKEND_DIR/venv"
+    if [ ! -f "$ACTIVE_VENV/bin/uvicorn" ]; then
+        echo "Creando entorno virtual en $ACTIVE_VENV..."
+        python3 -m venv "$ACTIVE_VENV"
     fi
 
-    # Asegurar enlace simbólico entre venv y .venv
-    if [ -d "$BACKEND_DIR/.venv" ] && [ ! -e "$BACKEND_DIR/venv" ]; then
-        ln -s "$BACKEND_DIR/.venv" "$BACKEND_DIR/venv" || true
-    elif [ -d "$BACKEND_DIR/venv" ] && [ ! -e "$BACKEND_DIR/.venv" ]; then
-        ln -s "$BACKEND_DIR/venv" "$BACKEND_DIR/.venv" || true
-    fi
+    # Enlace simbólico .venv -> venv
+    rm -rf "$BACKEND_DIR/.venv" 2>/dev/null || true
+    ln -sfn "$ACTIVE_VENV" "$BACKEND_DIR/.venv" || true
 
     ########################################
     # ACTIVAR VENV Y ACTUALIZAR DEPENDENCIAS
@@ -223,6 +215,15 @@ if [ "$IS_BACKEND" = true ]; then
     echo "Instalando dependencias Python..."
     pip install --upgrade pip
     pip install -r requirements.txt
+    pip install "uvicorn[standard]"
+
+    echo "Verificando binario uvicorn:"
+    "$ACTIVE_VENV/bin/uvicorn" --version || echo "Error al verificar uvicorn"
+
+    # Asegurar permisos de ejecución y lectura
+    chmod -R a+rX "$ACTIVE_VENV" 2>/dev/null || true
+    chmod +x "$ACTIVE_VENV/bin/"* 2>/dev/null || true
+    sudo chown -R www-data:www-data "$BACKEND_DIR" 2>/dev/null || true
 
     ########################################
     # ALEMBIC MIGRACIONES
@@ -234,7 +235,7 @@ if [ "$IS_BACKEND" = true ]; then
     fi
 
     echo "Validando importación de FastAPI app.main..."
-    python3 -c "import app.main; print('app.main importado exitosamente')"
+    "$ACTIVE_VENV/bin/python" -c "import app.main; print('app.main importado exitosamente')"
 
     deactivate
 
