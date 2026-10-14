@@ -21,8 +21,16 @@ jobs:
             git clean -fd
             cd deploy
             bash deploy.sh
-            echo "--- ESTADO DE SERVICIOS SYSTEMD ---"
-            sudo systemctl status pedidos-tridente 2>/dev/null || true
-            sudo systemctl status distribuidoratridente-api 2>/dev/null || true
-            echo "--- PROBANDO HEALTH INTERNO ---"
-            curl -s http://127.0.0.1:8001/api/health || true
+            echo "=== SYSTEMD SERVICES ===" > /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>/dev/null || true
+            sudo systemctl list-units --type=service --all | grep -iE "tridente|pedidos|api|uvicorn" >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            echo "=== SYSTEMCTL STATUS ===" >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            sudo systemctl status pedidos-tridente >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            sudo systemctl status distribuidoratridente-api >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            echo "=== JOURNALCTL ===" >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            sudo journalctl -u pedidos-tridente -u distribuidoratridente-api -n 40 --no-pager >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            echo "=== TRY MANUAL IMPORT TEST ===" >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            cd /var/www/pedidos.distribuidoratridente.cl/backend
+            (source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null) && python3 -c "import app.main; print('IMPORT OK IN VENV')" >> /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>&1 || true
+            sudo cp /var/www/html/pedidos.distribuidoratridente.cl/diag.txt /var/www/pedidos.distribuidoratridente.cl/frontend/dist/diag.txt 2>/dev/null || true
+            sudo chmod 644 /var/www/html/pedidos.distribuidoratridente.cl/diag.txt 2>/dev/null || true
+            sudo chmod 644 /var/www/pedidos.distribuidoratridente.cl/frontend/dist/diag.txt 2>/dev/null || true
