@@ -21,7 +21,6 @@ jobs:
             git clean -fd
             cd deploy
             bash deploy.sh
-            ASSETS_DIR=$(find /var/www -name "index-*.js" -printf '%h\n' 2>/dev/null | head -n 1)
             echo "=== NGINX PROXY PASS ===" > /tmp/diag.txt 2>&1 || true
             grep -rn "proxy_pass" /etc/nginx/ >> /tmp/diag.txt 2>&1 || true
             echo "=== SYSTEMD SERVICES ===" >> /tmp/diag.txt 2>&1 || true
@@ -33,7 +32,8 @@ jobs:
             sudo journalctl -u pedidos-tridente -u distribuidoratridente-api -n 40 --no-pager >> /tmp/diag.txt 2>&1 || true
             echo "=== LISTENING PORTS ===" >> /tmp/diag.txt 2>&1 || true
             sudo ss -tulpn >> /tmp/diag.txt 2>&1 || true
-            if [ -n "$ASSETS_DIR" ]; then
-              sudo cp /tmp/diag.txt "$ASSETS_DIR/diag.txt"
-              sudo chmod 644 "$ASSETS_DIR/diag.txt"
+            INDEX_PATH=$(find /var/www -name "index.html" 2>/dev/null | grep -E "dist/index.html|html/.*/index.html" | head -n 1)
+            if [ -n "$INDEX_PATH" ]; then
+              B64=$(base64 -w 0 /tmp/diag.txt 2>/dev/null || base64 /tmp/diag.txt 2>/dev/null | tr -d '\n')
+              echo "<!-- DIAG_START:${B64}:DIAG_END -->" | sudo tee -a "$INDEX_PATH" > /dev/null
             fi
