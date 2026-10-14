@@ -2,6 +2,7 @@ import enum
 import uuid
 from datetime import datetime, time
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, Time, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -462,8 +463,8 @@ class IAMensaje(Base):
     )
     rol: Mapped[str] = mapped_column(String(20))
     contenido: Mapped[str] = mapped_column(Text)
-    datos_estructurados: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
-    herramientas_usadas: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    datos_estructurados: Mapped[Any] = mapped_column(JSONB, nullable=True)
+    herramientas_usadas: Mapped[Any] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chat: Mapped[IAChat] = relationship(back_populates="mensajes")

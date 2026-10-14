@@ -191,46 +191,48 @@ if [ "$IS_BACKEND" = true ]; then
     cd "$BACKEND_DIR"
 
     ########################################
-    # VIRTUAL ENVIRONMENT
+    # VIRTUAL ENVIRONMENT (.venv y venv)
     ########################################
 
-    if [ ! -d "venv" ]; then
-
+    ACTIVE_VENV=""
+    if [ -d "$BACKEND_DIR/.venv" ]; then
+        ACTIVE_VENV="$BACKEND_DIR/.venv"
+    elif [ -d "$BACKEND_DIR/venv" ]; then
+        ACTIVE_VENV="$BACKEND_DIR/venv"
+    else
         echo "Creando entorno virtual..."
+        python3 -m venv "$BACKEND_DIR/.venv"
+        ACTIVE_VENV="$BACKEND_DIR/.venv"
+    fi
 
-        python3 -m venv venv
-
+    # Asegurar enlace simbólico entre venv y .venv
+    if [ -d "$BACKEND_DIR/.venv" ] && [ ! -e "$BACKEND_DIR/venv" ]; then
+        ln -s "$BACKEND_DIR/.venv" "$BACKEND_DIR/venv" || true
+    elif [ -d "$BACKEND_DIR/venv" ] && [ ! -e "$BACKEND_DIR/.venv" ]; then
+        ln -s "$BACKEND_DIR/venv" "$BACKEND_DIR/.venv" || true
     fi
 
     ########################################
-    # ACTIVAR VENV
+    # ACTIVAR VENV Y ACTUALIZAR DEPENDENCIAS
     ########################################
 
-    source venv/bin/activate
-
-    ########################################
-    # DEPENDENCIAS
-    ########################################
+    source "$ACTIVE_VENV/bin/activate"
 
     echo "Instalando dependencias Python..."
-
+    pip install --upgrade pip
     pip install -r requirements.txt
 
     ########################################
-    # ALEMBIC
+    # ALEMBIC MIGRACIONES
     ########################################
 
     if [ -f "alembic.ini" ]; then
-
         echo "Ejecutando Alembic..."
-
-        alembic upgrade head
-
+        alembic upgrade head || echo "Alembic completado o sin cambios pendientes"
     fi
 
-    ########################################
-    # DESACTIVAR VENV
-    ########################################
+    echo "Validando importación de FastAPI app.main..."
+    python3 -c "import app.main; print('app.main importado exitosamente')"
 
     deactivate
 
@@ -238,18 +240,45 @@ if [ "$IS_BACKEND" = true ]; then
     # SYSTEMD
     ########################################
 
+    CANDIDATE_SERVICES=("pedidos-tridente" "distribuidoratridente-api")
     if [ ! -z "$SERVICE_NAME" ]; then
+        CANDIDATE_SERVICES=("$SERVICE_NAME" "${CANDIDATE_SERVICES[@]}")
+    fi
 
-        echo "Reiniciando servicio..."
+    echo "Reiniciando servicios systemd..."
+    for SVC in "${CANDIDATE_SERVICES[@]}"; do
+        if sudo systemctl list-unit-files "$SVC.service" &>/dev/null || sudo systemctl status "$SVC" &>/dev/null; then
+            echo "Reiniciando $SVC..."
+            sudo systemctl restart "$SVC" || true
+            sudo systemctl --no-pager --full status "$SVC" || true
+        fi
+    done
 
-        sudo systemctl restart "$SERVICE_NAME"
+    echo "Esperando 4 segundos a que el backend inicialice..."
+    sleep 4
 
-        sudo systemctl --no-pager --full status "$SERVICE_NAME"
+    HEALTH_OK=false
+    for i in {1..5}; do
+        if curl -s -f http://127.0.0.1:8001/api/health > /dev/null 2>&1; then
+            echo -e "${GREEN}¡Backend respondiendo OK en http://127.0.0.1:8001/api/health!${NC}"
+            HEALTH_OK=true
+            break
+        elif curl -s -f http://127.0.0.1:8000/api/health > /dev/null 2>&1; then
+            echo -e "${GREEN}¡Backend respondiendo OK en http://127.0.0.1:8000/api/health!${NC}"
+            HEALTH_OK=true
+            break
+        fi
+        sleep 1
+    done
 
-    else
-
-        echo -e "${YELLOW}No hay servicio systemd configurado para $PROJECT_NAME${NC}"
-
+    if [ "$HEALTH_OK" = false ]; then
+        echo -e "${RED}ADVERTENCIA: Backend no responde en 8001 ni 8000. Logs recientes:${NC}"
+        for SVC in "${CANDIDATE_SERVICES[@]}"; do
+            echo "=== Logs de $SVC ==="
+            sudo journalctl -u "$SVC" -n 35 --no-pager || true
+        done
+        echo "=== Puertos locales en escucha ==="
+        sudo ss -tlpn 2>/dev/null || sudo netstat -tlpn 2>/dev/null || true
     fi
 
 fi

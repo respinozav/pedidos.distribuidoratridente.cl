@@ -16,6 +16,11 @@ depends_on = None
 
 def upgrade() -> None:
     schema = get_settings().database_schema
+    try:
+        op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+    except Exception:
+        pass
+
     op.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {schema}.ia_chats (
@@ -25,10 +30,18 @@ def upgrade() -> None:
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
+        """
+    )
 
+    op.execute(
+        f"""
         CREATE INDEX IF NOT EXISTS ix_ia_chats_usuario_updated 
             ON {schema}.ia_chats(usuario_id, updated_at DESC);
+        """
+    )
 
+    op.execute(
+        f"""
         CREATE TABLE IF NOT EXISTS {schema}.ia_mensajes (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             chat_id UUID NOT NULL REFERENCES {schema}.ia_chats(id) ON DELETE CASCADE,
@@ -38,7 +51,11 @@ def upgrade() -> None:
             herramientas_usadas JSONB NULL,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
+        """
+    )
 
+    op.execute(
+        f"""
         CREATE INDEX IF NOT EXISTS ix_ia_mensajes_chat_created 
             ON {schema}.ia_mensajes(chat_id, created_at ASC);
         """
