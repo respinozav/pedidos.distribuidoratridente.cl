@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from decimal import Decimal
 import logging
+from typing import Any
 from zoneinfo import ZoneInfo
 from uuid import UUID
 

@@ -18,5 +18,11 @@ jobs:
           script: |
             cd /var/www/pedidos.distribuidoratridente.cl
             git reset --hard HEAD
+            git clean -fd
             cd deploy
             bash deploy.sh
+            echo "--- ESTADO DE SERVICIOS SYSTEMD ---"
+            sudo systemctl status pedidos-tridente 2>/dev/null || true
+            sudo systemctl status distribuidoratridente-api 2>/dev/null || true
+            echo "--- PROBANDO HEALTH INTERNO ---"
+            curl -s http://127.0.0.1:8001/api/health || true
