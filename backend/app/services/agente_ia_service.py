@@ -5,8 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from google import genai
-from google.genai import types
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -18,14 +17,14 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 SYSTEM_INSTRUCTION = """
-Eres el **Agente Tridente IA**, el asistente inteligente de analítica y gestión comercial de Distribuidora Tridente.
+Eres el **Agente Tridente IA**, el asistente inteligente de analítica comercial y abastecimiento de Distribuidora Tridente.
 Tu objetivo es ayudar a los administradores a supervisar y optimizar el negocio:
 - Consultar stock de productos, precios y estados.
 - Analizar el historial y frecuencia de pedidos de clientes.
 - Realizar análisis predictivos de abastecimiento (identificar qué productos se van a agotar pronto según la rotación de pedidos y sugerir cantidades de reposición).
 - Generar métricas ejecutivas, resúmenes de facturación y rankings de ventas.
 
-Tienes a tu disposición herramientas (Function Calling) para consultar en tiempo real las tablas de productos y pedidos a través del servicio PostgREST/PostgreSQL:
+Tienes herramientas disponibles para consultar en tiempo real las tablas de productos y pedidos a través del servicio PostgREST/PostgreSQL:
 1. `consultar_productos`: busca productos por nombre/código, stock o estado.
 2. `consultar_pedidos_recientes`: consulta pedidos y compras de clientes en un rango de días.
 3. `consultar_metricas_generales`: obtiene métricas consolidadas (top más vendidos, total facturado, stock crítico).
@@ -38,7 +37,7 @@ REGLAS FUNDAMENTALES:
 ```json
 {
   "type": "chart",
-  "chartType": "bar", // o "line", "pie", "doughnut"
+  "chartType": "bar",
   "title": "Top 5 Productos más Vendidos",
   "description": "Comparativa de unidades vendidas en los últimos 30 días",
   "data": {
@@ -71,8 +70,73 @@ REGLAS FUNDAMENTALES:
   ]
 }
 ```
-Puedes incluir texto explicativo en formato Markdown antes o después del bloque JSON.
 """
+
+GEMINI_TOOLS_DECLARATION = [
+    {
+        "functionDeclarations": [
+            {
+                "name": "consultar_productos",
+                "description": "Consulta productos en el catálogo de Distribuidora Tridente por término de búsqueda, stock o estado activo vía PostgREST.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "termino_busqueda": {
+                            "type": "STRING",
+                            "description": "Palabra clave para buscar en nombre o código del producto.",
+                        },
+                        "solo_activos": {
+                            "type": "BOOLEAN",
+                            "description": "Si es true, sólo retorna productos activos y no eliminados.",
+                        },
+                        "ordenar_por_stock_asc": {
+                            "type": "BOOLEAN",
+                            "description": "Si es true, ordena primero los productos con menos stock.",
+                        },
+                        "limite": {
+                            "type": "INTEGER",
+                            "description": "Número máximo de productos a retornar (por defecto 35).",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "consultar_pedidos_recientes",
+                "description": "Consulta los pedidos recientes y sus detalles de venta vía PostgREST.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "dias_historial": {
+                            "type": "INTEGER",
+                            "description": "Cantidad de días hacia atrás a consultar (ej. 7, 30, 60).",
+                        },
+                        "estado_filtro": {
+                            "type": "STRING",
+                            "description": "Filtrar por estado del pedido (opcional).",
+                        },
+                        "limite": {
+                            "type": "INTEGER",
+                            "description": "Número máximo de pedidos a retornar.",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "consultar_metricas_generales",
+                "description": "Obtiene métricas clave: total pedidos, facturación total, ticket promedio, top 10 productos más vendidos y productos con stock crítico.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "dias": {
+                            "type": "INTEGER",
+                            "description": "Días del periodo para el análisis (por defecto 30).",
+                        },
+                    },
+                },
+            },
+        ]
+    }
+]
 
 
 class AgenteIAService:
@@ -82,11 +146,8 @@ class AgenteIAService:
         self.postgrest = PostgrestService(db)
         self.api_key = settings.gemini_api_key
 
-    def _get_genai_client(self) -> genai.Client:
-        return genai.Client(api_key=self.api_key)
-
     def ejecutar_herramienta(self, nombre: str, args: dict[str, Any]) -> dict[str, Any]:
-        """Ejecuta la función solicitada por Gemini vía PostgREST."""
+        """Ejecuta la función solicitada por Gemini vía PostgREST o fallback local."""
         logger.info("Agente IA ejecutando herramienta '%s' con args %s", nombre, args)
         if nombre == "consultar_productos":
             return {
@@ -114,12 +175,8 @@ class AgenteIAService:
         return {"error": f"Herramienta '{nombre}' desconocida."}
 
     def _extraer_datos_estructurados(self, texto: str) -> tuple[str, dict[str, Any] | None]:
-        """
-        Detecta bloques de json de tipo 'chart' o 'prediction' dentro de la respuesta
-        y los extrae para el frontend.
-        """
+        """Extrae bloques de json de tipo 'chart' o 'prediction'."""
         datos_estructurados = None
-        # Buscar bloques ```json { ... } ```
         bloques = re.findall(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", texto)
         for b in bloques:
             try:
@@ -130,7 +187,6 @@ class AgenteIAService:
             except Exception:
                 continue
 
-        # Si no encontró en bloques de código, buscar cualquier JSON con "type": "chart"
         if not datos_estructurados:
             match = re.search(r'(\{\s*"type"\s*:\s*"(?:chart|prediction)"[\s\S]*?\n\})', texto)
             if match:
@@ -145,13 +201,11 @@ class AgenteIAService:
 
     def procesar_mensaje(self, chat_id: UUID, mensaje_usuario: str) -> dict[str, Any]:
         """
-        Orquesta la conversación con Gemini:
-        1. Guarda el mensaje del usuario.
-        2. Configura tools de Function Calling.
-        3. Realiza la llamada a Gemini y maneja tool calls iterativamente.
-        4. Extrae gráficos estructurados y guarda respuesta del asistente.
+        Orquesta la conversación con Gemini usando HTTP REST puro vía httpx:
+        - Cero dependencias externas incompatibles.
+        - Soporta Function Calling nativo con PostgREST.
+        - Fallback a modelos alternativos en caso de rate-limit o 503.
         """
-        # 1. Obtener o validar el chat
         chat = self.db.scalar(
             select(IAChat)
             .options(selectinload(IAChat.mensajes))
@@ -160,7 +214,7 @@ class AgenteIAService:
         if not chat:
             raise ValueError("Chat no encontrado o no autorizado")
 
-        # 2. Guardar mensaje del usuario
+        # Guardar mensaje del usuario
         msg_user = IAMensaje(
             chat_id=chat.id,
             rol="user",
@@ -171,140 +225,136 @@ class AgenteIAService:
         self.db.add(msg_user)
         self.db.flush()
 
-        # Si el chat aún tiene título por defecto y es el primer mensaje, generamos un título breve
         if chat.titulo == "Nueva conversación":
             titulo_auto = mensaje_usuario.strip()[:40]
             if len(mensaje_usuario.strip()) > 40:
                 titulo_auto += "..."
             chat.titulo = titulo_auto
 
-        # 3. Preparar historial para Gemini
-        historial_previo = [
-            types.Content(
-                role="user" if m.rol == "user" else "model",
-                parts=[types.Part.from_text(text=m.contenido)],
-            )
-            for m in chat.mensajes
-            if m.id != msg_user.id
-        ]
-        historial_previo.append(
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=mensaje_usuario)],
-            )
-        )
-
-        # 4. Definir herramientas como funciones de Python
-        def consultar_productos(
-            termino_busqueda: str = "",
-            solo_activos: bool = True,
-            ordenar_por_stock_asc: bool = False,
-            limite: int = 35,
-        ) -> str:
-            """Consulta productos en el catálogo de Distribuidora Tridente vía PostgREST."""
-            data = self.ejecutar_herramienta(
-                "consultar_productos",
-                {
-                    "termino_busqueda": termino_busqueda,
-                    "solo_activos": solo_activos,
-                    "ordenar_por_stock_asc": ordenar_por_stock_asc,
-                    "limite": limite,
-                },
-            )
-            return json.dumps(data, ensure_ascii=False)
-
-        def consultar_pedidos_recientes(
-            dias_historial: int = 30,
-            estado_filtro: str = "",
-            limite: int = 35,
-        ) -> str:
-            """Consulta pedidos recientes y sus detalles de venta vía PostgREST."""
-            data = self.ejecutar_herramienta(
-                "consultar_pedidos_recientes",
-                {
-                    "dias_historial": dias_historial,
-                    "estado_filtro": estado_filtro or None,
-                    "limite": limite,
-                },
-            )
-            return json.dumps(data, ensure_ascii=False)
-
-        def consultar_metricas_generales(dias: int = 30) -> str:
-            """Obtiene métricas de negocio: productos más vendidos, stock crítico y facturación total."""
-            data = self.ejecutar_herramienta(
-                "consultar_metricas_generales",
-                {"dias": dias},
-            )
-            return json.dumps(data, ensure_ascii=False)
-
-        herramientas_list = [
-            consultar_productos,
-            consultar_pedidos_recientes,
-            consultar_metricas_generales,
-        ]
-
-        herramientas_ejecutadas: list[str] = []
-        respuesta_texto = ""
-        datos_estructurados = None
-
-        modelos_candidatos = [
-            settings.gemini_model or "gemini-3.5-flash-lite",
-            "gemini-3.5-flash-lite",
-            "gemini-3.8-flash",
-            "gemini-3.6-flash",
-        ]
-
         if not self.api_key:
-            respuesta_texto = (
+            texto_respuesta = (
                 "⚠️ **Aviso del Sistema:** La clave `GEMINI_API_KEY` no está configurada en el servidor. "
                 "Por favor, define la variable en el archivo `.env` del backend para activar las respuestas de IA."
             )
-        else:
-            client = self._get_genai_client()
+            msg_ia = IAMensaje(
+                chat_id=chat.id,
+                rol="assistant",
+                contenido=texto_respuesta,
+                datos_estructurados=None,
+                herramientas_usadas=None,
+            )
+            self.db.add(msg_ia)
+            chat.updated_at = datetime.now()
+            self.db.commit()
+            self.db.refresh(msg_ia)
+            return {
+                "id": str(msg_ia.id),
+                "chat_id": str(chat.id),
+                "rol": "assistant",
+                "contenido": msg_ia.contenido,
+                "datos_estructurados": None,
+                "herramientas_usadas": None,
+                "created_at": msg_ia.created_at.isoformat(),
+            }
+
+        # Armar historial de contents para la API de Gemini
+        contents: list[dict[str, Any]] = []
+        for m in chat.mensajes:
+            if m.id == msg_user.id:
+                continue
+            role = "user" if m.rol == "user" else "model"
+            contents.append({"role": role, "parts": [{"text": m.contenido}]})
+        contents.append({"role": "user", "parts": [{"text": mensaje_usuario}]})
+
+        modelos_candidatos = [
+            "gemini-flash-latest",
+            "gemini-pro-latest",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+        ]
+
+        herramientas_ejecutadas: list[str] = []
+        texto_final = ""
+
+        with httpx.Client(timeout=30.0) as client:
             for modelo in modelos_candidatos:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={self.api_key}"
                 try:
-                    config = types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        tools=herramientas_list,
-                        temperature=0.3,
-                    )
-                    # Realizar la llamada a Gemini (el SDK de google-genai maneja function calling automáticamente si se pasan funciones)
-                    response = client.models.generate_content(
-                        model=modelo,
-                        contents=historial_previo,
-                        config=config,
-                    )
+                    payload = {
+                        "contents": contents,
+                        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+                        "tools": GEMINI_TOOLS_DECLARATION,
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "maxOutputTokens": 2048,
+                        },
+                    }
 
-                    # Verificar si hubo llamadas a herramientas registradas
-                    if hasattr(response, "function_calls") and response.function_calls:
-                        for fc in response.function_calls:
-                            herramientas_ejecutadas.append(fc.name)
+                    # Bucle de Function Calling (máximo 4 iteraciones)
+                    for _ in range(4):
+                        res = client.post(url, json=payload)
+                        if res.status_code != 200:
+                            logger.warning("Gemini REST error %s: %s", res.status_code, res.text[:200])
+                            break
 
-                    respuesta_texto = response.text or ""
-                    break
+                        res_json = res.json()
+                        candidates = res_json.get("candidates", [])
+                        if not candidates:
+                            break
+
+                        content_candidate = candidates[0].get("content", {})
+                        parts = content_candidate.get("parts", [])
+
+                        # Verificar si hay functionCall
+                        function_calls = [p.get("functionCall") for p in parts if "functionCall" in p]
+                        if not function_calls:
+                            # Tenemos respuesta de texto final
+                            textos = [p.get("text", "") for p in parts if "text" in p]
+                            texto_final = "\n".join(textos).strip()
+                            break
+
+                        # Ejecutar llamadas a herramientas y enviar respuestas a Gemini
+                        # Agregar el mensaje del modelo con sus functionCalls a contents
+                        payload["contents"].append(content_candidate)
+
+                        response_parts = []
+                        for fc in function_calls:
+                            fn_name = fc.get("name")
+                            fn_args = fc.get("args", {})
+                            herramientas_ejecutadas.append(fn_name)
+                            tool_result = self.ejecutar_herramienta(fn_name, fn_args)
+                            response_parts.append(
+                                {
+                                    "functionResponse": {
+                                        "name": fn_name,
+                                        "response": {"result": tool_result},
+                                    }
+                                }
+                            )
+
+                        # Enviar las respuestas de las funciones
+                        payload["contents"].append(
+                            {
+                                "role": "user",
+                                "parts": response_parts,
+                            }
+                        )
+
+                    if texto_final:
+                        break
+
                 except Exception as ex:
-                    err_msg = str(ex)
-                    logger.warning("Error llamando a Gemini modelo %s: %s", modelo, err_msg)
-                    if "503" in err_msg or "high demand" in err_msg or "404" in err_msg:
-                        # Probar siguiente modelo
-                        continue
-                    # Si hubo otro error pero tenemos respuesta previa
-                    respuesta_texto = (
-                        f"Ocurrió un error al procesar tu solicitud con Gemini ({err_msg[:120]}). "
-                        "Por favor intenta de nuevo en unos momentos."
-                    )
-                    break
+                    logger.warning("Fallo llamando a modelo %s: %s", modelo, str(ex))
+                    continue
 
-            if not respuesta_texto:
-                respuesta_texto = (
-                    "El servicio de IA se encuentra temporalmente con alta demanda en este momento. "
-                    "Por favor intenta enviar tu mensaje nuevamente en unos segundos."
-                )
+        if not texto_final:
+            texto_final = (
+                "El Agente Tridente IA no pudo completar la consulta en este momento. "
+                "Por favor verifica la conexión o intenta nuevamente en unos segundos."
+            )
 
-        # 5. Extraer cualquier gráfico o predicción estructurada
-        texto_limpio, datos_estructurados = self._extraer_datos_estructurados(respuesta_texto)
+        texto_limpio, datos_estructurados = self._extraer_datos_estructurados(texto_final)
 
-        # 6. Guardar mensaje de la IA en la base de datos
         msg_ia = IAMensaje(
             chat_id=chat.id,
             rol="assistant",
