@@ -1961,5 +1961,39 @@ def send_ia_chat_message(
         )
 
 
+@router.get("/ia/diagnostico", tags=["IA"])
+def diagnostico_ia() -> dict[str, Any]:
+    """Endpoint de diagnóstico para probar la conectividad directa con Gemini API."""
+    import httpx
+    cfg = get_settings()
+    api_key = cfg.gemini_api_key
+    if not api_key:
+        return {"status": "error", "mensaje": "GEMINI_API_KEY no esta configurada en el servidor"}
+    
+    masked_key = api_key[:4] + "..." + api_key[-4:] if len(api_key) > 8 else "***"
+    modelo = getattr(cfg, "gemini_model", None) or "gemini-3.6-flash"
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
+    payload = {"contents": [{"parts": [{"text": "Responde OK"}]}]}
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            res = client.post(url, json=payload)
+            return {
+                "status": "ok" if res.status_code == 200 else "error",
+                "modelo_usado": modelo,
+                "api_key_prefijo": masked_key,
+                "http_status": res.status_code,
+                "respuesta": res.json() if res.status_code == 200 else res.text[:300],
+            }
+    except Exception as ex:
+        return {
+            "status": "excepcion",
+            "modelo_usado": modelo,
+            "api_key_prefijo": masked_key,
+            "error_tipo": type(ex).__name__,
+            "error_detalle": str(ex),
+        }
+
+
 
 

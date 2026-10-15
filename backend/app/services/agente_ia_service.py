@@ -407,6 +407,7 @@ class AgenteIAService:
 
         herramientas_ejecutadas: list[str] = []
         texto_final = ""
+        errores_intentos: list[str] = []
 
         with httpx.Client(timeout=30.0) as client:
             for modelo in modelos_candidatos:
@@ -423,15 +424,20 @@ class AgenteIAService:
                     }
 
                     # Bucle de Function Calling (máximo 4 iteraciones)
-                    for _ in range(4):
+                    for iteracion in range(4):
                         res = client.post(url, json=payload)
                         if res.status_code != 200:
-                            logger.warning("Gemini REST error %s: %s", res.status_code, res.text[:200])
+                            err_info = f"[{modelo}] HTTP {res.status_code}: {res.text[:120]}"
+                            logger.warning("Gemini error: %s", err_info)
+                            errores_intentos.append(err_info)
                             break
 
                         res_json = res.json()
                         candidates = res_json.get("candidates", [])
                         if not candidates:
+                            err_info = f"[{modelo}] Sin candidatos en respuesta: {str(res_json)[:100]}"
+                            logger.warning(err_info)
+                            errores_intentos.append(err_info)
                             break
 
                         content_candidate = candidates[0].get("content", {})
@@ -476,13 +482,17 @@ class AgenteIAService:
                         break
 
                 except Exception as ex:
-                    logger.warning("Fallo llamando a modelo %s: %s", modelo, str(ex))
+                    err_info = f"[{modelo}] Excepción {type(ex).__name__}: {str(ex)[:120]}"
+                    logger.warning("Fallo llamando a modelo: %s", err_info)
+                    errores_intentos.append(err_info)
                     continue
 
         if not texto_final:
+            detalle_fallos = " // ".join(errores_intentos) if errores_intentos else "Sin respuesta de modelos"
             texto_final = (
-                "El Agente Tridente IA no pudo completar la consulta en este momento. "
-                "Por favor verifica la conexión o intenta nuevamente en unos segundos."
+                f"El Agente Tridente IA no pudo completar la consulta en este momento.\n\n"
+                f"> 🔍 **Diagnóstico de conexión:** `{detalle_fallos}`\n\n"
+                f"Por favor verifica la conexión o intenta nuevamente en unos segundos."
             )
 
         texto_limpio, datos_estructurados = self._extraer_datos_estructurados(texto_final)

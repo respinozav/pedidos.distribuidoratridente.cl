@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     defontana_api_user: str = ""
     defontana_api_password: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.6-flash"
     postgrest_url: str = "http://localhost:3000"
     postgrest_schema: str = "bdtridente"
     postgrest_token: str = ""
