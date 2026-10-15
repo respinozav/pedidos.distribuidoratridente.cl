@@ -206,7 +206,7 @@ export default function CotizadorManager() {
       setIsSearchingProducts(true);
       try {
         const res = await api.get("/admin/productos", {
-          params: { search: term, page_size: 10 },
+          params: { search: term, page_size: 15 },
         });
         const items = res.data?.items || (Array.isArray(res.data) ? res.data : []);
         setProductResults(items);
@@ -220,6 +220,22 @@ export default function CotizadorManager() {
 
     return () => clearTimeout(timer);
   }, [productSearch]);
+
+  // Cerrar dropdown al hacer clic fuera del buscador
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        productSearchRef.current &&
+        !productSearchRef.current.contains(event.target)
+      ) {
+        setShowProductDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Agregar producto a la cotización
   const handleAddProduct = (product) => {
@@ -257,8 +273,7 @@ export default function CotizadorManager() {
       ];
     });
 
-    setProductSearch("");
-    setShowProductDropdown(false);
+    // Mantenemos el dropdown abierto y la búsqueda activa para permitir seleccionar múltiples productos
   };
 
   // Modificar cantidad de un ítem
@@ -839,6 +854,20 @@ export default function CotizadorManager() {
                   if (productResults.length > 0) setShowProductDropdown(true);
                 }}
               />
+              {productSearch && (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary border-start-0"
+                  onClick={() => {
+                    setProductSearch("");
+                    setProductResults([]);
+                    setShowProductDropdown(false);
+                  }}
+                  title="Limpiar búsqueda"
+                >
+                  <X size={15} />
+                </button>
+              )}
               {isSearchingProducts && (
                 <span className="input-group-text bg-white text-muted">
                   <RefreshCw size={15} className="spinner-border spinner-border-sm" />
@@ -846,45 +875,84 @@ export default function CotizadorManager() {
               )}
             </div>
 
-            {/* Dropdown de productos */}
+            {/* Dropdown de productos con soporte para multiselección */}
             {showProductDropdown && productResults.length > 0 && (
               <div
-                className="dropdown-menu show w-100 position-absolute shadow-sm"
+                className="dropdown-menu show w-100 position-absolute shadow-lg"
                 style={{
                   top: "100%",
                   zIndex: 1050,
-                  maxHeight: "260px",
+                  maxHeight: "320px",
                   overflowY: "auto",
                   background: "#ffffff",
                   border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  marginTop: "4px",
                 }}
               >
+                {/* Cabecera informativa para multi-selección */}
+                <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-light border-bottom text-muted small">
+                  <span style={{ fontSize: "0.82rem" }}>
+                    Haz clic o presiona <strong>[+]</strong> para agregar varios productos a la cotización:
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary py-0 px-2 d-flex align-items-center gap-1"
+                    style={{ fontSize: "0.75rem" }}
+                    onClick={() => setShowProductDropdown(false)}
+                    title="Cerrar lista desplegable"
+                  >
+                    <span>Listo / Cerrar</span>
+                    <X size={13} />
+                  </button>
+                </div>
+
                 {productResults.map((p) => {
                   const hasCaja = Boolean(p.tiene_caja && p.cantidad_caja);
+                  const existingItem = quoteItems.find((item) => item.producto_id === p.id);
+                  const qtyInQuote = existingItem ? existingItem.cantidad : 0;
+
                   return (
-                    <button
+                    <div
                       key={p.id}
-                      type="button"
-                      className="dropdown-item d-flex justify-content-between align-items-center py-2 border-bottom"
+                      className="dropdown-item d-flex justify-content-between align-items-center py-2 px-3 border-bottom"
+                      style={{ cursor: "pointer", transition: "background-color 0.15s ease" }}
                       onClick={() => handleAddProduct(p)}
                     >
-                      <div className="d-flex flex-column text-start">
-                        <strong className="text-truncate" style={{ maxWidth: "450px" }}>
+                      <div className="d-flex flex-column text-start flex-grow-1 me-2" style={{ minWidth: 0 }}>
+                        <strong className="text-truncate text-dark" style={{ maxWidth: "480px" }}>
                           {p.nombre}
                         </strong>
                         <small className="text-muted">
-                          SKU: <code>{p.codigo || "S/C"}</code> · Stock: {p.cantidad} un.
+                          SKU: <code className="text-secondary">{p.codigo || "S/C"}</code> · Stock: {p.cantidad} un.
                           {hasCaja && ` · Empaque: Caja x${p.cantidad_caja}`}
                           {p.afecto ? " · Afecto a IVA" : " · Exento"}
                         </small>
                       </div>
-                      <div className="d-flex align-items-center gap-2">
+                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                        {qtyInQuote > 0 && (
+                          <span
+                            className="badge bg-success-subtle text-success border border-success"
+                            style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                          >
+                            ✓ Agregado (x{qtyInQuote})
+                          </span>
+                        )}
                         <span className="fw-bold text-primary">{money.format(p.precio)}</span>
-                        <span className="btn btn-sm btn-primary p-1">
-                          <Plus size={14} />
-                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary p-1 d-flex align-items-center justify-content-center"
+                          style={{ width: "26px", height: "26px", borderRadius: "6px" }}
+                          title="Agregar una unidad más"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddProduct(p);
+                          }}
+                        >
+                          <Plus size={15} />
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
