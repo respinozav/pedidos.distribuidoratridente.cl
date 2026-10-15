@@ -17,6 +17,8 @@ import {
   ChevronRight,
   Database,
   Cpu,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { api } from "../../services/api";
@@ -56,9 +58,111 @@ export default function AgenteTridenteIA() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isListening, setIsListening] = useState(false);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const baseTextBeforeListeningRef = useRef("");
+
+  // Limpiar reconocimiento de voz al desmontar componente
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
+  // Alternar dictado por voz (Speech-to-Text)
+  const toggleSpeechRecognition = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      Swal.fire({
+        icon: "info",
+        title: "Navegador no compatible",
+        text: "Tu navegador no cuenta con soporte nativo para reconocimiento de voz Web Speech API. Te recomendamos usar Google Chrome, Microsoft Edge o Safari.",
+        confirmButtonColor: "#0284c7",
+      });
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "es-CL";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognitionRef.current = recognition;
+
+      baseTextBeforeListeningRef.current = inputMessage;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
+
+        for (let i = 0; i < event.results.length; ++i) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        const speechText = (finalTranscript + " " + interimTranscript).trim();
+        const base = baseTextBeforeListeningRef.current.trim();
+        const combined = base ? `${base} ${speechText}` : speechText;
+
+        setInputMessage(combined);
+
+        if (textareaRef.current) {
+          textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.warn("Reconocimiento de voz:", event.error);
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          Swal.fire({
+            icon: "warning",
+            title: "Permiso de micrófono requerido",
+            text: "Por favor permite el acceso al micrófono en la barra de tu navegador para dictar mensajes al Agente Tridente IA.",
+            confirmButtonColor: "#0284c7",
+          });
+        }
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error("Error al iniciar reconocimiento de voz:", err);
+      setIsListening(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -161,6 +265,13 @@ export default function AgenteTridenteIA() {
 
   // Enviar mensaje
   const handleSendMessage = async (textToSend = null) => {
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+      setIsListening(false);
+    }
+
     const text = (textToSend !== null ? textToSend : inputMessage).trim();
     if (!text || sendingMessage) return;
 
@@ -493,8 +604,24 @@ export default function AgenteTridenteIA() {
 
         {/* FORMULARIO DE ENTRADA INFERIOR */}
         <footer className="chat-input-bar">
+          {isListening && (
+            <div className="speech-listening-banner">
+              <span className="speech-pulse-indicator"></span>
+              <span className="speech-listening-text">
+                Escuchando voz... habla con claridad y se irá escribiendo en tiempo real
+              </span>
+              <button
+                type="button"
+                className="btn-stop-speech"
+                onClick={toggleSpeechRecognition}
+              >
+                Pausar dictado
+              </button>
+            </div>
+          )}
+
           <form
-            className="chat-input-form"
+            className={`chat-input-form ${isListening ? "is-voice-listening" : ""}`}
             onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage();
@@ -504,12 +631,29 @@ export default function AgenteTridenteIA() {
               ref={textareaRef}
               rows={1}
               className="chat-textarea"
-              placeholder="Pregúntale al Agente Tridente IA sobre stock, ventas o predicciones..."
+              placeholder={
+                isListening
+                  ? "🎙️ Escuchando tu voz... (habla con naturalidad)"
+                  : "Pregúntale al Agente Tridente IA sobre stock, ventas o predicciones..."
+              }
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={sendingMessage}
             />
+
+            {/* BOTÓN MICRÓFONO (SPEECH TO TEXT) */}
+            <button
+              type="button"
+              className={`btn-mic-message ${isListening ? "listening" : ""}`}
+              onClick={toggleSpeechRecognition}
+              disabled={sendingMessage}
+              title={isListening ? "Detener dictado por voz" : "Dictar mensaje por voz"}
+            >
+              {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
+
+            {/* BOTÓN ENVIAR */}
             <button
               type="submit"
               className="btn-send-message"
@@ -519,6 +663,7 @@ export default function AgenteTridenteIA() {
               <Send size={18} />
             </button>
           </form>
+
           <div className="chat-disclaimer">
             <span>
               El Agente Tridente IA utiliza Gemini Pro y herramientas de solo lectura sobre
