@@ -13,6 +13,7 @@ import PublicidadManager from "./pages/admin/PublicidadManager";
 import CotizadorManager from "./pages/admin/CotizadorManager";
 import AdminAccount from "./pages/admin/AdminAccount";
 import PromoBannerCarousel from "./components/PromoBannerCarousel";
+import ProductImageLightbox from "./components/ProductImageLightbox";
 import StockAlertBell from "./components/admin/StockAlertBell";
 import PublicPublicidades from "./pages/public/PublicPublicidades";
 import VendedorVentasRealizadas from "./pages/admin/VendedorVentasRealizadas";
@@ -3411,6 +3412,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   const [suggestionModalOpen, setSuggestionModalOpen] = useState(false);
   const [stockNoticeProduct, setStockNoticeProduct] = useState(null);
   const [pendingStockNotices, setPendingStockNotices] = useState([]);
+  const [lightboxProduct, setLightboxProduct] = useState(null);
 
   // Cargar avisos de stock pendientes de este cliente
   useEffect(() => {
@@ -4244,9 +4246,30 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
 
                       return (
                         <article className={`product ${isOutOfStock ? "product-out-of-stock" : ""}`} key={product.id}>
-                          <div className="product-image position-relative">
+                          <div
+                            className={`product-image position-relative ${productImageSource(product.imagen_url) ? "product-image-clickable" : ""}`}
+                            onClick={() => {
+                              if (productImageSource(product.imagen_url)) {
+                                setLightboxProduct(product);
+                              }
+                            }}
+                            role={productImageSource(product.imagen_url) ? "button" : undefined}
+                            tabIndex={productImageSource(product.imagen_url) ? 0 : undefined}
+                            onKeyDown={(e) => {
+                              if ((e.key === "Enter" || e.key === " ") && productImageSource(product.imagen_url)) {
+                                e.preventDefault();
+                                setLightboxProduct(product);
+                              }
+                            }}
+                            title={productImageSource(product.imagen_url) ? "Ver imagen en grande" : undefined}
+                          >
                             {productImageSource(product.imagen_url) ? (
-                              <img src={productImageSource(product.imagen_url)} alt={product.nombre} />
+                              <>
+                                <img src={productImageSource(product.imagen_url)} alt={product.nombre} />
+                                <span className="product-image-zoom-hint" aria-hidden="true" title="Ampliar imagen">
+                                  <Eye size={15} />
+                                </span>
+                              </>
                             ) : (
                               <Package size={30} />
                             )}
@@ -4474,6 +4497,12 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         customer={customer}
         onClose={() => setStockNoticeProduct(null)}
         onConfirm={handleConfirmStockNotice}
+      />
+    )}
+    {lightboxProduct && (
+      <ProductImageLightbox
+        product={lightboxProduct}
+        onClose={() => setLightboxProduct(null)}
       />
     )}
     </>
