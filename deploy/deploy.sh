@@ -76,6 +76,9 @@ echo -e "${BLUE}Usuario:${NC} $(whoami)"
 echo -e "${BLUE}Fecha:${NC} $(date)"
 
 CURRENT_BRANCH=$(git branch --show-current)
+if [ -z "$CURRENT_BRANCH" ]; then
+    CURRENT_BRANCH="main"
+fi
 CURRENT_COMMIT=$(git rev-parse --short HEAD)
 
 echo -e "${BLUE}Branch:${NC} $CURRENT_BRANCH"
@@ -112,9 +115,10 @@ NGINX_ROOT="/var/www/html/$PROJECT_NAME"
 echo ""
 echo -e "${YELLOW}>> Actualizando repositorio...${NC}"
 
-git reset --hard HEAD || true
+git checkout main 2>/dev/null || true
+git fetch origin main || true
+git reset --hard origin/main || true
 git clean -fd deploy/ || true
-git pull origin "$CURRENT_BRANCH"
 
 NEW_COMMIT=$(git rev-parse --short HEAD)
 

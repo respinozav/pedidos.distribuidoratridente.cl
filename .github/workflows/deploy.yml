@@ -17,10 +17,12 @@ jobs:
           key: ${{ secrets.AWS_PRIVATE_KEY }}
           script: |
             cd /var/www/pedidos.distribuidoratridente.cl
-            git reset --hard HEAD
+            git checkout main 2>/dev/null || true
+            git fetch origin main
+            git reset --hard origin/main
             git clean -fd
             cd deploy
-            bash deploy.sh || echo "deploy.sh finalizo con advertencias, procediendo con diagnostico..."
+            bash deploy.sh || echo "deploy.sh finalizo con advertencias, procediendo..."
             
             REPORT_FILE="/tmp/status_ports.txt"
             echo "==========================================" > "$REPORT_FILE" 2>&1
