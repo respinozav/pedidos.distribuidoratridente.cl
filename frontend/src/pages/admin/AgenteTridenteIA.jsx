@@ -50,6 +50,15 @@ const QUICK_PROMPTS = [
   },
 ];
 
+const mapearNombreHerramienta = (nombre) => {
+  const mapa = {
+    consultar_productos: "Catálogo de productos",
+    consultar_pedidos_recientes: "Historial de ventas",
+    consultar_metricas_generales: "Métricas comerciales",
+  };
+  return mapa[nombre] || nombre.replace(/_/g, " ");
+};
+
 export default function AgenteTridenteIA() {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
@@ -425,10 +434,10 @@ export default function AgenteTridenteIA() {
         <div className="sidebar-footer">
           <div className="badge-agent-info">
             <Database size={13} className="text-info" />
-            <span>PostgREST v12</span>
+            <span>Datos en tiempo real</span>
             <span className="dot-divider">•</span>
             <Cpu size={13} className="text-success" />
-            <span>Gemini Pro</span>
+            <span>Tridente IA</span>
           </div>
         </div>
       </aside>
@@ -489,10 +498,9 @@ export default function AgenteTridenteIA() {
               </div>
               <h3 className="welcome-title">¡Hola! Soy tu Agente Tridente IA</h3>
               <p className="welcome-desc">
-                Estoy conectado en tiempo real a las tablas de <strong>productos</strong> y{" "}
-                <strong>pedidos</strong> vía <strong>PostgREST</strong>. Puedo responder tus
-                preguntas, proyectar necesidades de reposición y graficar métricas clave de la
-                distribuidora.
+                Estoy conectado en tiempo real al inventario de <strong>productos</strong> y{" "}
+                <strong>pedidos</strong> de la distribuidora. Puedo responder tus
+                preguntas, proyectar necesidades de reposición y resumir métricas clave del negocio.
               </p>
 
               <div className="quick-prompts-grid">
@@ -533,12 +541,14 @@ export default function AgenteTridenteIA() {
                     )}
 
                     <div className="message-bubble">
-                      {/* Badge de herramientas PostgREST utilizadas */}
+                      {/* Badge de herramientas utilizadas */}
                       {!isUser && msg.herramientas_usadas && msg.herramientas_usadas.length > 0 && (
                         <div className="tools-used-badge">
                           <Database size={12} className="text-info" />
-                          <span>Consultó PostgREST:</span>
-                          <strong>{msg.herramientas_usadas.join(", ")}</strong>
+                          <span>Información verificada:</span>
+                          <strong>
+                            {msg.herramientas_usadas.map(mapearNombreHerramienta).join(" • ")}
+                          </strong>
                         </div>
                       )}
 
@@ -578,7 +588,7 @@ export default function AgenteTridenteIA() {
                 );
               })}
 
-              {/* Indicador de escritura y consulta a PostgREST */}
+              {/* Indicador de escritura y consulta al sistema */}
               {sendingMessage && (
                 <div className="chat-message-row is-assistant">
                   <div className="message-avatar">
@@ -588,7 +598,7 @@ export default function AgenteTridenteIA() {
                     <div className="d-flex align-items-center gap-2 mb-1">
                       <Sparkles size={14} className="text-warning spinning" />
                       <span className="fw-semibold text-muted small">
-                        Consultando datos vía PostgREST y analizando...
+                        Consultando información del sistema y analizando...
                       </span>
                     </div>
                     <div className="typing-dots">
@@ -669,8 +679,8 @@ export default function AgenteTridenteIA() {
 
           <div className="chat-disclaimer">
             <span>
-              El Agente Tridente IA utiliza Gemini Pro y herramientas de solo lectura sobre
-              PostgreSQL / PostgREST para analizar datos y proyecciones.
+              El Agente Tridente IA analiza ventas, stock y pedidos en tiempo real para
+              brindarte reportes y proyecciones comerciales.
             </span>
           </div>
         </footer>

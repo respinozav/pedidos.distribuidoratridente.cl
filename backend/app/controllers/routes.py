@@ -1944,7 +1944,7 @@ def send_ia_chat_message(
 ) -> dict[str, Any]:
     """
     Envía un mensaje al Agente Tridente IA.
-    El backend orquesta la consulta a PostgREST / PostgreSQL mediante Function Calling con Gemini,
+    El backend orquesta la consulta al catálogo y pedidos en tiempo real mediante Function Calling con Gemini,
     analiza stock/pedidos, extrae datos estructurados de gráficos y devuelve la respuesta.
     """
     servicio_ia = AgenteIAService(database, current_admin)
