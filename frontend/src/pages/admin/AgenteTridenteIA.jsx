@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Bot,
   Plus,
@@ -541,9 +542,11 @@ export default function AgenteTridenteIA() {
                         </div>
                       )}
 
-                      {/* Contenido en Markdown */}
+                      {/* Contenido en Markdown con soporte para Tablas GFM */}
                       <div className="message-text-content">
-                        <ReactMarkdown>{msg.contenido}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.contenido}
+                        </ReactMarkdown>
                       </div>
 
                       {/* Gráficos dinámicos estructurados */}

@@ -17,43 +17,63 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 SYSTEM_INSTRUCTION = """
-Eres el **Agente Tridente IA**, el asistente inteligente de analítica comercial y abastecimiento de Distribuidora Tridente.
-Tu objetivo es ayudar a los administradores a supervisar y optimizar el negocio:
-- Consultar stock de productos, precios y estados.
-- Analizar el historial y frecuencia de pedidos de clientes.
-- Realizar análisis predictivos de abastecimiento (identificar qué productos se van a agotar pronto según la rotación de pedidos y sugerir cantidades de reposición).
-- Generar métricas ejecutivas, resúmenes de facturación y rankings de ventas.
+Eres el **Agente Tridente IA**, el asistente inteligente de analítica comercial, rotación de inventario y abastecimiento de Distribuidora Tridente.
+Tu objetivo es asesorar a los administradores, dueños y ejecutivos comerciales de la empresa.
 
-Tienes herramientas disponibles para consultar en tiempo real las tablas de productos y pedidos a través del servicio PostgREST/PostgreSQL:
+AUDIENCIA Y TONO:
+- Tu interlocutor es un usuario comercial/administrativo, **NO ES INFORMÁTICO NI PROGRAMADOR**.
+- **ESTÁ ESTRICTAMENTE PROHIBIDO responder con objetos JSON, código fuente o estructuras de programación en el texto que lee el usuario.**
+- NUNCA uses bloques de código con sintaxis técnica como `{"clave": "valor"}` o `[{"id": 1}]`.
+- Comunícate siempre en un tono profesional, claro, ejecutivo y cordial en español (Chile).
+
+REGLA DE ORO: SIEMPRE RESPONDE CON TABLAS MARKDOWN
+1. Toda lista de productos, stock, compras, pedidos, clientes, precios o métricas DEBE presentarse obligatoriamente en formato de **TABLA MARKDOWN** (`| Encabezado | ... |`).
+   Ejemplo de tabla obligatoria:
+   | Código | Producto | Stock Actual | Precio | Estado |
+   | :--- | :--- | :---: | :---: | :--- |
+   | PROD-01 | Arroz Extra 1kg | 24 un. | $1.290 | Disponible ✅ |
+   | PROD-05 | Aceite Vegetal 900ml | 4 un. | $2.190 | Stock Crítico ⚠️ |
+
+2. Formato de datos en las tablas:
+   - Precios: siempre con formato de moneda en pesos chilenos (ej: `$1.500`, `$24.990`).
+   - Cantidades: siempre con unidad de medida clara (ej: `15 un.`, `8 cajas`, `0 un. (Agotado 🚨)`).
+   - Fechas: formato legible día/mes/año (ej: `14/10/2026`).
+
+3. Complementa la tabla con un análisis ejecutivo:
+   - Inicia con una breve introducción directa al grano.
+   - Presenta la tabla con los datos solicitados.
+   - Concluye con recomendaciones comerciales prácticas (ej: sugerencias de compra, clientes que han dejado de comprar, etc.).
+
+HERRAMIENTAS EN TIEMPO REAL:
+Tienes herramientas disponibles para consultar las tablas de la base de datos vía PostgREST:
 1. `consultar_productos`: busca productos por nombre/código, stock o estado.
 2. `consultar_pedidos_recientes`: consulta pedidos y compras de clientes en un rango de días.
 3. `consultar_metricas_generales`: obtiene métricas consolidadas (top más vendidos, total facturado, stock crítico).
+DEBES utilizarlas para responder con datos reales y actualizados. No inventes números ni productos.
 
-REGLAS FUNDAMENTALES:
-1. Siempre que te pregunten sobre productos, stock, ventas, clientes o pedidos, DEBES utilizar las herramientas para consultar los datos reales antes de responder. No inventes datos.
-2. Sé conciso, profesional y estratégico en tus conclusiones.
-3. Si el usuario te pide un gráfico, visualización, comparativa o números para visualizar, DEBES incluir en tu respuesta un bloque JSON estructurado con el formato:
+GRÁFICOS Y PREDICCIONES INTERACTIVAS (OPCIONAL):
+Si el usuario te pide expresamente un gráfico o una predicción visual, presenta primero tu explicación y tu TABLA con los datos para el usuario, y luego, al final absoluto de tu mensaje, incluye el bloque técnico de datos para el motor gráfico con uno de estos formatos:
 
 ```json
 {
   "type": "chart",
   "chartType": "bar",
   "title": "Top 5 Productos más Vendidos",
-  "description": "Comparativa de unidades vendidas en los últimos 30 días",
+  "description": "Comparativa de unidades vendidas",
   "data": {
-    "labels": ["Producto A", "Producto B", "Producto C"],
+    "labels": ["Prod A", "Prod B"],
     "datasets": [
       {
-        "label": "Unidades Vendidas",
-        "data": [120, 85, 43],
-        "backgroundColor": ["#0ea5e9", "#10b981", "#f59e0b"]
+        "label": "Unidades",
+        "data": [120, 85],
+        "backgroundColor": ["#0ea5e9", "#10b981"]
       }
     ]
   }
 }
 ```
 
-4. Si realizas un análisis predictivo de compras, además de tu explicación, incluye un bloque estructurado:
+o para predicción:
 ```json
 {
   "type": "prediction",
@@ -70,6 +90,7 @@ REGLAS FUNDAMENTALES:
   ]
 }
 ```
+Nota: El sistema extraerá automáticamente este bloque para dibujar el gráfico y lo ocultará del texto del mensaje para que el usuario nunca vea código JSON. Por eso es vital que antes del bloque hayas incluido la tabla con los datos para que el usuario pueda leerla directamente.
 """
 
 GEMINI_TOOLS_DECLARATION = [
@@ -139,6 +160,43 @@ GEMINI_TOOLS_DECLARATION = [
 ]
 
 
+def _json_a_tabla_markdown(datos: Any) -> str:
+    """Convierte listas de diccionarios o estructuras JSON a una tabla Markdown legible."""
+    if isinstance(datos, dict):
+        for key in ("productos", "pedidos", "items", "datos", "data", "ventas", "ranking"):
+            if key in datos and isinstance(datos[key], list) and datos[key]:
+                datos = datos[key]
+                break
+        else:
+            filas = [
+                "| Parámetro | Valor |",
+                "| :--- | :--- |",
+            ]
+            for k, v in datos.items():
+                k_bonito = str(k).replace("_", " ").title()
+                filas.append(f"| {k_bonito} | {v} |")
+            return "\n".join(filas)
+
+    if isinstance(datos, list) and datos:
+        if all(isinstance(elem, dict) for elem in datos):
+            columnas = []
+            for elem in datos:
+                for k in elem.keys():
+                    if k not in columnas:
+                        columnas.append(k)
+            if not columnas:
+                return ""
+            encabezados = [c.replace("_", " ").title() for c in columnas]
+            header_row = "| " + " | ".join(encabezados) + " |"
+            sep_row = "| " + " | ".join([":---"] * len(columnas)) + " |"
+            filas = [header_row, sep_row]
+            for elem in datos:
+                valores = [str(elem.get(c, "-")).replace("\n", " ") for c in columnas]
+                filas.append("| " + " | ".join(valores) + " |")
+            return "\n".join(filas)
+    return ""
+
+
 class AgenteIAService:
     def __init__(self, db: Session, usuario: Usuario):
         self.db = db
@@ -175,29 +233,91 @@ class AgenteIAService:
         return {"error": f"Herramienta '{nombre}' desconocida."}
 
     def _extraer_datos_estructurados(self, texto: str) -> tuple[str, dict[str, Any] | None]:
-        """Extrae bloques de json de tipo 'chart' o 'prediction'."""
+        """
+        Extrae datos para gráficos/predicciones y limpia el texto para garantizar
+        que NUNCA se muestre código JSON a los usuarios no técnicos.
+        Convierte cualquier bloque JSON residual en tablas Markdown legibles.
+        """
         datos_estructurados = None
-        bloques = re.findall(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", texto)
-        for b in bloques:
-            try:
-                parsed = json.loads(b)
-                if isinstance(parsed, dict) and parsed.get("type") in ("chart", "prediction"):
-                    datos_estructurados = parsed
-                    break
-            except Exception:
-                continue
+        texto_limpio = texto
 
-        if not datos_estructurados:
-            match = re.search(r'(\{\s*"type"\s*:\s*"(?:chart|prediction)"[\s\S]*?\n\})', texto)
-            if match:
+        # 1. Buscar bloques de código ```json ... ``` o ``` ... ```
+        patron_bloques = r"```(?:json)?\s*([\s\S]*?)\s*```"
+        bloques = re.findall(patron_bloques, texto)
+
+        for contenido_bloque in bloques:
+            contenido_trim = contenido_bloque.strip()
+            # Intentar parsear como JSON si tiene forma de estructura
+            if (contenido_trim.startswith("{") and contenido_trim.endswith("}")) or (
+                contenido_trim.startswith("[") and contenido_trim.endswith("]")
+            ):
                 try:
-                    parsed = json.loads(match.group(1))
-                    if isinstance(parsed, dict):
-                        datos_estructurados = parsed
+                    parsed = json.loads(contenido_trim)
+                    if isinstance(parsed, dict) and parsed.get("type") in ("chart", "prediction"):
+                        if not datos_estructurados:
+                            datos_estructurados = parsed
+                        # Eliminar el bloque de código del texto para no mostrar JSON al usuario
+                        texto_limpio = re.sub(
+                            r"```(?:json)?\s*" + re.escape(contenido_bloque) + r"\s*```",
+                            "",
+                            texto_limpio,
+                        )
+                    else:
+                        # Si es un JSON de datos (ej: lista de productos o métricas), convertir a tabla Markdown
+                        tabla_md = _json_a_tabla_markdown(parsed)
+                        if tabla_md:
+                            # Reemplazar el bloque de código técnico por una tabla Markdown elegante
+                            texto_limpio = re.sub(
+                                r"```(?:json)?\s*" + re.escape(contenido_bloque) + r"\s*```",
+                                f"\n\n{tabla_md}\n\n",
+                                texto_limpio,
+                            )
+                        else:
+                            texto_limpio = re.sub(
+                                r"```(?:json)?\s*" + re.escape(contenido_bloque) + r"\s*```",
+                                "",
+                                texto_limpio,
+                            )
                 except Exception:
                     pass
 
-        return texto, datos_estructurados
+        # 2. Si no se encontró en bloques ``` pero viene un JSON suelto {"type": "chart" | "prediction"}
+        if not datos_estructurados:
+            match = re.search(r'(\{\s*"type"\s*:\s*"(?:chart|prediction)"[\s\S]*?\})', texto_limpio)
+            if match:
+                try:
+                    parsed = json.loads(match.group(1))
+                    if isinstance(parsed, dict) and parsed.get("type") in ("chart", "prediction"):
+                        datos_estructurados = parsed
+                        texto_limpio = texto_limpio.replace(match.group(1), "")
+                except Exception:
+                    pass
+
+        # 3. Limpiar cualquier JSON residual si la IA respondió directamente con JSON sin formato
+        texto_limpio_strip = texto_limpio.strip()
+        if (texto_limpio_strip.startswith("{") and texto_limpio_strip.endswith("}")) or (
+            texto_limpio_strip.startswith("[") and texto_limpio_strip.endswith("]")
+        ):
+            try:
+                parsed_residual = json.loads(texto_limpio_strip)
+                tabla_residual = _json_a_tabla_markdown(parsed_residual)
+                if tabla_residual:
+                    texto_limpio = (
+                        "A continuación se detallan los datos consultados en formato de tabla:\n\n"
+                        + tabla_residual
+                    )
+            except Exception:
+                pass
+
+        # 4. Asegurarse de que no quede texto vacío si todo era el bloque del gráfico
+        texto_limpio = re.sub(r"\n{3,}", "\n\n", texto_limpio).strip()
+        if not texto_limpio and datos_estructurados:
+            if datos_estructurados.get("type") == "chart":
+                texto_limpio = f"A continuación se presenta el gráfico: **{datos_estructurados.get('title', 'Análisis Gráfico')}**."
+            elif datos_estructurados.get("type") == "prediction":
+                texto_limpio = f"A continuación se presentan las estimaciones: **{datos_estructurados.get('title', 'Sugerencias de Abastecimiento')}**."
+
+        return texto_limpio, datos_estructurados
 
     def procesar_mensaje(self, chat_id: UUID, mensaje_usuario: str) -> dict[str, Any]:
         """
