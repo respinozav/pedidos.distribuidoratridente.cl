@@ -73,11 +73,11 @@ jobs:
                   echo "" | sudo tee -a "$ENV_FILE" > /dev/null
                   echo "# Google Gemini AI" | sudo tee -a "$ENV_FILE" > /dev/null
                   echo "GEMINI_API_KEY=$G_KEY" | sudo tee -a "$ENV_FILE" > /dev/null
-                  echo "GEMINI_MODEL=gemini-2.5-flash" | sudo tee -a "$ENV_FILE" > /dev/null
+                  echo "GEMINI_MODEL=gemini-3.6-flash" | sudo tee -a "$ENV_FILE" > /dev/null
                   echo "Agregado GEMINI_API_KEY a $ENV_FILE" >> "$REPORT_FILE" 2>&1
                 else
                   sudo sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=$G_KEY|" "$ENV_FILE"
-                  sudo sed -i "s|^GEMINI_MODEL=.*|GEMINI_MODEL=gemini-2.5-flash|" "$ENV_FILE"
+                  sudo sed -i "s|^GEMINI_MODEL=.*|GEMINI_MODEL=gemini-3.6-flash|" "$ENV_FILE"
                   echo "Actualizado GEMINI_API_KEY en $ENV_FILE" >> "$REPORT_FILE" 2>&1
                 fi
                 sudo chmod 644 "$ENV_FILE"

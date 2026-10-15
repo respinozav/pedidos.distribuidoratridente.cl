@@ -378,21 +378,32 @@ class AgenteIAService:
                 "created_at": msg_ia.created_at.isoformat(),
             }
 
-        # Armar historial de contents para la API de Gemini
+        # Armar historial de contents para la API de Gemini (omitiendo mensajes de error del sistema)
         contents: list[dict[str, Any]] = []
         for m in chat.mensajes:
             if m.id == msg_user.id:
                 continue
+            contenido_m = m.contenido.strip() if m.contenido else ""
+            if not contenido_m or contenido_m.startswith("⚠️") or "no pudo completar la consulta" in contenido_m:
+                continue
             role = "user" if m.rol == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": m.contenido}]})
+            contents.append({"role": role, "parts": [{"text": contenido_m}]})
         contents.append({"role": "user", "parts": [{"text": mensaje_usuario}]})
 
-        modelos_candidatos = [
-            "gemini-flash-latest",
-            "gemini-pro-latest",
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
+        modelo_env = getattr(settings, "gemini_model", None)
+        if modelo_env in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"):
+            modelo_env = "gemini-3.6-flash"
+
+        lista_base = [
+            modelo_env if modelo_env else "gemini-3.6-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash",
         ]
+        # Eliminar duplicados manteniendo orden de prioridad
+        modelos_candidatos = list(dict.fromkeys(lista_base))
 
         herramientas_ejecutadas: list[str] = []
         texto_final = ""
