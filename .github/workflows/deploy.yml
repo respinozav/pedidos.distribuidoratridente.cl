@@ -95,10 +95,8 @@ jobs:
             # Imprimir en consola de GitHub Actions
             cat "$REPORT_FILE"
             
-            # Publicar archivo en los directorios web para consulta directa via HTTPS
+            # Limpiar archivo de diagnóstico de directorios públicos
+            rm -f "$REPORT_FILE" 2>/dev/null || true
             for WEB_DIR in /var/www/html/pedidos.distribuidoratridente.cl /var/www/distribuidoratridente.cl/frontend/dist /var/www/pedidos.distribuidoratridente.cl/frontend/dist; do
-              if [ -d "$WEB_DIR" ]; then
-                sudo cp "$REPORT_FILE" "$WEB_DIR/status_ports.txt" 2>/dev/null || true
-                sudo chmod 644 "$WEB_DIR/status_ports.txt" 2>/dev/null || true
-              fi
+              sudo rm -f "$WEB_DIR/status_ports.txt" 2>/dev/null || true
             done
