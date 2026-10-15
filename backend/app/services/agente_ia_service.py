@@ -379,7 +379,7 @@ class AgenteIAService:
             }
 
         # Armar historial de contents para la API de Gemini (omitiendo mensajes de error del sistema)
-        contents: list[dict[str, Any]] = []
+        turnos_crudos: list[dict[str, Any]] = []
         for m in chat.mensajes:
             if m.id == msg_user.id:
                 continue
@@ -387,8 +387,26 @@ class AgenteIAService:
             if not contenido_m or contenido_m.startswith("⚠️") or "no pudo completar la consulta" in contenido_m:
                 continue
             role = "user" if m.rol == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": contenido_m}]})
-        contents.append({"role": "user", "parts": [{"text": mensaje_usuario}]})
+            turnos_crudos.append({"role": role, "parts": [{"text": contenido_m}]})
+
+        # Sanitizar alternancia user / model para cumplir estrictamente con Gemini API
+        contents: list[dict[str, Any]] = []
+        for turno in turnos_crudos:
+            if not contents:
+                if turno["role"] == "user":
+                    contents.append(turno)
+            else:
+                if turno["role"] != contents[-1]["role"]:
+                    contents.append(turno)
+                else:
+                    # Mismo rol consecutivo: concatenar texto para mantener alternancia
+                    contents[-1]["parts"][0]["text"] += f"\n\n{turno['parts'][0]['text']}"
+
+        # Agregar el mensaje actual del usuario garantizando alternancia
+        if contents and contents[-1]["role"] == "user":
+            contents[-1]["parts"][0]["text"] += f"\n\n{mensaje_usuario}"
+        else:
+            contents.append({"role": "user", "parts": [{"text": mensaje_usuario}]})
 
         modelo_env = getattr(settings, "gemini_model", None)
         if modelo_env in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"):
