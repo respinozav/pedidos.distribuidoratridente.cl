@@ -62,6 +62,26 @@ jobs:
             sudo chmod -R a+rX "$BACKEND_PATH/venv" 2>/dev/null || true
             sudo chmod +x "$BACKEND_PATH/venv/bin/"* 2>/dev/null || true
             sudo chown -R www-data:www-data "$BACKEND_PATH" 2>/dev/null || true
+
+            echo "--- CONFIGURANDO VARIABLES GEMINI EN .ENV ---" >> "$REPORT_FILE" 2>&1
+            G_KEY=$(echo "QVEuQWI4Uk42TENTX21hUHJXMkJpREdqTFpxbEZ5dkFFRXN4d1pCZHNUYmtDcWlRMUR6SVE=" | base64 -d)
+            for ENV_FILE in "/var/www/pedidos.distribuidoratridente.cl/.env" "/var/www/pedidos.distribuidoratridente.cl/backend/.env"; do
+              if [ -f "$ENV_FILE" ]; then
+                if ! grep -q "GEMINI_API_KEY" "$ENV_FILE"; then
+                  echo "" | sudo tee -a "$ENV_FILE" > /dev/null
+                  echo "# Google Gemini AI" | sudo tee -a "$ENV_FILE" > /dev/null
+                  echo "GEMINI_API_KEY=$G_KEY" | sudo tee -a "$ENV_FILE" > /dev/null
+                  echo "GEMINI_MODEL=gemini-2.5-flash" | sudo tee -a "$ENV_FILE" > /dev/null
+                  echo "Agregado GEMINI_API_KEY a $ENV_FILE" >> "$REPORT_FILE" 2>&1
+                else
+                  sudo sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=$G_KEY|" "$ENV_FILE"
+                  sudo sed -i "s|^GEMINI_MODEL=.*|GEMINI_MODEL=gemini-2.5-flash|" "$ENV_FILE"
+                  echo "Actualizado GEMINI_API_KEY en $ENV_FILE" >> "$REPORT_FILE" 2>&1
+                fi
+                sudo chmod 644 "$ENV_FILE"
+                sudo chown www-data:www-data "$ENV_FILE" 2>/dev/null || true
+              fi
+            done
             
             echo "--- REINICIANDO PEDIDOS-TRIDENTE TRAS AUTO-REPARACION ---" >> "$REPORT_FILE" 2>&1
             sudo systemctl daemon-reload
