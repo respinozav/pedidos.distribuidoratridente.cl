@@ -264,19 +264,20 @@ def generar_cotizacion_pdf(cotizacion: CotizacionInput, database: Session | None
     if cant_desglose:
         items_label += f" ({', '.join(cant_desglose)})"
 
+    total_formatted = f"${total_acumulado:,.0f}.- Imp. Inc.".replace(",", ".")
     footer_rows = [
         [
             Paragraph(f"<font color='#667085'><b>{html.escape(items_label)}</b></font>", styles["CotizadorDetails"]),
             "TOTAL",
-            _currency(total_acumulado),
+            total_formatted,
         ]
     ]
 
-    total_table = Table(footer_rows, colWidths=[92 * mm, 43 * mm, 39 * mm], hAlign="RIGHT")
+    total_table = Table(footer_rows, colWidths=[74 * mm, 30 * mm, 70 * mm], hAlign="RIGHT")
     total_table.setStyle(TableStyle([
         ("TOPPADDING", (0, 0), (-1, -1), 8),
         ("FONTNAME", (1, 0), (-1, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (1, 0), (-1, -1), 13),
+        ("FONTSIZE", (1, 0), (-1, -1), 11),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("ALIGN", (2, 0), (2, -1), "RIGHT"),
