@@ -48,7 +48,29 @@ jobs:
             
             echo "--- ULTIMOS LOGS DE JOURNALCTL ---" >> "$REPORT_FILE" 2>&1
             sudo journalctl -u pedidos-tridente -u distribuidoratridente-api -n 40 --no-pager >> "$REPORT_FILE" 2>&1 || true
+
+            echo "--- AUTO-REPARACION DE BACKEND Y VENV ---" >> "$REPORT_FILE" 2>&1
+            BACKEND_PATH="/var/www/pedidos.distribuidoratridente.cl/backend"
+            if ! "$BACKEND_PATH/venv/bin/uvicorn" --version >> "$REPORT_FILE" 2>&1; then
+              echo "Reconstruyendo $BACKEND_PATH/venv..." >> "$REPORT_FILE" 2>&1
+              sudo rm -rf "$BACKEND_PATH/venv" "$BACKEND_PATH/.venv" 2>/dev/null || true
+              sudo python3 -m venv "$BACKEND_PATH/venv"
+              sudo "$BACKEND_PATH/venv/bin/pip" install --upgrade pip >> "$REPORT_FILE" 2>&1 || true
+              sudo "$BACKEND_PATH/venv/bin/pip" install -r "$BACKEND_PATH/requirements.txt" >> "$REPORT_FILE" 2>&1 || true
+            fi
+            sudo chmod -R a+rX "$BACKEND_PATH/venv" 2>/dev/null || true
+            sudo chmod +x "$BACKEND_PATH/venv/bin/"* 2>/dev/null || true
+            sudo chown -R www-data:www-data "$BACKEND_PATH" 2>/dev/null || true
             
+            echo "--- REINICIANDO PEDIDOS-TRIDENTE TRAS AUTO-REPARACION ---" >> "$REPORT_FILE" 2>&1
+            sudo systemctl daemon-reload
+            sudo systemctl restart pedidos-tridente
+            sleep 4
+            sudo systemctl status pedidos-tridente --no-pager >> "$REPORT_FILE" 2>&1 || true
+            
+            echo "--- TEST FINAL PUERTO 8001 ---" >> "$REPORT_FILE" 2>&1
+            curl -s -i "http://127.0.0.1:8001/api/health" >> "$REPORT_FILE" 2>&1 || echo "Fallo al conectar a 8001" >> "$REPORT_FILE" 2>&1
+
             # Imprimir en consola de GitHub Actions
             cat "$REPORT_FILE"
             

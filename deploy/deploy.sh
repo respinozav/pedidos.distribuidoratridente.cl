@@ -197,8 +197,9 @@ if [ "$IS_BACKEND" = true ]; then
     ########################################
 
     ACTIVE_VENV="$BACKEND_DIR/venv"
-    if [ ! -f "$ACTIVE_VENV/bin/uvicorn" ]; then
-        echo "Creando entorno virtual en $ACTIVE_VENV..."
+    if ! "$ACTIVE_VENV/bin/python" -c "import sys; sys.exit(0)" 2>/dev/null || [ ! -x "$ACTIVE_VENV/bin/uvicorn" ]; then
+        echo "Entorno virtual no existe o está dañado. Recreando $ACTIVE_VENV..."
+        rm -rf "$ACTIVE_VENV" "$BACKEND_DIR/.venv" 2>/dev/null || true
         python3 -m venv "$ACTIVE_VENV"
     fi
 
