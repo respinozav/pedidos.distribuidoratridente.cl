@@ -610,7 +610,7 @@ def list_products(
     search: str | None = Query(default=None, max_length=180),
     customer_id: UUID | None = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=15, ge=1, le=500),
+    page_size: int = Query(default=15, ge=1, le=2000),
 ) -> ProductPage:
     statement = (
         select(Producto)
@@ -659,7 +659,7 @@ def list_admin_products(
     search: str | None = Query(default=None, max_length=180),
     stock_lt: int | None = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=10, ge=1, le=500),
+    page_size: int = Query(default=10, ge=1, le=2000),
 ) -> ProductPage:
     statement = (
         select(Producto)

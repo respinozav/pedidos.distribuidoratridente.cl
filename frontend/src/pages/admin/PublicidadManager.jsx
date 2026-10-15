@@ -120,10 +120,25 @@ const [error, setError] = useState("");
     }
 
     try {
-      const resProds = await api.get("/admin/productos", { params: { page: 1, page_size: 1000 } });
-      setProducts(resProds.data.items || []);
+      const resProds = await api.get("/admin/productos", { params: { page: 1, page_size: 500 } });
+      let allItems = resProds.data?.items || (Array.isArray(resProds.data) ? resProds.data : []);
+      const total = resProds.data?.total || allItems.length;
+      if (total > allItems.length) {
+        const remainingPages = Math.ceil(total / 500);
+        for (let p = 2; p <= remainingPages; p++) {
+          try {
+            const moreRes = await api.get("/admin/productos", { params: { page: p, page_size: 500 } });
+            if (moreRes.data?.items?.length) {
+              allItems = allItems.concat(moreRes.data.items);
+            }
+          } catch (e) {
+            console.warn("Error cargando página adicional de productos", p, e);
+          }
+        }
+      }
+      setProducts(allItems);
     } catch (err) {
-      console.warn("No fue posible cargar el selector de productos", err);
+      console.error("No fue posible cargar el selector de productos", err);
     } finally {
       setLoading(false);
     }
@@ -208,13 +223,19 @@ const [error, setError] = useState("");
     setIsProductDropdownOpen(false);
   }
 
+  function matchProductCategory(p, catId) {
+    if (!catId) return true;
+    const pCatId = p.categoria_id || p.categoria?.id;
+    if (pCatId && String(pCatId).toLowerCase() === String(catId).toLowerCase()) {
+      return true;
+    }
+    return false;
+  }
+
   const filteredProductsForSelect = useMemo(() => {
     let list = products;
     if (selectedCategoryFilter) {
-      list = list.filter((p) => {
-        const catId = p.categoria_id || (p.categoria && p.categoria.id);
-        return String(catId) === String(selectedCategoryFilter);
-      });
+      list = list.filter((p) => matchProductCategory(p, selectedCategoryFilter));
     }
     const q = (productSearchText || "").trim().toLowerCase();
     if (q) {
@@ -911,14 +932,13 @@ const [error, setError] = useState("");
                             value={selectedCategoryFilter}
                             onChange={(e) => {
                               setSelectedCategoryFilter(e.target.value);
+                              setIsProductDropdownOpen(true);
                             }}
                             style={{ borderRadius: "8px", height: "38px" }}
                           >
                             <option value="">Todas las categorías ({products.length})</option>
                             {categories.map((cat) => {
-                              const count = products.filter(
-                                (p) => String(p.categoria_id || p.categoria?.id) === String(cat.id)
-                              ).length;
+                              const count = products.filter((p) => matchProductCategory(p, cat.id)).length;
                               return (
                                 <option key={cat.id} value={cat.id}>
                                   {cat.nombre} {count > 0 ? `(${count})` : ""}
