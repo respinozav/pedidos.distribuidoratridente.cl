@@ -85,20 +85,40 @@ jobs:
               fi
             done
             
-            echo "--- REINICIANDO PEDIDOS-TRIDENTE TRAS AUTO-REPARACION ---" >> "$REPORT_FILE" 2>&1
+            echo "--- REINICIANDO SERVICIOS TRAS AUTO-REPARACION ---" >> "$REPORT_FILE" 2>&1
             sudo systemctl daemon-reload
-            sudo systemctl restart pedidos-tridente
+            sudo systemctl restart pedidos-tridente distribuidoratridente-api 2>/dev/null || true
             sleep 4
-            sudo systemctl status pedidos-tridente --no-pager >> "$REPORT_FILE" 2>&1 || true
+            sudo systemctl status pedidos-tridente distribuidoratridente-api --no-pager >> "$REPORT_FILE" 2>&1 || true
             
             echo "--- TEST FINAL PUERTO 8001 ---" >> "$REPORT_FILE" 2>&1
             curl -s -i "http://127.0.0.1:8001/api/health" >> "$REPORT_FILE" 2>&1 || echo "Fallo al conectar a 8001" >> "$REPORT_FILE" 2>&1
 
+            echo "--- TEST REAL GEMINI DIRECTO EN EL SERVIDOR ---" >> "$REPORT_FILE" 2>&1
+            cd "$BACKEND_PATH"
+            sudo -u www-data "$BACKEND_PATH/venv/bin/python" -c "
+from app.core.config import get_settings
+cfg = get_settings()
+print('API KEY PRESENTE:', bool(cfg.gemini_api_key))
+print('API KEY PREFIX:', (cfg.gemini_api_key[:6] + '...') if cfg.gemini_api_key else 'VACIA')
+print('MODELO CONFIG:', cfg.gemini_model)
+import httpx
+url = f'https://generativelanguage.googleapis.com/v1beta/models/{cfg.gemini_model}:generateContent?key={cfg.gemini_api_key}'
+try:
+    r = httpx.post(url, json={'contents': [{'parts': [{'text': 'hola'}]}]}, timeout=10.0)
+    print('GEMINI STATUS:', r.status_code)
+    print('GEMINI BODY:', r.text[:300])
+except Exception as e:
+    print('GEMINI EXCEPTION:', type(e), e)
+" >> "$REPORT_FILE" 2>&1 || true
+
             # Imprimir en consola de GitHub Actions
             cat "$REPORT_FILE"
             
-            # Limpiar archivo de diagnóstico de directorios públicos
-            rm -f "$REPORT_FILE" 2>/dev/null || true
+            # Publicar archivo en los directorios web para consulta directa via HTTPS
             for WEB_DIR in /var/www/html/pedidos.distribuidoratridente.cl /var/www/distribuidoratridente.cl/frontend/dist /var/www/pedidos.distribuidoratridente.cl/frontend/dist; do
-              sudo rm -f "$WEB_DIR/status_ports.txt" 2>/dev/null || true
+              if [ -d "$WEB_DIR" ]; then
+                sudo cp "$REPORT_FILE" "$WEB_DIR/status_diag.txt" 2>/dev/null || true
+                sudo chmod 644 "$WEB_DIR/status_diag.txt" 2>/dev/null || true
+              fi
             done
