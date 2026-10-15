@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Megaphone,
   Plus,
@@ -21,6 +21,9 @@ import {
   CheckSquare,
   Square,
   Search,
+  Filter,
+  ChevronDown,
+  Check,
   ShieldCheck,
   Globe,
   Copy,
@@ -40,6 +43,12 @@ import {
 export default function PublicidadManager() {
   const [publicidades, setPublicidades] = useState([]);
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("");
+  const [productSearchText, setProductSearchText] = useState("");
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
+  const productDropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
 const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -104,7 +113,14 @@ const [error, setError] = useState("");
     }
 
     try {
-      const resProds = await api.get("/admin/productos", { params: { page: 1, page_size: 500 } });
+      const resCats = await api.get("/categorias");
+      setCategories(resCats.data || []);
+    } catch (err) {
+      console.warn("No fue posible cargar las categorías", err);
+    }
+
+    try {
+      const resProds = await api.get("/admin/productos", { params: { page: 1, page_size: 1000 } });
       setProducts(resProds.data.items || []);
     } catch (err) {
       console.warn("No fue posible cargar el selector de productos", err);
@@ -117,6 +133,21 @@ const [error, setError] = useState("");
     loadData();
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        productDropdownRef.current &&
+        !productDropdownRef.current.contains(event.target)
+      ) {
+        setIsProductDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   function getNextCorrelativeOrder() {
     if (!publicidades || publicidades.length === 0) return 1;
     const maxOrder = Math.max(0, ...publicidades.map((p) => Number(p.orden) || 0));
@@ -127,6 +158,9 @@ const [error, setError] = useState("");
     setEditingId(null);
     const firstProd = products.length > 0 ? products[0] : null;
     setSelectedProduct(firstProd);
+    setSelectedCategoryFilter("");
+    setProductSearchText("");
+    setIsProductDropdownOpen(false);
     const nextOrder = getNextCorrelativeOrder();
     setFormData({
       producto_id: firstProd ? firstProd.id : "",
@@ -145,6 +179,10 @@ const [error, setError] = useState("");
     setEditingId(pub.id);
     const prod = products.find((p) => p.id === pub.producto_id) || pub.producto || null;
     setSelectedProduct(prod);
+    const catId = prod?.categoria_id || prod?.categoria?.id || "";
+    setSelectedCategoryFilter(catId ? String(catId) : "");
+    setProductSearchText("");
+    setIsProductDropdownOpen(false);
 
     setFormData({
       producto_id: pub.producto_id || (prod ? prod.id : ""),
@@ -159,15 +197,40 @@ const [error, setError] = useState("");
     setIsModalOpen(true);
   }
 
-  function handleProductSelect(e) {
-    const prodId = e.target.value;
-    const prod = products.find((p) => p.id === prodId) || null;
+  function handleSelectProductItem(prod) {
     setSelectedProduct(prod);
     setFormData((prev) => ({
       ...prev,
-      producto_id: prodId || "",
+      producto_id: prod ? prod.id : "",
       titulo: prod ? `OFERTA ${prod.nombre.toUpperCase()}` : prev.titulo,
     }));
+    setProductSearchText("");
+    setIsProductDropdownOpen(false);
+  }
+
+  const filteredProductsForSelect = useMemo(() => {
+    let list = products;
+    if (selectedCategoryFilter) {
+      list = list.filter((p) => {
+        const catId = p.categoria_id || (p.categoria && p.categoria.id);
+        return String(catId) === String(selectedCategoryFilter);
+      });
+    }
+    const q = (productSearchText || "").trim().toLowerCase();
+    if (q) {
+      list = list.filter((p) => {
+        const nameMatch = (p.nombre || "").toLowerCase().includes(q);
+        const codeMatch = (p.codigo || "").toLowerCase().includes(q);
+        return nameMatch || codeMatch;
+      });
+    }
+    return list;
+  }, [products, selectedCategoryFilter, productSearchText]);
+
+  function handleProductSelect(e) {
+    const prodId = e.target.value;
+    const prod = products.find((p) => p.id === prodId) || null;
+    handleSelectProductItem(prod);
   }
 
   function handleOrderBlur() {
@@ -823,51 +886,281 @@ const [error, setError] = useState("");
 
                 {/* CAMPOS DEL FORMULARIO */}
                 <div className="row g-3">
-                  {/* 1. Selector de Producto Existente Obligatorio */}
+                  {/* 1. Selector de Producto con Filtro de Categoría y Buscador Tipeable */}
                   <div className="col-md-12">
-                    <label className="form-label fw-bold">
-                      Producto en Promoción * <small className="text-muted fw-normal">(Se utilizará la foto, código y precio del producto)</small>
-                    </label>
-                    <select
-                      className="form-select"
-                      value={formData.producto_id || ""}
-                      onChange={handleProductSelect}
-                      required
-                    >
-                      <option value="">-- Selecciona un producto del catálogo --</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          [{p.codigo}] {p.nombre} — ${Number(p.precio).toLocaleString("es-CL")}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="d-flex flex-column gap-2">
+                      <div className="d-flex justify-content-between align-items-center flex-wrap gap-1">
+                        <label className="form-label fw-bold mb-0">
+                          Producto en Promoción *
+                        </label>
+                        <small className="text-muted fw-normal">
+                          (Se utilizará la foto, código y precio del producto)
+                        </small>
+                      </div>
 
-                    {/* Resumen del producto seleccionado con foto */}
-                    {selectedProduct && (
-                      <div className="d-flex align-items-center gap-3 p-2 mt-2 bg-light rounded border">
-                        <div className="pub-table-thumb" style={{ width: "48px", height: "48px" }}>
-                          {formatImageSrc(selectedProduct.imagen_url) ? (
-                            <img
-                              src={formatImageSrc(selectedProduct.imagen_url)}
-                              alt={selectedProduct.nombre}
-                            />
-                          ) : (
-                            <div className="pub-table-thumb-fallback">
-                              <Package size={20} />
-                            </div>
-                          )}
+                      {/* Fila con Filtro de Categoría y Buscador Abierto Tipeable */}
+                      <div className="row g-2 align-items-end">
+                        {/* Filtro por Categoría */}
+                        <div className="col-12 col-md-5">
+                          <label className="form-label small text-muted fw-semibold mb-1 d-flex align-items-center gap-1">
+                            <Filter size={13} className="text-primary" />
+                            Filtrar por Categoría:
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={selectedCategoryFilter}
+                            onChange={(e) => {
+                              setSelectedCategoryFilter(e.target.value);
+                            }}
+                            style={{ borderRadius: "8px", height: "38px" }}
+                          >
+                            <option value="">Todas las categorías ({products.length})</option>
+                            {categories.map((cat) => {
+                              const count = products.filter(
+                                (p) => String(p.categoria_id || p.categoria?.id) === String(cat.id)
+                              ).length;
+                              return (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.nombre} {count > 0 ? `(${count})` : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
                         </div>
-                        <div className="flex-grow-1">
-                          <strong className="d-block text-dark font-medium" style={{ fontSize: "0.92rem" }}>
-                            {selectedProduct.nombre}
-                          </strong>
-                          <div className="d-flex gap-3 text-muted" style={{ fontSize: "0.82rem" }}>
-                            <span>Cód: <strong>{selectedProduct.codigo}</strong></span>
-                            <span>Precio: <strong className="text-success">${Number(selectedProduct.precio).toLocaleString("es-CL")}</strong></span>
+
+                        {/* Buscador Interactivo Tipeable */}
+                        <div className="col-12 col-md-7">
+                          <label className="form-label small text-muted fw-semibold mb-1 d-flex align-items-center justify-content-between">
+                            <span className="d-flex align-items-center gap-1">
+                              <Search size={13} className="text-primary" />
+                              Buscar producto:
+                            </span>
+                            <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                              {filteredProductsForSelect.length} disponible(s)
+                            </span>
+                          </label>
+                          <div className="position-relative" ref={productDropdownRef}>
+                            <div className="input-group" style={{ height: "38px" }}>
+                              <span className="input-group-text bg-white border-end-0 text-muted" style={{ borderRadius: "8px 0 0 8px" }}>
+                                <Search size={15} />
+                              </span>
+                              <input
+                                ref={searchInputRef}
+                                type="text"
+                                className="form-control border-start-0 border-end-0"
+                                placeholder={
+                                  selectedProduct
+                                    ? `[${selectedProduct.codigo}] ${selectedProduct.nombre}`
+                                    : "Tipea nombre o SKU para buscar..."
+                                }
+                                value={productSearchText}
+                                onChange={(e) => {
+                                  setProductSearchText(e.target.value);
+                                  setIsProductDropdownOpen(true);
+                                }}
+                                onFocus={() => setIsProductDropdownOpen(true)}
+                                style={{ fontSize: "0.88rem" }}
+                              />
+                              {productSearchText && (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary border-start-0 border-end-0"
+                                  onClick={() => {
+                                    setProductSearchText("");
+                                    searchInputRef.current?.focus();
+                                  }}
+                                  title="Limpiar búsqueda"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary border-start-0"
+                                onClick={() => setIsProductDropdownOpen(!isProductDropdownOpen)}
+                                style={{ borderRadius: "0 8px 8px 0" }}
+                                title="Abrir / Cerrar lista"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  style={{
+                                    transform: isProductDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                    transition: "transform 0.2s ease",
+                                  }}
+                                />
+                              </button>
+                            </div>
+
+                            {/* DROPDOWN FLOTANTE ABIERTO AL ESCRIBIR O HACER CLICK */}
+                            {isProductDropdownOpen && (
+                              <div
+                                className="position-absolute w-100 bg-white border rounded-3 shadow-lg p-2"
+                                style={{
+                                  top: "100%",
+                                  left: 0,
+                                  marginTop: "4px",
+                                  zIndex: 1060,
+                                  maxHeight: "280px",
+                                  overflowY: "auto",
+                                }}
+                              >
+                                <div className="d-flex justify-content-between align-items-center px-2 py-1 mb-1 border-bottom text-muted small">
+                                  <span style={{ fontSize: "0.78rem" }}>
+                                    {selectedCategoryFilter
+                                      ? `Categoría: ${categories.find((c) => String(c.id) === String(selectedCategoryFilter))?.nombre || "Filtrada"}`
+                                      : "Catálogo completo"}
+                                  </span>
+                                  <span className="badge bg-light text-dark border" style={{ fontSize: "0.72rem" }}>
+                                    {filteredProductsForSelect.length} resultado(s)
+                                  </span>
+                                </div>
+
+                                {filteredProductsForSelect.length === 0 ? (
+                                  <div className="p-3 text-center text-muted">
+                                    <Package size={26} className="text-secondary opacity-50 mb-1" />
+                                    <p className="mb-1 fw-semibold small">No se encontraron productos</p>
+                                    <small style={{ fontSize: "0.78rem" }}>
+                                      Intenta con otro término o cambia la categoría seleccionada.
+                                    </small>
+                                  </div>
+                                ) : (
+                                  <div className="d-flex flex-column gap-1">
+                                    {filteredProductsForSelect.map((p) => {
+                                      const isSelected = selectedProduct?.id === p.id;
+                                      return (
+                                        <div
+                                          key={p.id}
+                                          onClick={() => handleSelectProductItem(p)}
+                                          className={`d-flex align-items-center gap-2 p-2 rounded-2 cursor-pointer ${
+                                            isSelected
+                                              ? "bg-primary-subtle border border-primary"
+                                              : "border border-transparent"
+                                          }`}
+                                          style={{
+                                            cursor: "pointer",
+                                            transition: "background-color 0.15s ease",
+                                            backgroundColor: isSelected ? "rgba(13, 110, 253, 0.08)" : undefined,
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            if (!isSelected) e.currentTarget.style.backgroundColor = "#f8f9fa";
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            if (!isSelected) e.currentTarget.style.backgroundColor = "transparent";
+                                          }}
+                                        >
+                                          {/* Miniatura del producto */}
+                                          <div
+                                            style={{
+                                              width: "36px",
+                                              height: "36px",
+                                              borderRadius: "6px",
+                                              overflow: "hidden",
+                                              backgroundColor: "#f1f5f9",
+                                              flexShrink: 0,
+                                              display: "flex",
+                                              alignItems: "center",
+                                              justifyContent: "center",
+                                            }}
+                                          >
+                                            {formatImageSrc(p.imagen_url) ? (
+                                              <img
+                                                src={formatImageSrc(p.imagen_url)}
+                                                alt={p.nombre}
+                                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                                onError={(e) => {
+                                                  e.target.style.display = "none";
+                                                }}
+                                              />
+                                            ) : (
+                                              <Package size={16} className="text-muted" />
+                                            )}
+                                          </div>
+
+                                          {/* Datos del producto */}
+                                          <div className="flex-grow-1 overflow-hidden" style={{ minWidth: 0 }}>
+                                            <div className="d-flex align-items-center gap-1">
+                                              <span className="badge bg-light text-secondary border px-1" style={{ fontSize: "0.72rem" }}>
+                                                {p.codigo}
+                                              </span>
+                                              <span className="fw-semibold text-dark text-truncate" style={{ fontSize: "0.85rem" }}>
+                                                {p.nombre}
+                                              </span>
+                                            </div>
+                                            <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: "0.76rem" }}>
+                                              {p.categoria?.nombre && (
+                                                <span className="text-muted opacity-75">{p.categoria.nombre}</span>
+                                              )}
+                                              <span className="text-success fw-bold">
+                                                ${Number(p.precio).toLocaleString("es-CL")}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          {/* Indicador de seleccionado */}
+                                          {isSelected && (
+                                            <Check size={16} className="text-primary flex-shrink-0" />
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    )}
+
+                      {/* Resumen del producto seleccionado con foto */}
+                      {selectedProduct ? (
+                        <div className="d-flex align-items-center gap-3 p-2 bg-light rounded border mt-2">
+                          <div className="pub-table-thumb" style={{ width: "48px", height: "48px" }}>
+                            {formatImageSrc(selectedProduct.imagen_url) ? (
+                              <img
+                                src={formatImageSrc(selectedProduct.imagen_url)}
+                                alt={selectedProduct.nombre}
+                              />
+                            ) : (
+                              <div className="pub-table-thumb-fallback">
+                                <Package size={20} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2 flex-wrap">
+                              <strong className="text-dark font-medium" style={{ fontSize: "0.92rem" }}>
+                                {selectedProduct.nombre}
+                              </strong>
+                              {selectedProduct.categoria?.nombre && (
+                                <span className="badge bg-white text-secondary border" style={{ fontSize: "0.72rem" }}>
+                                  {selectedProduct.categoria.nombre}
+                                </span>
+                              )}
+                            </div>
+                            <div className="d-flex gap-3 text-muted flex-wrap" style={{ fontSize: "0.82rem" }}>
+                              <span>Cód: <strong>{selectedProduct.codigo}</strong></span>
+                              <span>Precio: <strong className="text-success">${Number(selectedProduct.precio).toLocaleString("es-CL")}</strong></span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => {
+                              setIsProductDropdownOpen(true);
+                              searchInputRef.current?.focus();
+                            }}
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            Cambiar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="alert alert-warning py-2 px-3 small d-flex align-items-center gap-2 mt-2 mb-0">
+                          <AlertCircle size={16} />
+                          <span>Debes seleccionar un producto para vincular a este banner promocional.</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* 2. Título Principal (Campo Separado) */}
