@@ -89,20 +89,20 @@ jobs:
             echo "--- TEST REAL GEMINI DIRECTO EN EL SERVIDOR ---" >> "$REPORT_FILE" 2>&1
             cd "$BACKEND_PATH" || true
             sudo -u www-data "$BACKEND_PATH/venv/bin/python" -c "
-from app.core.config import get_settings
-cfg = get_settings()
-print('API KEY PRESENTE:', bool(cfg.gemini_api_key))
-print('API KEY PREFIX:', (cfg.gemini_api_key[:6] + '...') if cfg.gemini_api_key else 'VACIA')
-print('MODELO CONFIG:', cfg.gemini_model)
-import httpx
-url = f'https://generativelanguage.googleapis.com/v1beta/models/{cfg.gemini_model}:generateContent?key={cfg.gemini_api_key}'
-try:
-    r = httpx.post(url, json={'contents': [{'parts': [{'text': 'hola'}]}]}, timeout=10.0)
-    print('GEMINI STATUS:', r.status_code)
-    print('GEMINI BODY:', r.text[:300])
-except Exception as e:
-    print('GEMINI EXCEPTION:', type(e), e)
-" >> "$REPORT_FILE" 2>&1 || true
+              from app.core.config import get_settings
+              cfg = get_settings()
+              print('API KEY PRESENTE:', bool(cfg.gemini_api_key))
+              print('API KEY PREFIX:', (cfg.gemini_api_key[:6] + '...') if cfg.gemini_api_key else 'VACIA')
+              print('MODELO CONFIG:', cfg.gemini_model)
+              import httpx
+              url = f'https://generativelanguage.googleapis.com/v1beta/models/{cfg.gemini_model}:generateContent?key={cfg.gemini_api_key}'
+              try:
+                  r = httpx.post(url, json={'contents': [{'parts': [{'text': 'hola'}]}]}, timeout=10.0)
+                  print('GEMINI STATUS:', r.status_code)
+                  print('GEMINI BODY:', r.text[:300])
+              except Exception as e:
+                  print('GEMINI EXCEPTION:', type(e), e)
+            " >> "$REPORT_FILE" 2>&1 || true
 
             # Imprimir en consola de GitHub Actions
             cat "$REPORT_FILE"
