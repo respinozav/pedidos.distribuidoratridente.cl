@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Calculator, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -10,6 +10,7 @@ import CommercialSettings from "./pages/admin/CommercialSettings";
 import NotificationLogs from "./pages/admin/NotificationLogs";
 import SessionLogs from "./pages/admin/SessionLogs";
 import PublicidadManager from "./pages/admin/PublicidadManager";
+import CotizadorManager from "./pages/admin/CotizadorManager";
 import AdminAccount from "./pages/admin/AdminAccount";
 import PromoBannerCarousel from "./components/PromoBannerCarousel";
 import StockAlertBell from "./components/admin/StockAlertBell";
@@ -1833,7 +1834,7 @@ const [loading, setLoading] = useState(true);
     (!adminProfile && storedRole === "VENDEDOR");
   const isAdmin = !isColaborador && !isVendedor;
 
-  const allowedColaboradorKeys = ["categories", "products", "orders", "profile"];
+  const allowedColaboradorKeys = ["categories", "products", "orders", "profile", "cotizador"];
   const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "customers", "profile"];
 
   const initialDefaultSection = isVendedor
@@ -2047,6 +2048,7 @@ const [loading, setLoading] = useState(true);
     [ClipboardList, "Pedidos", "orders", true],
     [DollarSign, "Créditos", "credits", true],
     [Megaphone, "Publicidad", "publicidad", true],
+    [Calculator, "Cotizador", "cotizador", true],
     ...(isAdmin ? [[Bot, "Agente Tridente IA", "ia_agent", true]] : []),
   ];
 
@@ -2250,6 +2252,10 @@ const [loading, setLoading] = useState(true);
       ) : activeSection === "publicidad" ? (
         <section className="admin-workspace">
           <PublicidadManager />
+        </section>
+      ) : activeSection === "cotizador" ? (
+        <section className="admin-workspace">
+          <CotizadorManager />
         </section>
       ) : activeSection === "ia_agent" ? (
         <section className="admin-workspace">

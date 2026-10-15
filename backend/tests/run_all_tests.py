@@ -11,6 +11,7 @@ import tests.test_producto_notificar_stock as tpns
 import tests.test_negative_stock_order as tnso
 import tests.test_publicidad_email as tpe
 import tests.test_product_suggestion as tps
+import tests.test_cotizador as tcot
 
 
 class MonkeyPatch:
@@ -91,7 +92,10 @@ def main():
     tps.test_send_product_suggestion_notification_success()
     tps.test_send_product_suggestion_no_admins()
     tps.test_route_submit_product_suggestion()
-    print(">>> ALL 31 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    tcot.test_cotizador_validations()
+    tcot.test_cotizador_pdf_generation()
+    tcot.test_cotizador_role_permissions()
+    print(">>> ALL 34 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ from uuid import UUID
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy import String, cast, func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import (
@@ -23,12 +23,21 @@ from app.api.dependencies import (
     SuperAdminUser,
     VendedorUser,
 )
+from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     create_customer_access_token,
     create_vendor_customer_token,
     hash_password,
     verify_password,
+)
+from app.services.cotizador_service import (
+    CotizacionInput,
+    CotizacionEmailInput,
+    CotizacionWhatsAppInput,
+    generar_cotizacion_pdf,
+    enviar_cotizacion_email,
+    enviar_cotizacion_whatsapp,
 )
 from app.models.entities import (
     Categoria,
@@ -612,7 +621,8 @@ def list_products(
     if category_id:
         statement = statement.where(Producto.categoria_id == category_id)
     if search:
-        statement = statement.where(Producto.nombre.ilike(f"%{search}%"))
+        term = f"%{search.strip()}%"
+        statement = statement.where(or_(Producto.nombre.ilike(term), Producto.codigo.ilike(term)))
     customer = database.get(Cliente, customer_id) if customer_id else None
     total = database.scalar(select(func.count()).select_from(statement.subquery())) or 0
     products = database.scalars(
@@ -660,7 +670,8 @@ def list_admin_products(
     if category_id:
         statement = statement.where(Producto.categoria_id == category_id)
     if search:
-        statement = statement.where(Producto.nombre.ilike(f"%{search}%"))
+        term = f"%{search.strip()}%"
+        statement = statement.where(or_(Producto.nombre.ilike(term), Producto.codigo.ilike(term)))
     if stock_lt is not None:
         statement = statement.where(Producto.cantidad < stock_lt)
     total = database.scalar(select(func.count()).select_from(statement.subquery())) or 0
@@ -805,7 +816,7 @@ def sync_product_to_defontana(product_id: UUID, database: DatabaseSession, _: Ad
 
 
 @router.get("/clientes", response_model=list[CustomerOutput], tags=["Clientes"])
-def list_customers(database: DatabaseSession, _: AdminOrVendedorUser) -> list[Cliente]:
+def list_customers(database: DatabaseSession, _: AdminUser) -> list[Cliente]:
     return list(database.scalars(select(Cliente).options(selectinload(Cliente.direcciones)).where(Cliente.eliminado_at.is_(None))))
 
 
@@ -1993,6 +2004,51 @@ def diagnostico_ia() -> dict[str, Any]:
             "error_tipo": type(ex).__name__,
             "error_detalle": str(ex),
         }
+
+
+# ==============================================================================
+# ENDPOINTS DEL MÓDULO COTIZADOR (ADMINISTRADOR Y COLABORADOR)
+# ==============================================================================
+
+@router.post("/cotizaciones/pdf", tags=["Cotizador"])
+def cotizador_generar_pdf(
+    cotizacion: CotizacionInput,
+    database: DatabaseSession,
+    _: NotVendedorUser,
+) -> Response:
+    """Genera y descarga el PDF de la cotización con la misma estructura y diseño de Pedidos."""
+    if not cotizacion.items:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debe incluir al menos un producto en la cotización.")
+    pdf_bytes, filename = generar_cotizacion_pdf(cotizacion, database)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+@router.post("/cotizaciones/enviar-correo", tags=["Cotizador"])
+def cotizador_enviar_correo(
+    payload: CotizacionEmailInput,
+    database: DatabaseSession,
+    _: NotVendedorUser,
+) -> dict[str, Any]:
+    """Envía la cotización en PDF adjunta por correo electrónico al cliente."""
+    return enviar_cotizacion_email(database, payload)
+
+
+@router.post("/cotizaciones/enviar-whatsapp", tags=["Cotizador"])
+def cotizador_enviar_whatsapp(
+    payload: CotizacionWhatsAppInput,
+    database: DatabaseSession,
+    _: NotVendedorUser,
+) -> dict[str, Any]:
+    """Envía la cotización y su PDF adjunto por WhatsApp utilizando Evolution API."""
+    return enviar_cotizacion_whatsapp(database, payload)
+
 
 
 
