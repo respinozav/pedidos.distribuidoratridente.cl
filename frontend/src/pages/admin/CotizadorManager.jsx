@@ -26,6 +26,9 @@ import {
   X,
   FileSpreadsheet,
   Info,
+  History,
+  Calendar,
+  ChevronDown,
 } from "lucide-react";
 import { api } from "../../services/api";
 import StockAlertBell from "../../components/admin/StockAlertBell";
@@ -69,6 +72,21 @@ export default function CotizadorManager() {
     direccion: "",
     comuna: "",
   });
+
+  // ---------------------------------------------------------------------------
+  // ESTADO: HISTORIAL DE CLIENTE COTIZANTE
+  // ---------------------------------------------------------------------------
+  const [cotizantesList, setCotizantesList] = useState([]);
+  const [isLoadingCotizantes, setIsLoadingCotizantes] = useState(false);
+  const [cotizanteSearchQuery, setCotizanteSearchQuery] = useState("");
+  const [showCotizanteDropdown, setShowCotizanteDropdown] = useState(false);
+  const [selectedCotizante, setSelectedCotizante] = useState(null);
+  const cotizanteSearchRef = useRef(null);
+
+  // Modal de productos cotizados
+  const [isProductsModalOpen, setIsProductsModalOpen] = useState(false);
+  const [isLoadingCotizanteHistory, setIsLoadingCotizanteHistory] = useState(false);
+  const [cotizanteHistory, setCotizanteHistory] = useState([]);
 
   // ---------------------------------------------------------------------------
   // ESTADO: BUSCADOR DE PRODUCTOS
@@ -192,6 +210,168 @@ export default function CotizadorManager() {
   };
 
   // ---------------------------------------------------------------------------
+  // GESTIÓN DE CLIENTES COTIZANTES (Historial)
+  // ---------------------------------------------------------------------------
+  const fetchCotizantes = useCallback(async (query = "") => {
+    setIsLoadingCotizantes(true);
+    try {
+      const res = await api.get("/cotizaciones/cotizantes", {
+        params: query ? { q: query } : {},
+      });
+      setCotizantesList(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.warn("No fue posible cargar clientes cotizantes:", err);
+    } finally {
+      setIsLoadingCotizantes(false);
+    }
+  }, []);
+
+  const filteredCotizantes = useMemo(() => {
+    const q = cotizanteSearchQuery.trim().toLowerCase();
+    if (!q) return cotizantesList.slice(0, 12);
+    const qClean = q.replace(/[^0-9kK]/g, "");
+    return cotizantesList
+      .filter((c) => {
+        const nombre = (c.nombre || c.razon_social || "").toLowerCase();
+        const rut = (c.rut || "").toLowerCase();
+        const rutClean = (c.rut_clean || "").toLowerCase();
+        const correo = (c.correo || "").toLowerCase();
+        return (
+          nombre.includes(q) ||
+          rut.includes(q) ||
+          correo.includes(q) ||
+          (qClean && rutClean.includes(qClean))
+        );
+      })
+      .slice(0, 15);
+  }, [cotizantesList, cotizanteSearchQuery]);
+
+  const handleSelectCotizante = (cot) => {
+    setSelectedCotizante(cot);
+    const nombre = cot.nombre || cot.razon_social || "";
+    const rut = cot.rut || "";
+    const correo = cot.correo || "";
+    const telefono = cot.telefono || "";
+    const direccion = cot.direccion || "";
+    const comuna = cot.comuna || "";
+
+    setClientForm({
+      nombre,
+      rut,
+      correo,
+      telefono,
+      direccion,
+      comuna,
+    });
+
+    if (correo && isValidEmail(correo)) {
+      setEmailDestino(correo);
+    }
+    if (telefono && isValidPhone(telefono)) {
+      setPhoneDestino(telefono);
+    }
+
+    setCotizanteSearchQuery(rut ? `${rut} · ${nombre}` : nombre);
+    setShowCotizanteDropdown(false);
+  };
+
+  const handleClearCotizante = () => {
+    setSelectedCotizante(null);
+    setCotizanteSearchQuery("");
+    setClientForm({
+      nombre: "",
+      rut: "",
+      correo: "",
+      telefono: "",
+      direccion: "",
+      comuna: "",
+    });
+    setEmailDestino("");
+    setPhoneDestino("");
+  };
+
+  const handleSwitchToCotizante = () => {
+    setClientMode("cotizante");
+    if (cotizantesList.length === 0) {
+      fetchCotizantes();
+    }
+  };
+
+  const handleOpenProductosCotizados = async () => {
+    const ident =
+      clientForm.rut?.trim() ||
+      clientForm.nombre?.trim() ||
+      selectedCotizante?.rut ||
+      selectedCotizante?.nombre;
+
+    if (!ident) {
+      Swal.fire({
+        icon: "info",
+        title: "Selecciona un cliente",
+        text: "Primero selecciona o ingresa el RUT / Nombre del cliente cotizante para consultar sus productos cotizados.",
+        confirmButtonColor: "#146CCE",
+      });
+      return;
+    }
+
+    setIsProductsModalOpen(true);
+    setIsLoadingCotizanteHistory(true);
+    try {
+      const res = await api.get(
+        `/cotizaciones/cotizantes/${encodeURIComponent(ident)}/historial`
+      );
+      setCotizanteHistory(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Error al obtener historial de productos cotizados:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Error al cargar historial",
+        text: "No fue posible obtener el detalle de productos cotizados del cliente.",
+        confirmButtonColor: "#146CCE",
+      });
+    } finally {
+      setIsLoadingCotizanteHistory(false);
+    }
+  };
+
+  const handleCargarProductosACotizacion = (items) => {
+    if (!items || items.length === 0) return;
+
+    const newItems = items.map((it) => {
+      const id = it.producto_id || it.id || `hist-${Math.random().toString(36).substring(2, 8)}`;
+      return {
+        id,
+        producto_id: it.producto_id || it.id,
+        codigo: it.codigo_sku || "S/C",
+        nombre: it.nombre_producto,
+        precio_unitario: Number(it.precio_unitario) || 0,
+        cantidad: Number(it.cantidad) || 1,
+        subtotal: Number(it.subtotal) || ((Number(it.precio_unitario) || 0) * (Number(it.cantidad) || 1)),
+        afecto: it.afecto_iva !== false,
+        tipo_empaque: it.tipo_empaque || "unidad",
+        cantidad_caja: it.cantidad_caja || null,
+      };
+    });
+
+    setQuoteItems((prev) => {
+      const existingIds = new Set(prev.map((p) => p.producto_id || p.id));
+      const notPresent = newItems.filter((p) => !existingIds.has(p.producto_id || p.id));
+      return [...prev, ...(notPresent.length > 0 ? notPresent : newItems)];
+    });
+
+    setIsProductsModalOpen(false);
+    Swal.fire({
+      icon: "success",
+      title: "Productos agregados",
+      text: `Se agregaron ${newItems.length} producto(s) a la cotización activa.`,
+      toast: true,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2500,
+    });
+  };
+
+  // ---------------------------------------------------------------------------
   // BUSCADOR DE PRODUCTOS (Debounced)
   // ---------------------------------------------------------------------------
   useEffect(() => {
@@ -221,7 +401,7 @@ export default function CotizadorManager() {
     return () => clearTimeout(timer);
   }, [productSearch]);
 
-  // Cerrar dropdown al hacer clic fuera del buscador
+  // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     function handleClickOutside(event) {
       if (
@@ -229,6 +409,12 @@ export default function CotizadorManager() {
         !productSearchRef.current.contains(event.target)
       ) {
         setShowProductDropdown(false);
+      }
+      if (
+        cotizanteSearchRef.current &&
+        !cotizanteSearchRef.current.contains(event.target)
+      ) {
+        setShowCotizanteDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -662,6 +848,14 @@ export default function CotizadorManager() {
                 <UserPlus size={15} className="me-1" />
                 Ingreso Rápido (Manual)
               </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${clientMode === "cotizante" ? "btn-primary" : "btn-outline-primary"}`}
+                onClick={handleSwitchToCotizante}
+              >
+                <History size={15} className="me-1" />
+                Historial de Cliente Cotizante
+              </button>
             </div>
           </div>
 
@@ -734,6 +928,140 @@ export default function CotizadorManager() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Modo: Historial de Cliente Cotizante */}
+          {clientMode === "cotizante" && (
+            <div className="mb-3" ref={cotizanteSearchRef}>
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <label className="form-label fw-semibold mb-0">
+                  Buscar Cliente Cotizante (RUT o Nombre):
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary d-inline-flex align-items-center gap-2 shadow-sm"
+                  onClick={handleOpenProductosCotizados}
+                  title="Ver los productos cotizados y fecha de este cliente"
+                >
+                  <Package size={16} />
+                  <span className="fw-semibold">Productos Cotizados</span>
+                  {selectedCotizante?.total_cotizaciones ? (
+                    <span className="badge bg-white text-primary rounded-pill px-2">
+                      {selectedCotizante.total_cotizaciones} {selectedCotizante.total_cotizaciones === 1 ? "cotización" : "cotizaciones"}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+
+              <div className="position-relative">
+                <div className="input-group">
+                  <span className="input-group-text bg-white">
+                    <Search size={16} className="text-muted" />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Desplegar o escribir RUT / Nombre de cliente cotizante..."
+                    value={cotizanteSearchQuery}
+                    onClick={() => {
+                      if (cotizantesList.length === 0) fetchCotizantes();
+                      setShowCotizanteDropdown(true);
+                    }}
+                    onChange={(e) => {
+                      setCotizanteSearchQuery(e.target.value);
+                      setShowCotizanteDropdown(true);
+                    }}
+                    onFocus={() => {
+                      if (cotizantesList.length === 0) fetchCotizantes();
+                      setShowCotizanteDropdown(true);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => {
+                      if (cotizantesList.length === 0) fetchCotizantes();
+                      setShowCotizanteDropdown((prev) => !prev);
+                    }}
+                    title="Desplegar lista de clientes cotizantes por RUT"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                  {(selectedCotizante || cotizanteSearchQuery) && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger"
+                      onClick={handleClearCotizante}
+                      title="Quitar cliente cotizante seleccionado"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown de autocompletado de cotizantes */}
+                {showCotizanteDropdown && (
+                  <div
+                    className="dropdown-menu show w-100 position-absolute shadow-sm"
+                    style={{
+                      top: "100%",
+                      zIndex: 1050,
+                      maxHeight: "260px",
+                      overflowY: "auto",
+                      background: "#ffffff",
+                      border: "1px solid #cbd5e1",
+                    }}
+                  >
+                    {isLoadingCotizantes ? (
+                      <div className="p-3 text-center text-muted small">
+                        <RefreshCw size={14} className="spin me-1" /> Cargando clientes cotizantes...
+                      </div>
+                    ) : filteredCotizantes.length > 0 ? (
+                      filteredCotizantes.map((c, idx) => {
+                        const cName = c.nombre || c.razon_social || "Cliente Cotizante";
+                        const fechaTxt = c.ultima_fecha
+                          ? new Date(c.ultima_fecha).toLocaleDateString("es-CL", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : null;
+                        return (
+                          <button
+                            key={c.rut_clean || c.rut || idx}
+                            type="button"
+                            className="dropdown-item d-flex justify-content-between align-items-center py-2 border-bottom"
+                            onClick={() => handleSelectCotizante(c)}
+                          >
+                            <div>
+                              <strong className="d-block text-truncate" style={{ maxWidth: "360px" }}>
+                                {cName}
+                              </strong>
+                              <small className="text-muted">
+                                {c.rut ? `RUT: ${c.rut}` : "Sin RUT"} · {c.correo || "Sin correo"} · {c.telefono || "Sin teléfono"}
+                              </small>
+                              {fechaTxt && (
+                                <div className="text-primary mt-1" style={{ fontSize: "11px" }}>
+                                  <Clock size={11} className="me-1 inline" />
+                                  Última cotización: {fechaTxt} ({c.total_cotizaciones} {c.total_cotizaciones === 1 ? "registro" : "registros"})
+                                </div>
+                              )}
+                            </div>
+                            <span className="badge bg-light text-primary border">Seleccionar</span>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="p-3 text-center text-muted small">
+                        No se encontraron clientes cotizantes para "{cotizanteSearchQuery}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1299,6 +1627,203 @@ export default function CotizadorManager() {
           </div>
         </section>
       </div>
+
+      {/* =================================================================== */}
+      {/* MODAL: HISTORIAL DE PRODUCTOS COTIZADOS */}
+      {/* =================================================================== */}
+      {isProductsModalOpen && (
+        <div
+          className="modal-backdrop-custom"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsProductsModalOpen(false);
+          }}
+        >
+          <section
+            className="category-modal product-modal shadow-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="historial-cotizaciones-title"
+            style={{
+              maxWidth: "880px",
+              width: "95%",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              background: "#ffffff",
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}
+          >
+            <header className="modal-header-custom border-bottom p-3 d-flex justify-content-between align-items-center bg-light">
+              <div>
+                <p className="eyebrow text-uppercase text-primary fw-semibold small mb-0" style={{ letterSpacing: "0.5px" }}>
+                  Historial de Cotizaciones
+                </p>
+                <h2 id="historial-cotizaciones-title" className="fs-5 m-0 text-dark fw-bold">
+                  Productos Cotizados: {clientForm.nombre || selectedCotizante?.nombre || "Cliente Cotizante"}
+                </h2>
+                <div className="text-muted small mt-1">
+                  {clientForm.rut ? <span className="me-2"><strong>RUT:</strong> {clientForm.rut}</span> : null}
+                  {clientForm.correo ? <span className="me-2"><strong>Correo:</strong> {clientForm.correo}</span> : null}
+                  {clientForm.telefono ? <span><strong>Teléfono:</strong> {clientForm.telefono}</span> : null}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setIsProductsModalOpen(false)}
+                aria-label="Cerrar modal"
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <div
+              className="modal-body-custom flex-grow-1 overflow-auto p-3"
+              style={{ maxHeight: "calc(88vh - 140px)" }}
+            >
+              {isLoadingCotizanteHistory ? (
+                <div className="p-5 text-center text-muted">
+                  <RefreshCw size={28} className="spinner-border spinner-border-sm mb-2 text-primary" />
+                  <p className="m-0 fw-semibold">Consultando historial de cotizaciones y productos...</p>
+                </div>
+              ) : cotizanteHistory.length === 0 ? (
+                <div className="p-5 text-center text-muted">
+                  <Package size={44} className="mb-2 text-secondary opacity-50" />
+                  <h5 className="fw-bold text-dark mb-1">Sin historial de cotizaciones previas</h5>
+                  <p className="small text-muted mb-0">
+                    No se encontraron cotizaciones web registradas para {clientForm.nombre || clientForm.rut || "este cliente"}.
+                    Aquí se muestran las cotizaciones realizadas por clientes y prospectos desde el sitio web comercial.
+                  </p>
+                </div>
+              ) : (
+                <div className="d-flex flex-column gap-3">
+                  {cotizanteHistory.map((cot, cIdx) => {
+                    const fechaFormateada = cot.fecha_emision
+                      ? new Date(cot.fecha_emision).toLocaleDateString("es-CL", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Fecha no disponible";
+
+                    const itemsCount = cot.items?.length || 0;
+
+                    return (
+                      <div
+                        key={cot.id || cot.folio || cIdx}
+                        className="card border shadow-sm rounded-3 overflow-hidden"
+                      >
+                        <div className="card-header bg-light d-flex flex-wrap justify-content-between align-items-center py-2 px-3 gap-2 border-bottom">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-primary text-white font-monospace px-2 py-1">
+                              {cot.folio || `COT-#${cIdx + 1}`}
+                            </span>
+                            <span className="text-muted small d-flex align-items-center gap-1">
+                              <Calendar size={13} className="text-secondary" /> {fechaFormateada}
+                            </span>
+                            <span className="badge bg-secondary-subtle text-secondary small">
+                              {itemsCount} {itemsCount === 1 ? "producto" : "productos"}
+                            </span>
+                          </div>
+
+                          <div className="d-flex align-items-center gap-3">
+                            <div className="text-end">
+                              <small className="text-muted d-block" style={{ fontSize: "11px" }}>Total Cotizado:</small>
+                              <strong className="text-primary fs-6">{money.format(cot.total || 0)}</strong>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 shadow-sm"
+                              onClick={() => handleCargarProductosACotizacion(cot.items)}
+                              title="Cargar estos productos a la cotización actual"
+                            >
+                              <Plus size={14} />
+                              <span className="d-none d-sm-inline fw-semibold">Re-cotizar</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="card-body p-0">
+                          <div className="table-responsive">
+                            <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "13px" }}>
+                              <thead className="table-light text-muted">
+                                <tr>
+                                  <th style={{ width: "12%" }} className="ps-3">Código</th>
+                                  <th style={{ width: "42%" }}>Producto</th>
+                                  <th style={{ width: "14%" }} className="text-center">Empaque</th>
+                                  <th style={{ width: "10%" }} className="text-center">Cant.</th>
+                                  <th style={{ width: "11%" }} className="text-end">P. Unitario</th>
+                                  <th style={{ width: "11%" }} className="text-end pe-3">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {cot.items && cot.items.length > 0 ? (
+                                  cot.items.map((it, itIdx) => {
+                                    const empaqueText = it.tipo_empaque === "caja"
+                                      ? (it.cantidad_caja ? `Caja x${it.cantidad_caja}` : "Caja")
+                                      : "Unidad";
+                                    return (
+                                      <tr key={it.id || itIdx}>
+                                        <td className="ps-3 font-monospace text-muted small">
+                                          {it.codigo_sku || "S/C"}
+                                        </td>
+                                        <td className="fw-semibold text-dark">
+                                          {it.nombre_producto}
+                                        </td>
+                                        <td className="text-center">
+                                          <span className={`badge ${it.tipo_empaque === "caja" ? "bg-info-subtle text-info border-info" : "bg-light text-muted"} border`}>
+                                            {empaqueText}
+                                          </span>
+                                        </td>
+                                        <td className="text-center fw-bold">
+                                          {it.cantidad}
+                                        </td>
+                                        <td className="text-end text-muted font-monospace">
+                                          {money.format(it.precio_unitario || 0)}
+                                        </td>
+                                        <td className="text-end pe-3 fw-bold text-dark font-monospace">
+                                          {money.format(it.subtotal || 0)}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                ) : (
+                                  <tr>
+                                    <td colSpan="6" className="text-center text-muted py-3">
+                                      Sin detalle de productos registrado
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <footer className="modal-footer-custom border-top p-3 d-flex justify-content-between align-items-center bg-light">
+              <span className="small text-muted">
+                {cotizanteHistory.length > 0 ? `${cotizanteHistory.length} cotización(es) encontrada(s)` : ""}
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm px-4"
+                onClick={() => setIsProductsModalOpen(false)}
+              >
+                Cerrar
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </>
   );
 }

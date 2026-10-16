@@ -38,6 +38,8 @@ from app.services.cotizador_service import (
     generar_cotizacion_pdf,
     enviar_cotizacion_email,
     enviar_cotizacion_whatsapp,
+    obtener_clientes_cotizantes,
+    obtener_historial_cotizante,
 )
 from app.models.entities import (
     Categoria,
@@ -2048,6 +2050,28 @@ def cotizador_enviar_whatsapp(
 ) -> dict[str, Any]:
     """Envía la cotización y su PDF adjunto por WhatsApp utilizando Evolution API."""
     return enviar_cotizacion_whatsapp(database, payload)
+
+
+@router.get("/cotizaciones/cotizantes", tags=["Cotizador"])
+def cotizador_listar_cotizantes(
+    database: DatabaseSession,
+    _: NotVendedorUser,
+    q: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[dict[str, Any]]:
+    """Lista clientes que han realizado cotizaciones previas con datos de contacto y última cotización."""
+    return obtener_clientes_cotizantes(database, query=q, limit=limit)
+
+
+@router.get("/cotizaciones/cotizantes/{identificador}/historial", tags=["Cotizador"])
+def cotizador_historial_cotizante(
+    identificador: str,
+    database: DatabaseSession,
+    _: NotVendedorUser,
+) -> list[dict[str, Any]]:
+    """Obtiene el historial de cotizaciones con fecha y detalle de productos cotizados para un cliente."""
+    return obtener_historial_cotizante(database, identificador=identificador)
+
 
 
 

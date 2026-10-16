@@ -6,12 +6,15 @@ from sqlalchemy import select
 
 from app.core.database import SessionLocal
 from app.core.security import hash_password
-from app.models.entities import Rol, Usuario
+from app.models.entities import CotizacionCliente, Rol, Usuario
 from app.api.dependencies import require_not_vendedor
 from app.services.cotizador_service import (
     CotizacionInput,
     CotizacionItemInput,
     generar_cotizacion_pdf,
+    guardar_cotizacion_en_bd,
+    obtener_clientes_cotizantes,
+    obtener_historial_cotizante,
     validar_email,
     validar_telefono_cl,
 )
@@ -154,3 +157,83 @@ def test_cotizador_role_permissions():
         except Exception:
             db.rollback()
         db.close()
+
+
+def test_cotizador_historial_cotizantes():
+    db = SessionLocal()
+    test_folio = f"COT-TEST-{uuid4().hex[:6].upper()}"
+    test_rut = "12.345.678-9"
+    test_nombre = "Cliente Cotizante Unit Test SpA"
+    try:
+        cot = CotizacionInput(
+            codigo=test_folio,
+            cliente_nombre=test_nombre,
+            cliente_rut=test_rut,
+            cliente_correo="cotizante@test.cl",
+            cliente_telefono="+56999887766",
+            cliente_direccion="Calle Test 456",
+            cliente_comuna="La Serena",
+            validez_dias=7,
+            items=[
+                CotizacionItemInput(
+                    producto_id=str(uuid4()),
+                    codigo_producto="TEST-SKU-99",
+                    nombre_producto="Producto Test Historial",
+                    precio_unitario=Decimal("5000"),
+                    cantidad=3,
+                    subtotal=Decimal("15000"),
+                    afecto=True,
+                    tipo_empaque="caja",
+                    cantidad_caja=12,
+                )
+            ],
+        )
+
+        # 1. Guardar cotización
+        guardada = guardar_cotizacion_en_bd(db, cot)
+        assert guardada.folio == test_folio
+        assert guardada.cliente_rut == test_rut
+        assert guardada.total == Decimal("17850")  # 15000 + 19% iva = 17850
+
+        # 2. Listar clientes cotizantes
+        cotizantes = obtener_clientes_cotizantes(db, query="12345678")
+        assert len(cotizantes) >= 1
+        found = next((c for c in cotizantes if c["nombre"] == test_nombre), None)
+        assert found is not None
+        assert found["rut"] == test_rut
+        assert found["correo"] == "cotizante@test.cl"
+
+        # 3. Obtener historial detallado de cotizaciones y productos
+        historial = obtener_historial_cotizante(db, test_rut)
+        assert len(historial) >= 1
+        hist_item = next((h for h in historial if h["folio"] == test_folio), None)
+        assert hist_item is not None
+        assert hist_item["cliente_razon_social"] == test_nombre
+        assert len(hist_item["items"]) == 1
+        assert hist_item["items"][0]["codigo_sku"] == "TEST-SKU-99"
+        assert hist_item["items"][0]["nombre_producto"] == "Producto Test Historial"
+        assert hist_item["items"][0]["cantidad"] == 3
+        assert hist_item["items"][0]["precio_unitario"] == 5000.0
+
+    finally:
+        try:
+            cot_db = db.query(CotizacionCliente).filter(CotizacionCliente.folio == test_folio).first()
+            if cot_db:
+                db.delete(cot_db)
+                db.commit()
+        except Exception:
+            db.rollback()
+        db.close()
+
+
+if __name__ == "__main__":
+    print("Ejecutando test_cotizador_validations...")
+    test_cotizador_validations()
+    print("Ejecutando test_cotizador_pdf_generation...")
+    test_cotizador_pdf_generation()
+    print("Ejecutando test_cotizador_role_permissions...")
+    test_cotizador_role_permissions()
+    print("Ejecutando test_cotizador_historial_cotizantes...")
+    test_cotizador_historial_cotizantes()
+    print("[OK] Todos los tests de Cotizador completados con exito!")
+

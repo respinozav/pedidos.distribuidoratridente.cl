@@ -470,3 +470,75 @@ class IAMensaje(Base):
     chat: Mapped[IAChat] = relationship(back_populates="mensajes")
 
 
+class CotizacionCliente(Base):
+    __tablename__ = "cotizaciones_clientes"
+    __table_args__ = (
+        Index("idx_cotizaciones_clientes_rut", "cliente_rut"),
+        Index("idx_cotizaciones_clientes_folio", "folio"),
+        Index("idx_cotizaciones_clientes_fecha", "fecha_emision"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    folio: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    cliente_razon_social: Mapped[str] = mapped_column(String(255))
+    cliente_rut: Mapped[str] = mapped_column(String(20), index=True)
+    cliente_telefono: Mapped[str] = mapped_column(String(50))
+    cliente_correo: Mapped[str] = mapped_column(String(255))
+    cliente_direccion: Mapped[str] = mapped_column(Text)
+    cliente_comuna: Mapped[str | None] = mapped_column(String(100), default="", nullable=True)
+    cliente_observaciones: Mapped[str | None] = mapped_column(Text, default="", nullable=True)
+    fecha_emision: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    fecha_vencimiento: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    subtotal_neto: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal(0))
+    subtotal_exento: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal(0))
+    iva: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal(0))
+    total: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    total_items: Mapped[int] = mapped_column(Integer, default=0)
+    total_unidades: Mapped[int] = mapped_column(Integer, default=0)
+    productos: Mapped[Any] = mapped_column(JSONB, default=list)
+    estado: Mapped[str] = mapped_column(String(50), default="emitida")
+    ip_origen: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    items: Mapped[list["CotizacionProducto"]] = relationship(
+        back_populates="cotizacion", cascade="all, delete-orphan", order_by="CotizacionProducto.created_at.asc()"
+    )
+    usuario: Mapped[Usuario | None] = relationship()
+
+
+class CotizacionProducto(Base):
+    __tablename__ = "cotizaciones_productos"
+    __table_args__ = (
+        Index("idx_cotizaciones_productos_cot_id", "cotizacion_id"),
+        Index("idx_cotizaciones_productos_rut", "cliente_rut"),
+        Index("idx_cotizaciones_productos_fecha", "fecha_cotizacion"),
+        Index("idx_cotizaciones_productos_sku", "codigo_sku"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cotizacion_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cotizaciones_clientes.id", ondelete="CASCADE"), index=True
+    )
+    cotizacion_folio: Mapped[str] = mapped_column(String(50), index=True)
+    cliente_rut: Mapped[str] = mapped_column(String(20), index=True)
+    cliente_razon_social: Mapped[str] = mapped_column(String(255))
+    producto_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    codigo_sku: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    nombre_producto: Mapped[str] = mapped_column(String(255))
+    tipo_empaque: Mapped[str] = mapped_column(String(50), default="unidad")
+    cantidad_caja: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    precio_unitario: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    cantidad: Mapped[int] = mapped_column(Integer, default=1)
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    afecto_iva: Mapped[bool] = mapped_column(Boolean, default=True)
+    fecha_cotizacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    cotizacion: Mapped[CotizacionCliente] = relationship(back_populates="items")
+
+
+

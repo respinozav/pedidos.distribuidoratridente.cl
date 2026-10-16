@@ -20,7 +20,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+from app.models.entities import CotizacionCliente, CotizacionProducto
 
 from app.core.config import get_settings
 from app.services.notifications import _currency, _get_smtp_settings, _get_system_timezone
@@ -100,12 +103,17 @@ def validar_telefono_cl(phone: str) -> bool:
 # GENERACIÓN DE PDF DE COTIZACIÓN (CLON EXACTO DE FORMATO DE PEDIDOS)
 # ==============================================================================
 
-def generar_cotizacion_pdf(cotizacion: CotizacionInput, database: Session | None = None) -> tuple[bytes, str]:
+def generar_cotizacion_pdf(
+    cotizacion: CotizacionInput,
+    database: Session | None = None,
+) -> tuple[bytes, str]:
     """
     Genera un documento PDF idéntico en tipografía, colores, dimensiones y estructura
     al comprobante de pedidos de Distribuidora Tridente, pero con denominación de COTIZACIÓN.
     """
     quote_code = cotizacion.codigo or f"COT-{uuid.uuid4().hex[:6].upper()}"
+    cotizacion.codigo = quote_code
+
     system_tz = _get_system_timezone(database)
     now_dt = datetime.now(system_tz)
     fecha_emision = now_dt.strftime("%d-%m-%Y %H:%M")
@@ -310,7 +318,11 @@ def generar_cotizacion_pdf(cotizacion: CotizacionInput, database: Session | None
 # ENVÍO DE COTIZACIÓN POR CORREO ELECTRÓNICO
 # ==============================================================================
 
-def enviar_cotizacion_email(database: Session, input_data: CotizacionEmailInput) -> dict[str, Any]:
+def enviar_cotizacion_email(
+    database: Session,
+    input_data: CotizacionEmailInput,
+    usuario_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
     """Envía la cotización en PDF adjunta al correo electrónico del cliente."""
     clean_recipient = input_data.destinatario_correo.strip()
     if not validar_email(clean_recipient):
@@ -467,7 +479,11 @@ def enviar_cotizacion_email(database: Session, input_data: CotizacionEmailInput)
 # ENVÍO DE COTIZACIÓN POR WHATSAPP (DOCUMENTO PDF)
 # ==============================================================================
 
-def enviar_cotizacion_whatsapp(database: Session, input_data: CotizacionWhatsAppInput) -> dict[str, Any]:
+def enviar_cotizacion_whatsapp(
+    database: Session,
+    input_data: CotizacionWhatsAppInput,
+    usuario_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
     """Envía el PDF de la cotización y el resumen a través de WhatsApp (Evolution API)."""
     raw_phone = input_data.destinatario_telefono.strip()
     if not validar_telefono_cl(raw_phone):
@@ -554,3 +570,276 @@ def enviar_cotizacion_whatsapp(database: Session, input_data: CotizacionWhatsApp
             status_code=500,
             detail=f"Fallo en la comunicación con WhatsApp: {str(ex)[:150]}",
         )
+
+
+# ==============================================================================
+# PERSISTENCIA Y CONSULTA DE HISTORIAL DE COTIZACIONES
+# ==============================================================================
+
+def guardar_cotizacion_en_bd(
+    database: Session,
+    cotizacion: CotizacionInput,
+    usuario_id: uuid.UUID | None = None,
+) -> CotizacionCliente:
+    """
+    Persiste la cotización y cada uno de sus productos en las tablas
+    cotizaciones_clientes y cotizaciones_productos.
+    """
+    if not cotizacion.codigo:
+        cotizacion.codigo = f"COT-{uuid.uuid4().hex[:6].upper()}"
+
+    # Revisar si ya existe cotización con este folio para evitar duplicados
+    existente = database.query(CotizacionCliente).filter(CotizacionCliente.folio == cotizacion.codigo).first()
+    if existente:
+        return existente
+
+    # Calcular totales
+    subtotal_neto = Decimal(0)
+    subtotal_exento = Decimal(0)
+    total_unidades = 0
+
+    for item in cotizacion.items:
+        cant = item.cantidad
+        total_unidades += cant
+        sub = item.subtotal if item.subtotal > 0 else (item.precio_unitario * cant)
+        if item.afecto:
+            subtotal_neto += sub
+        else:
+            subtotal_exento += sub
+
+    iva = (subtotal_neto * Decimal("0.19")).quantize(Decimal("1"))
+    total_final = subtotal_neto + subtotal_exento + iva
+    total_items = len(cotizacion.items)
+
+    system_tz = _get_system_timezone(database)
+    now_dt = datetime.now(system_tz)
+    fecha_vencimiento = now_dt + timedelta(days=cotizacion.validez_dias)
+
+    productos_data = [
+        {
+            "id": item.producto_id,
+            "codigo": item.codigo_producto or "S/C",
+            "nombre": item.nombre_producto,
+            "tipo_empaque": item.tipo_empaque or "unidad",
+            "cantidad_caja": item.cantidad_caja,
+            "precio_unitario": float(item.precio_unitario),
+            "cantidad": item.cantidad,
+            "subtotal": float(item.subtotal if item.subtotal > 0 else (item.precio_unitario * item.cantidad)),
+            "afecto": bool(item.afecto),
+        }
+        for item in cotizacion.items
+    ]
+
+    cot_db = CotizacionCliente(
+        folio=cotizacion.codigo,
+        cliente_razon_social=cotizacion.cliente_nombre.strip() or "Cliente",
+        cliente_rut=(cotizacion.cliente_rut or "").strip(),
+        cliente_telefono=(cotizacion.cliente_telefono or "").strip(),
+        cliente_correo=(cotizacion.cliente_correo or "").strip(),
+        cliente_direccion=(cotizacion.cliente_direccion or "").strip() or "A convenir / Sin dirección",
+        cliente_comuna=(cotizacion.cliente_comuna or "").strip(),
+        cliente_observaciones=(cotizacion.observaciones or "").strip(),
+        fecha_emision=now_dt,
+        fecha_vencimiento=fecha_vencimiento,
+        subtotal_neto=subtotal_neto,
+        subtotal_exento=subtotal_exento,
+        iva=iva,
+        total=total_final,
+        total_items=total_items,
+        total_unidades=total_unidades,
+        productos=productos_data,
+        estado="emitida",
+        usuario_id=usuario_id,
+    )
+    database.add(cot_db)
+    database.flush()
+
+    for item in cotizacion.items:
+        sub_it = item.subtotal if item.subtotal > 0 else (item.precio_unitario * item.cantidad)
+        prod_db = CotizacionProducto(
+            cotizacion_id=cot_db.id,
+            cotizacion_folio=cot_db.folio,
+            cliente_rut=cot_db.cliente_rut,
+            cliente_razon_social=cot_db.cliente_razon_social,
+            producto_id=item.producto_id,
+            codigo_sku=item.codigo_producto or "S/C",
+            nombre_producto=item.nombre_producto,
+            tipo_empaque=item.tipo_empaque or "unidad",
+            cantidad_caja=item.cantidad_caja,
+            precio_unitario=item.precio_unitario,
+            cantidad=item.cantidad,
+            subtotal=sub_it,
+            afecto_iva=item.afecto,
+            fecha_cotizacion=now_dt,
+        )
+        database.add(prod_db)
+
+    database.commit()
+    database.refresh(cot_db)
+    return cot_db
+
+
+def obtener_clientes_cotizantes(
+    database: Session,
+    query: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """
+    Retorna clientes únicos que han cotizado previamente en el sitio web,
+    agrupados por RUT (o identificador/nombre), con sus datos de contacto más recientes
+    y la fecha de su última cotización.
+    """
+    clean_q = (query or "").strip().lower()
+    db_query = database.query(CotizacionCliente)
+
+    if clean_q:
+        q_no_punct = re.sub(r"[^0-9kK]", "", clean_q).upper()
+        if q_no_punct:
+            pattern_rut = f"%{q_no_punct}%"
+            pattern_text = f"%{clean_q}%"
+            db_query = db_query.filter(
+                (func.replace(func.replace(func.upper(CotizacionCliente.cliente_rut), ".", ""), "-", "").like(pattern_rut))
+                | (CotizacionCliente.cliente_razon_social.ilike(pattern_text))
+                | (CotizacionCliente.cliente_rut.ilike(pattern_text))
+                | (CotizacionCliente.cliente_correo.ilike(pattern_text))
+            )
+        else:
+            pattern_text = f"%{clean_q}%"
+            db_query = db_query.filter(
+                (CotizacionCliente.cliente_razon_social.ilike(pattern_text))
+                | (CotizacionCliente.cliente_correo.ilike(pattern_text))
+            )
+
+    cotizaciones = (
+        db_query.order_by(CotizacionCliente.fecha_emision.desc())
+        .limit(500)
+        .all()
+    )
+
+    clientes_map: dict[str, dict[str, Any]] = {}
+
+    for cot in cotizaciones:
+        rut_clean = re.sub(r"[^0-9kK]", "", cot.cliente_rut or "").upper()
+        key = rut_clean if rut_clean else (cot.cliente_razon_social or "").strip().lower()
+        if not key:
+            continue
+
+        if key not in clientes_map:
+            clientes_map[key] = {
+                "rut": cot.cliente_rut or "",
+                "rut_clean": rut_clean,
+                "nombre": cot.cliente_razon_social or "",
+                "razon_social": cot.cliente_razon_social or "",
+                "telefono": cot.cliente_telefono or "",
+                "correo": cot.cliente_correo or "",
+                "direccion": cot.cliente_direccion or "",
+                "comuna": cot.cliente_comuna or "",
+                "ultima_fecha": cot.fecha_emision.isoformat() if cot.fecha_emision else "",
+                "ultimo_folio": cot.folio,
+                "total_cotizaciones": 1,
+            }
+        else:
+            clientes_map[key]["total_cotizaciones"] += 1
+            if not clientes_map[key]["telefono"] and cot.cliente_telefono:
+                clientes_map[key]["telefono"] = cot.cliente_telefono
+            if not clientes_map[key]["correo"] and cot.cliente_correo:
+                clientes_map[key]["correo"] = cot.cliente_correo
+            if not clientes_map[key]["direccion"] and cot.cliente_direccion:
+                clientes_map[key]["direccion"] = cot.cliente_direccion
+            if not clientes_map[key]["comuna"] and cot.cliente_comuna:
+                clientes_map[key]["comuna"] = cot.cliente_comuna
+
+    result = list(clientes_map.values())
+    return result[:limit]
+
+
+def obtener_historial_cotizante(
+    database: Session,
+    identificador: str,
+) -> list[dict[str, Any]]:
+    """
+    Retorna el historial completo de cotizaciones y sus productos detallados
+    para un cliente cotizante dado su RUT o nombre.
+    """
+    ident_clean = identificador.strip()
+    rut_digits = re.sub(r"[^0-9kK]", "", ident_clean).upper()
+
+    query = database.query(CotizacionCliente)
+    if rut_digits:
+        pattern_rut = f"%{rut_digits}%"
+        pattern_text = f"%{ident_clean}%"
+        query = query.filter(
+            (func.replace(func.replace(func.upper(CotizacionCliente.cliente_rut), ".", ""), "-", "").like(pattern_rut))
+            | (CotizacionCliente.cliente_razon_social.ilike(pattern_text))
+            | (CotizacionCliente.cliente_rut.ilike(pattern_text))
+        )
+    else:
+        pattern_text = f"%{ident_clean}%"
+        query = query.filter(
+            (CotizacionCliente.cliente_razon_social.ilike(pattern_text))
+            | (CotizacionCliente.cliente_rut.ilike(pattern_text))
+        )
+
+    cotizaciones = query.order_by(CotizacionCliente.fecha_emision.desc()).limit(50).all()
+
+    historial = []
+    for cot in cotizaciones:
+        items = []
+        for p in cot.items:
+            items.append({
+                "id": str(p.id),
+                "producto_id": p.producto_id,
+                "codigo_sku": p.codigo_sku or "S/C",
+                "nombre_producto": p.nombre_producto,
+                "tipo_empaque": p.tipo_empaque or "unidad",
+                "cantidad_caja": p.cantidad_caja,
+                "precio_unitario": float(p.precio_unitario),
+                "cantidad": p.cantidad,
+                "subtotal": float(p.subtotal),
+                "afecto_iva": p.afecto_iva,
+                "fecha_cotizacion": p.fecha_cotizacion.isoformat() if p.fecha_cotizacion else "",
+            })
+
+        if not items and cot.productos and isinstance(cot.productos, list):
+            for p in cot.productos:
+                p_unit = float(p.get("precio_unitario") or p.get("precio") or p.get("unit_price") or 0)
+                p_cant = int(p.get("cantidad") or p.get("qty") or 1)
+                p_sub = float(p.get("subtotal") or (p_unit * p_cant))
+                items.append({
+                    "id": str(p.get("id") or ""),
+                    "producto_id": p.get("producto_id") or p.get("id"),
+                    "codigo_sku": p.get("codigo_sku") or p.get("codigo") or p.get("sku") or "S/C",
+                    "nombre_producto": p.get("nombre_producto") or p.get("nombre") or p.get("producto") or "Producto sin nombre",
+                    "tipo_empaque": p.get("tipo_empaque") or "unidad",
+                    "cantidad_caja": p.get("cantidad_caja"),
+                    "precio_unitario": p_unit,
+                    "cantidad": p_cant,
+                    "subtotal": p_sub,
+                    "afecto_iva": bool(p.get("afecto", p.get("afecto_iva", True))),
+                    "fecha_cotizacion": cot.fecha_emision.isoformat() if cot.fecha_emision else "",
+                })
+
+        historial.append({
+            "id": str(cot.id),
+            "folio": cot.folio,
+            "fecha_emision": cot.fecha_emision.isoformat() if cot.fecha_emision else "",
+            "fecha_vencimiento": cot.fecha_vencimiento.isoformat() if cot.fecha_vencimiento else "",
+            "cliente_razon_social": cot.cliente_razon_social,
+            "cliente_rut": cot.cliente_rut,
+            "cliente_telefono": cot.cliente_telefono,
+            "cliente_correo": cot.cliente_correo,
+            "cliente_direccion": cot.cliente_direccion,
+            "cliente_comuna": cot.cliente_comuna or "",
+            "cliente_observaciones": cot.cliente_observaciones or "",
+            "subtotal_neto": float(cot.subtotal_neto or 0),
+            "subtotal_exento": float(cot.subtotal_exento or 0),
+            "iva": float(cot.iva or 0),
+            "total": float(cot.total or 0),
+            "total_items": cot.total_items or len(items),
+            "total_unidades": cot.total_unidades or sum(it["cantidad"] for it in items),
+            "estado": cot.estado or "emitida",
+            "items": items,
+        })
+
+    return historial
+
