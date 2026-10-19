@@ -8,6 +8,7 @@ import {
   Eye,
   Filter,
   Package,
+  Plus,
   RotateCcw,
   Search,
   ShoppingBag,
@@ -33,7 +34,7 @@ function getDefaultDates() {
   };
 }
 
-export default function AdminVentasManager() {
+export default function AdminVentasManager({ onOpenGenerarVenta }) {
   const { monthStart, today } = useMemo(() => getDefaultDates(), []);
   const [data, setData] = useState({
     total_ventas: 0,
@@ -130,18 +131,40 @@ export default function AdminVentasManager() {
         <div className="topbar-actions">
           <span className="topbar-date d-none d-sm-inline">Fuerza de Venta</span>
           <StockAlertBell />
+          {onOpenGenerarVenta && (
+            <button
+              type="button"
+              className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm"
+              onClick={onOpenGenerarVenta}
+            >
+              <Plus size={18} />
+              <span>Generar Venta</span>
+            </button>
+          )}
         </div>
       </header>
 
       <div className="admin-content dashboard-content">
         {/* Banner de resumen (Hero sin filtros apiñados) */}
         <section className="dashboard-hero mb-3">
-          <div>
-            <p className="eyebrow">FUERZA DE VENTA</p>
-            <h2>Comisiones y Pedidos por Vendedor</h2>
-            <p>
-              Supervisa las ventas acumuladas por cada vendedor, revisa sus comisiones y consulta el detalle de los pedidos.
-            </p>
+          <div className="d-flex flex-wrap justify-content-between align-items-center w-100 gap-3">
+            <div>
+              <p className="eyebrow">FUERZA DE VENTA</p>
+              <h2>Comisiones y Pedidos por Vendedor</h2>
+              <p>
+                Supervisa las ventas acumuladas por cada vendedor, revisa sus comisiones y consulta el detalle de los pedidos.
+              </p>
+            </div>
+            {onOpenGenerarVenta && (
+              <button
+                type="button"
+                className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm"
+                onClick={onOpenGenerarVenta}
+              >
+                <Plus size={18} />
+                <span>Generar Venta</span>
+              </button>
+            )}
           </div>
         </section>
 

@@ -1875,7 +1875,7 @@ const [loading, setLoading] = useState(true);
     : (section === "vendedor_ventas_realizadas" ? "summary" : section);
 
   async function openGenerarVentaModal() {
-    if (!isVendedor) return;
+    if (!isVendedor && !isAdmin) return;
     setModalGenerarVentaOpen(true);
     setSelectedClientId("");
     setClientFilter("");
@@ -1912,6 +1912,7 @@ const [loading, setLoading] = useState(true);
           adminToken: currentAdminToken,
           vendedor_id: data.vendedor_id,
           vendedor_nombre: data.vendedor_nombre,
+          isAdmin: Boolean(isAdmin),
         });
       }
     } catch (err) {
@@ -2232,7 +2233,7 @@ const [loading, setLoading] = useState(true);
         </section>
       ) : activeSection === "admin_ventas" ? (
         <section className="admin-workspace">
-          <AdminVentasManager />
+          <AdminVentasManager onOpenGenerarVenta={openGenerarVentaModal} />
         </section>
       ) : activeSection === "cartera" ? (
         <section className="admin-workspace">
@@ -2581,7 +2582,7 @@ const [loading, setLoading] = useState(true);
       )}
 
       {/* Modal ¿A qué cliente se generará la venta? */}
-      {isVendedor && modalGenerarVentaOpen && (
+      {(isVendedor || isAdmin) && modalGenerarVentaOpen && (
         <div className="modal-backdrop-custom" role="presentation">
           <form
             className="category-modal vendor-sale-modal"
@@ -2592,7 +2593,7 @@ const [loading, setLoading] = useState(true);
           >
             <header>
               <div>
-                <p className="eyebrow">MIS VENTAS</p>
+                <p className="eyebrow">{isAdmin ? "GESTION COMERCIAL" : "MIS VENTAS"}</p>
                 <h2 id="modal-generar-venta-title">¿A qué cliente se generará la venta?</h2>
               </div>
               <button
@@ -2607,7 +2608,9 @@ const [loading, setLoading] = useState(true);
 
             <div className="modal-body-custom">
               <p className="vendor-sale-modal-desc">
-                Comprarás como si fueras este cliente registrado, aplicando sus descuentos y condiciones comerciales. La venta y su comisión quedarán registradas a tu cuenta de vendedor.
+                {isAdmin
+                  ? "Comprarás como si fueras este cliente registrado, aplicando sus precios, descuentos y condiciones comerciales. El pedido quedará registrado en el sistema."
+                  : "Comprarás como si fueras este cliente registrado, aplicando sus descuentos y condiciones comerciales. La venta y su comisión quedarán registradas a tu cuenta de vendedor."}
               </p>
 
               <div className="mb-3">
@@ -4016,18 +4019,19 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       await Promise.all([loadHistory(), loadProducts()]);
       Swal.close();
       if (vendorSession) {
+        const isUserAdmin = Boolean(vendorSession.isAdmin);
         Swal.fire({
           icon: "success",
           title: "Venta registrada con éxito",
-          html: `<p>El pedido fue generado correctamente para <strong>${customer.nombre || customer.rut || "el cliente"}</strong>.</p><p class="text-muted">Código de pedido: <strong>${orderCode}</strong></p><p class="mt-2 text-success fw-bold">Comisión calculada y registrada en Mis Ventas.</p>`,
+          html: `<p>El pedido fue generado correctamente para <strong>${customer.nombre || customer.rut || "el cliente"}</strong>.</p><p class="text-muted">Código de pedido: <strong>${orderCode}</strong></p><p class="mt-2 text-success fw-bold">${isUserAdmin ? "Pedido registrado correctamente en el sistema." : "Comisión calculada y registrada en Mis Ventas."}</p>`,
           showCancelButton: true,
-          confirmButtonText: "Ver Mis Ventas",
+          confirmButtonText: isUserAdmin ? "Ver Ventas" : "Ver Mis Ventas",
           cancelButtonText: "Seguir comprando",
           confirmButtonColor: "#0d6efd",
           cancelButtonColor: "#6c757d",
         }).then((result) => {
           if (result.isConfirmed && onExitVendorMode) {
-            onExitVendorMode("vendedor_ventas_realizadas");
+            onExitVendorMode(isUserAdmin ? "admin_ventas" : "vendedor_ventas_realizadas");
           }
         });
       } else {
@@ -4091,7 +4095,9 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       {vendorSession && (
         <div className="vendor-mode-banner">
           <div className="vendor-mode-banner-info">
-            <span className="badge bg-warning text-dark fw-bold">MODO VENDEDOR</span>
+            <span className="badge bg-warning text-dark fw-bold">
+              {vendorSession.isAdmin ? "MODO ADMINISTRADOR" : "MODO VENDEDOR"}
+            </span>
             <span>
               Generando venta para: <strong>{customer.nombre || customer.rut || "Cliente"}</strong>
               {customer.rut ? ` (${customer.rut})` : ""}
@@ -4104,7 +4110,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
               onClick={() => onExitVendorMode && onExitVendorMode()}
             >
               <LogOut size={15} />
-              Volver a Panel Vendedor
+              {vendorSession.isAdmin ? "Volver a Panel Administrador" : "Volver a Panel Vendedor"}
             </button>
           </div>
         </div>
@@ -4598,14 +4604,16 @@ function App() {
     setVendorSaleSession(saleData);
   };
 
-  const handleExitVendorMode = (targetSection = "vendedor_ventas_realizadas") => {
+  const handleExitVendorMode = (targetSection) => {
+    const defaultSection = vendorSaleSession?.isAdmin ? "admin_ventas" : "vendedor_ventas_realizadas";
+    const finalSection = targetSection || defaultSection;
     const adminToken = vendorSaleSession?.adminToken || getStoredSession()?.token;
     if (adminToken) {
       setAdminToken(adminToken);
       saveSessionStorage(adminToken, "admin");
     }
     setVendorSaleSession(null);
-    setAdminInitialSection(targetSection);
+    setAdminInitialSection(finalSection);
     setView("admin-dashboard");
   };
 

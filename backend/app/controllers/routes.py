@@ -1503,8 +1503,8 @@ def session_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> SesionLo
 # RUTAS DE VENDEDOR (MIS VENTAS / GENERAR VENTA / VENTAS REALIZADAS)
 # =========================================================================
 @router.get("/admin/vendedor/clientes", response_model=list[CustomerSelectItemOutput], tags=["Vendedor"])
-def list_vendedor_clients(database: DatabaseSession, _: VendedorUser) -> list[CustomerSelectItemOutput]:
-    """Lista todos los clientes activos para selección en la generación de venta por parte del vendedor."""
+def list_vendedor_clients(database: DatabaseSession, _: AdminOrVendedorUser) -> list[CustomerSelectItemOutput]:
+    """Lista todos los clientes activos para selección en la generación de venta por parte del vendedor o administrador."""
     clients = list(
         database.scalars(
             select(Cliente)
@@ -1529,9 +1529,9 @@ def list_vendedor_clients(database: DatabaseSession, _: VendedorUser) -> list[Cu
 def iniciar_venta_vendedor(
     payload: IniciarVentaInput,
     database: DatabaseSession,
-    current_user: VendedorUser,
+    current_user: AdminOrVendedorUser,
 ) -> IniciarVentaOutput:
-    """Inicia sesión temporal como cliente para realizar venta a nombre de él, asociando al vendedor actual."""
+    """Inicia sesión temporal como cliente para realizar venta a nombre de él, asociando al vendedor o administrador actual."""
     client = database.get(Cliente, payload.cliente_id)
     if not client or not client.activo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado o inactivo")

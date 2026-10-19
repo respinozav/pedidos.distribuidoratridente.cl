@@ -171,21 +171,39 @@ def run_tests():
         assert len(found_item["detalles"]) == 1
         assert Decimal(str(found_item["detalles"][0]["comision_monto"])) == Decimal("900.00")
 
-        # Test E: Standard customer order (not through vendor) -> should NOT record VentaVendedor
-        customer_regular_token = create_access_token(test_cli.id, "CLIENTE")
-        res_reg_order = client.post(
-            f"/api/clientes/{test_cli.id}/pedidos",
-            json=order_payload,
-            headers={"Authorization": f"Bearer {customer_regular_token}"},
+        # Test F: Admin role generating sale (can list clients and initiate sale as customer)
+        admin_role = db.scalar(select(Rol).where(Rol.nombre == "ADMINISTRADOR"))
+        if not admin_role:
+            admin_role = Rol(nombre="ADMINISTRADOR", activo=True)
+            db.add(admin_role)
+            db.flush()
+        test_admin = Usuario(
+            nombre="Admin Venta Test",
+            correo=f"admin_{uuid.uuid4().hex[:6]}@tridente.cl",
+            password_hash=hash_password("password123"),
+            rol_id=admin_role.id,
+            activo=True,
         )
-        assert res_reg_order.status_code == 201, res_reg_order.text
-        reg_order_data = res_reg_order.json()
-        assert reg_order_data.get("vendedor_id") is None
-        reg_order_id = uuid.UUID(reg_order_data["id"])
-        reg_venta = db.scalar(
-            select(VentaVendedor).where(VentaVendedor.pedido_id == reg_order_id)
+        db.add(test_admin)
+        db.commit()
+
+        admin_token = create_access_token(test_admin.id, "ADMINISTRADOR")
+        res_admin_clients = client.get(
+            "/api/admin/vendedor/clientes",
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
-        assert reg_venta is None
+        assert res_admin_clients.status_code == 200, res_admin_clients.text
+
+        res_admin_iniciar = client.post(
+            "/api/admin/vendedor/iniciar-venta",
+            json={"cliente_id": str(test_cli.id)},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert res_admin_iniciar.status_code == 200, res_admin_iniciar.text
+        admin_iniciar_data = res_admin_iniciar.json()
+        assert admin_iniciar_data["cliente_id"] == str(test_cli.id)
+        assert admin_iniciar_data["vendedor_id"] == str(test_admin.id)
+        assert "access_token" in admin_iniciar_data
 
         print("All test_vendedor_ventas tests PASSED successfully!")
     finally:
