@@ -2053,7 +2053,7 @@ const [loading, setLoading] = useState(true);
     [Megaphone, "Publicidad", "publicidad", true],
     [Calculator, "Cotizador", "cotizador", true],
     ...(isAdmin ? [[Bot, "Agente Tridente IA", "ia_agent", true]] : []),
-    [Video, "Video Tutorial", "faq", true],
+    [HelpCircle, "Tutoriales y FAQ", "faq", true],
   ];
 
   const vendedorNavigation = [
@@ -2061,7 +2061,7 @@ const [loading, setLoading] = useState(true);
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
     [DollarSign, "Créditos", "credits", true],
-    [Video, "Video Tutorial", "faq", true],
+    [HelpCircle, "Tutoriales y FAQ", "faq", true],
   ];
 
   const navigation = isVendedor
@@ -4247,8 +4247,8 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                 setError("");
               }}
             >
-              <Video size={17} />
-              Video Tutorial
+              <HelpCircle size={17} />
+              Tutoriales y FAQ
             </button>
           </nav>
           <div className="customer-profile">
@@ -4275,7 +4275,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                 ? "Realizar pedido"
                 : section === "history"
                 ? "Pedidos históricos"
-                : "Video Tutorial"}
+                : "Tutoriales y FAQ"}
             </h1>
           </div>
           <div className="customer-header-right">
