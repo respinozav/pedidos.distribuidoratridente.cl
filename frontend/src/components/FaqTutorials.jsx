@@ -5,7 +5,6 @@ import {
   MessageCircle,
   Mic,
   Package,
-  Play,
   Search,
   ShoppingBag,
   Sparkles,
@@ -18,58 +17,32 @@ import {
 } from "lucide-react";
 import "./faqTutorials.css";
 
-const VIDEOS_TUTORIALES = [
-  {
-    id: "como-realizar-un-pedido",
-    title: "Cómo realizar un pedido",
-    tagline: "Video Tutorial Operativo",
-    badge: "Principal",
-    src: "/videos/gemini_generated_video_df0ab31e.mp4",
-    fallbackSrc: "/videos/como-realizar-un-pedido.mp4",
-    filename: "gemini_generated_video_df0ab31e.mp4",
-    description:
-      "Aprende paso a paso cómo buscar productos en el catálogo, seleccionar cantidades por unidad o por caja cerrada, revisar tu resumen y enviar tu pedido de forma rápida.",
-    steps: [
-      {
-        num: 1,
-        title: "Explora o dicta productos",
-        desc: "Filtra por categorías o usa el micrófono para dictar el producto.",
-      },
-      {
-        num: 2,
-        title: "Elige Unidad o Caja",
-        desc: "Selecciona si deseas empaque cerrado con precio por caja o unidades individuales.",
-      },
-      {
-        num: 3,
-        title: "Revisa y Envía",
-        desc: "Verifica tu dirección de despacho activa y confirma el envío.",
-      },
-    ],
-  },
-  {
-    id: "busqueda-dictado-voz",
-    title: "Búsqueda y dictado por voz",
-    tagline: "Productividad",
-    badge: "Nueva función",
-    duration: "1:20 min",
-    src: "/videos/busqueda-y-dictado-voz.mp4",
-    filename: "busqueda-y-dictado-voz.mp4",
-    description:
-      "Usa el botón de micrófono en la barra de búsqueda para decir productos como 'bon o bon', 'aceite' o 'galletas' y filtrarlos al instante.",
-  },
-  {
-    id: "unidades-y-cajas",
-    title: "Elegir entre Unidades o Cajas",
-    tagline: "Ahorro y Empaque",
-    badge: "Precios y Formatos",
-    duration: "1:45 min",
-    src: "/videos/unidades-y-cajas.mp4",
-    filename: "unidades-y-cajas.mp4",
-    description:
-      "Aprende la diferencia de valores, unidades contenidas por display y cómo aprovechar los mejores precios mayoristas.",
-  },
-];
+const VIDEO_TUTORIAL = {
+  id: "como-realizar-un-pedido",
+  title: "Cómo realizar un pedido",
+  tagline: "Video Tutorial Operativo",
+  src: "/videos/gemini_generated_video_df0ab31e.mp4",
+  fallbackSrc: "/videos/como-realizar-un-pedido.mp4",
+  description:
+    "Aprende paso a paso cómo buscar productos en el catálogo, seleccionar cantidades por unidad o por caja cerrada, revisar tu resumen y enviar tu pedido de forma rápida.",
+  steps: [
+    {
+      num: 1,
+      title: "Explora o dicta productos",
+      desc: "Filtra por categorías o usa el micrófono para dictar el producto.",
+    },
+    {
+      num: 2,
+      title: "Elige Unidad o Caja",
+      desc: "Selecciona si deseas empaque cerrado con precio por caja o unidades individuales.",
+    },
+    {
+      num: 3,
+      title: "Revisa y Envía",
+      desc: "Verifica tu dirección de despacho activa y confirma el envío.",
+    },
+  ],
+};
 
 const CATEGORIES = [
   { id: "todas", label: "Todas las preguntas" },
@@ -220,7 +193,6 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("todas");
   const [openFaqId, setOpenFaqId] = useState("hacer-pedido");
-  const [activeVideo, setActiveVideo] = useState(VIDEOS_TUTORIALES[0]);
 
   // Filtrar FAQs según búsqueda y categoría
   const filteredFaqs = useMemo(() => {
@@ -237,10 +209,6 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
 
   const toggleFaq = (id) => {
     setOpenFaqId((current) => (current === id ? null : id));
-  };
-
-  const handleSelectVideo = (video) => {
-    setActiveVideo(video);
   };
 
   return (
@@ -289,10 +257,10 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
             </div>
             <div>
               <span className="badge bg-primary bg-opacity-10 text-primary fw-semibold px-2 py-1 mb-1">
-                {activeVideo.tagline}
+                {VIDEO_TUTORIAL.tagline}
               </span>
-              <h2>{activeVideo.title}</h2>
-              <p>{activeVideo.description}</p>
+              <h2>{VIDEO_TUTORIAL.title}</h2>
+              <p>{VIDEO_TUTORIAL.description}</p>
             </div>
           </div>
 
@@ -311,24 +279,24 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
         {/* Reproductor de Video */}
         <div className="video-player-wrapper">
           <video
-            key={activeVideo.id}
+            key={VIDEO_TUTORIAL.id}
             className="video-element"
             controls
             playsInline
             preload="metadata"
           >
-            <source src={activeVideo.src} type="video/mp4" />
-            {activeVideo.fallbackSrc && (
-              <source src={activeVideo.fallbackSrc} type="video/mp4" />
+            <source src={VIDEO_TUTORIAL.src} type="video/mp4" />
+            {VIDEO_TUTORIAL.fallbackSrc && (
+              <source src={VIDEO_TUTORIAL.fallbackSrc} type="video/mp4" />
             )}
             Tu navegador no soporta reproducción de video HTML5.
           </video>
         </div>
 
         {/* Pasos clave si están definidos para este video */}
-        {activeVideo.steps && (
+        {VIDEO_TUTORIAL.steps && (
           <div className="video-steps-grid">
-            {activeVideo.steps.map((st) => (
+            {VIDEO_TUTORIAL.steps.map((st) => (
               <div key={st.num} className="video-step-card">
                 <div className="video-step-number">{st.num}</div>
                 <div className="video-step-text">
@@ -340,39 +308,6 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
           </div>
         )}
       </section>
-
-      {/* Galería de otros videos tutoriales */}
-      <h3 className="other-videos-heading">
-        <Video size={18} />
-        Otros videos tutoriales disponibles
-      </h3>
-      <div className="other-videos-grid">
-        {VIDEOS_TUTORIALES.map((vid) => {
-          const isSelected = activeVideo.id === vid.id;
-          return (
-            <div
-              key={vid.id}
-              className={`video-thumb-card ${isSelected ? "border-primary shadow-sm" : ""}`}
-              onClick={() => handleSelectVideo(vid)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") handleSelectVideo(vid);
-              }}
-            >
-              <div className="video-thumb-preview">
-                <Play size={24} fill="#ffffff" />
-                <span className="video-thumb-duration">{vid.duration}</span>
-              </div>
-              <div className="video-thumb-body">
-                <span className="video-thumb-badge">{vid.badge}</span>
-                <h4>{vid.title}</h4>
-                <p>{vid.description}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
       {/* SECCIÓN PREGUNTAS FRECUENTES (FAQ) */}
       <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
