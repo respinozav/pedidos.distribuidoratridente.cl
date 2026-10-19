@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Calculator, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Calculator, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Mic, MicOff, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -3416,6 +3416,98 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   const [stockNoticeProduct, setStockNoticeProduct] = useState(null);
   const [pendingStockNotices, setPendingStockNotices] = useState([]);
   const [lightboxProduct, setLightboxProduct] = useState(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // Ignorar
+        }
+      }
+    };
+  }, []);
+
+  const toggleVoiceSearch = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      Swal.fire({
+        icon: "info",
+        title: "Navegador no compatible",
+        text: "Tu navegador no cuenta con soporte nativo para reconocimiento de voz Web Speech API. Te sugerimos usar Google Chrome, Microsoft Edge o Safari.",
+        confirmButtonColor: "#0284c7",
+      });
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // Ignorar
+        }
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "es-CL";
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognitionRef.current = recognition;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        let interim = "";
+        let final = "";
+        for (let i = 0; i < event.results.length; ++i) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            final += item[0].transcript;
+          } else {
+            interim += item[0].transcript;
+          }
+        }
+        const spoken = (final || interim).trim().replace(/\.$/, "");
+        if (spoken) {
+          setQuery(spoken);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.warn("Reconocimiento de voz:", event.error);
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          Swal.fire({
+            icon: "warning",
+            title: "Permiso de micrófono requerido",
+            text: "Por favor permite el acceso al micrófono en tu navegador para dictar el nombre del producto.",
+            confirmButtonColor: "#0284c7",
+          });
+        }
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error("Error al iniciar dictado de voz:", err);
+      setIsListening(false);
+    }
+  };
 
   // Cargar avisos de stock pendientes de este cliente
   useEffect(() => {
@@ -4223,11 +4315,11 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                       </select>
                     </div>
                     <div className="col-12 col-md-7 col-lg-8">
-                      <div className="search-field">
+                      <div className={`search-field ${isListening ? "is-listening" : ""}`}>
                         <Search size={18} />
                         <input
                           className="form-control"
-                          placeholder="Busca por nombre de producto..."
+                          placeholder={isListening ? "🎙️ Escuchando... di el nombre del producto" : "Busca por nombre de producto..."}
                           value={query}
                           onChange={(event) => setQuery(event.target.value)}
                         />
@@ -4241,6 +4333,15 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                             <X size={16} />
                           </button>
                         )}
+                        <button
+                          type="button"
+                          className={`voice-search-btn ${isListening ? "active" : ""}`}
+                          onClick={toggleVoiceSearch}
+                          title={isListening ? "Detener dictado por voz" : "Buscar por voz (dictar nombre)"}
+                          aria-label={isListening ? "Detener dictado por voz" : "Buscar por voz"}
+                        >
+                          {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                        </button>
                       </div>
                     </div>
                   </div>
