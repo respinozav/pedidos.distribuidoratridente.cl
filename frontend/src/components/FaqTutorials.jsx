@@ -6,7 +6,6 @@ const VIDEO_TUTORIAL = {
   id: "como-realizar-un-pedido",
   title: "Cómo realizar un pedido",
   src: "/videos/gemini_generated_video_df0ab31e.mp4",
-  fallbackSrc: "/videos/como-realizar-un-pedido.mp4",
   description:
     "Aprende paso a paso cómo buscar productos en el catálogo, seleccionar cantidades por unidad o por caja cerrada, revisar tu resumen y enviar tu pedido.",
 };
@@ -48,9 +47,6 @@ export default function FaqTutorials({ onGoToShop }) {
             preload="metadata"
           >
             <source src={VIDEO_TUTORIAL.src} type="video/mp4" />
-            {VIDEO_TUTORIAL.fallbackSrc && (
-              <source src={VIDEO_TUTORIAL.fallbackSrc} type="video/mp4" />
-            )}
             Tu navegador no soporta reproducción de video HTML5.
           </video>
         </div>
