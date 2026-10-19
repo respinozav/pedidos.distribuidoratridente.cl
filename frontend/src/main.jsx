@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Calculator, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, HelpCircle, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Mic, MicOff, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Calculator, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, HelpCircle, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Mic, MicOff, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, Video, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -2053,7 +2053,7 @@ const [loading, setLoading] = useState(true);
     [Megaphone, "Publicidad", "publicidad", true],
     [Calculator, "Cotizador", "cotizador", true],
     ...(isAdmin ? [[Bot, "Agente Tridente IA", "ia_agent", true]] : []),
-    [HelpCircle, "Tutoriales y FAQ", "faq", true],
+    [Video, "Video Tutorial", "faq", true],
   ];
 
   const vendedorNavigation = [
@@ -2061,7 +2061,7 @@ const [loading, setLoading] = useState(true);
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
     [DollarSign, "Créditos", "credits", true],
-    [HelpCircle, "Tutoriales y FAQ", "faq", true],
+    [Video, "Video Tutorial", "faq", true],
   ];
 
   const navigation = isVendedor
@@ -4247,8 +4247,8 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                 setError("");
               }}
             >
-              <HelpCircle size={17} />
-              Tutoriales y FAQ
+              <Video size={17} />
+              Video Tutorial
             </button>
           </nav>
           <div className="customer-profile">
@@ -4275,7 +4275,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                 ? "Realizar pedido"
                 : section === "history"
                 ? "Pedidos históricos"
-                : "Centro de Ayuda y Tutoriales"}
+                : "Video Tutorial"}
             </h1>
           </div>
           <div className="customer-header-right">
