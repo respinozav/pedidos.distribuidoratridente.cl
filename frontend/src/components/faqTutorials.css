@@ -234,19 +234,6 @@
   margin-bottom: 1rem;
 }
 
-.video-folder-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 0.4rem 0.9rem;
-  border-radius: 8px;
-  font-family: monospace;
-  font-size: 0.85rem;
-  color: #7dd3fc;
-}
-
 /* Pasos clave del video */
 .video-steps-grid {
   display: grid;

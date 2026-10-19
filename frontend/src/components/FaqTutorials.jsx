@@ -221,8 +221,6 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
   const [selectedCategory, setSelectedCategory] = useState("todas");
   const [openFaqId, setOpenFaqId] = useState("hacer-pedido");
   const [activeVideo, setActiveVideo] = useState(VIDEOS_TUTORIALES[0]);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [videoLoadError, setVideoLoadError] = useState(false);
 
   // Filtrar FAQs según búsqueda y categoría
   const filteredFaqs = useMemo(() => {
@@ -243,8 +241,6 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
 
   const handleSelectVideo = (video) => {
     setActiveVideo(video);
-    setIsVideoPlaying(true);
-    setVideoLoadError(false);
   };
 
   return (
@@ -314,52 +310,19 @@ export default function FaqTutorials({ onGoToShop, isAdminOrVendor = false }) {
 
         {/* Reproductor de Video */}
         <div className="video-player-wrapper">
-          {isVideoPlaying && !videoLoadError ? (
-            <video
-              key={activeVideo.id}
-              className="video-element"
-              controls
-              autoPlay
-              playsInline
-              onError={() => setVideoLoadError(true)}
-            >
-              <source src={activeVideo.src} type="video/mp4" />
-              {activeVideo.fallbackSrc && (
-                <source src={activeVideo.fallbackSrc} type="video/mp4" />
-              )}
-              Tu navegador no soporta reproducción de video HTML5.
-            </video>
-          ) : (
-            <div className="video-placeholder-card">
-              <button
-                type="button"
-                className="video-play-btn-large"
-                onClick={() => {
-                  setIsVideoPlaying(true);
-                  setVideoLoadError(false);
-                }}
-                title="Reproducir video tutorial"
-                aria-label="Reproducir video"
-              >
-                <Play size={32} fill="#ffffff" />
-              </button>
-              <h3>{activeVideo.title}</h3>
-              <p>
-                {videoLoadError ? (
-                  <span>
-                    El archivo de video aún no se encuentra en el servidor.
-                    <br />
-                    Colócalo en la carpeta pública:
-                  </span>
-                ) : (
-                  "Haz clic para reproducir el video explicativo de la plataforma."
-                )}
-              </p>
-              <div className="video-folder-pill">
-                📁 frontend/public/videos/{activeVideo.filename}
-              </div>
-            </div>
-          )}
+          <video
+            key={activeVideo.id}
+            className="video-element"
+            controls
+            playsInline
+            preload="metadata"
+          >
+            <source src={activeVideo.src} type="video/mp4" />
+            {activeVideo.fallbackSrc && (
+              <source src={activeVideo.fallbackSrc} type="video/mp4" />
+            )}
+            Tu navegador no soporta reproducción de video HTML5.
+          </video>
         </div>
 
         {/* Pasos clave si están definidos para este video */}
