@@ -1,6 +1,6 @@
 import React, { Component, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Calculator, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Mic, MicOff, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
+import { Activity, AlertCircle, Bell, Bot, Boxes, Briefcase, Calculator, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, DollarSign, Eye, FileText, FolderTree, HelpCircle, KeyRound, LayoutDashboard, LogOut, Mail, MapPin, Megaphone, Menu, Mic, MicOff, Minus, Package, Pencil, Plus, RotateCcw, Save, Search, Send, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, TrendingUp, User, Users, X } from "lucide-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 import Swal from "sweetalert2";
@@ -20,6 +20,7 @@ import VendedorVentasRealizadas from "./pages/admin/VendedorVentasRealizadas";
 import AdminVentasManager from "./pages/admin/AdminVentasManager";
 import AdminCarteraManager from "./pages/admin/AdminCarteraManager";
 import AgenteTridenteIA from "./pages/admin/AgenteTridenteIA";
+import FaqTutorials from "./components/FaqTutorials";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
@@ -1835,8 +1836,8 @@ const [loading, setLoading] = useState(true);
     (!adminProfile && storedRole === "VENDEDOR");
   const isAdmin = !isColaborador && !isVendedor;
 
-  const allowedColaboradorKeys = ["categories", "products", "orders", "profile", "cotizador"];
-  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "customers", "profile"];
+  const allowedColaboradorKeys = ["categories", "products", "orders", "profile", "cotizador", "faq"];
+  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "customers", "profile", "faq"];
 
   const initialDefaultSection = isVendedor
     ? (initialSection && allowedVendedorKeys.includes(initialSection)
@@ -2052,6 +2053,7 @@ const [loading, setLoading] = useState(true);
     [Megaphone, "Publicidad", "publicidad", true],
     [Calculator, "Cotizador", "cotizador", true],
     ...(isAdmin ? [[Bot, "Agente Tridente IA", "ia_agent", true]] : []),
+    [HelpCircle, "Tutoriales y FAQ", "faq", true],
   ];
 
   const vendedorNavigation = [
@@ -2059,6 +2061,7 @@ const [loading, setLoading] = useState(true);
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
     [DollarSign, "Créditos", "credits", true],
+    [HelpCircle, "Tutoriales y FAQ", "faq", true],
   ];
 
   const navigation = isVendedor
@@ -2262,6 +2265,10 @@ const [loading, setLoading] = useState(true);
       ) : activeSection === "ia_agent" ? (
         <section className="admin-workspace">
           <AgenteTridenteIA />
+        </section>
+      ) : activeSection === "faq" ? (
+        <section className="admin-workspace">
+          <FaqTutorials isAdminOrVendor={true} />
         </section>
       ) : activeSection === "profile" ? (
         <section className="admin-workspace">
@@ -4233,6 +4240,16 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
               <ClipboardList size={17} />
               Pedidos históricos
             </button>
+            <button
+              className={section === "faq" ? "active" : ""}
+              onClick={() => {
+                setSection("faq");
+                setError("");
+              }}
+            >
+              <HelpCircle size={17} />
+              Tutoriales y FAQ
+            </button>
           </nav>
           <div className="customer-profile">
             <span>{(customer.nombre || customer.rut || customer.celular || "CL").slice(0, 2).toUpperCase()}</span>
@@ -4253,7 +4270,13 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         <header className="customer-portal-header">
           <div>
             <p className="eyebrow">PEDIDOS</p>
-            <h1>{section === "create" ? "Realizar pedido" : "Pedidos históricos"}</h1>
+            <h1>
+              {section === "create"
+                ? "Realizar pedido"
+                : section === "history"
+                ? "Pedidos históricos"
+                : "Centro de Ayuda y Tutoriales"}
+            </h1>
           </div>
           <div className="customer-header-right">
             <FocusGroupButton onClick={() => setSuggestionModalOpen(true)} />
@@ -4262,7 +4285,9 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         </header>
         <div className="customer-content">
           {error && <div className="alert alert-danger">{error}</div>}
-          {section === "create" ? (
+          {section === "faq" ? (
+            <FaqTutorials onGoToShop={() => setSection("create")} />
+          ) : section === "create" ? (
             <>
               {publicidades.length > 0 && (
                 <div className="mb-4">

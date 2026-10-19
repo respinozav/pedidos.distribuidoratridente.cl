@@ -1,0 +1,16 @@
+================================================================================
+CARPETA DE VIDEOS TUTORIALES - DISTRIBUIDORA TRIDENTE
+================================================================================
+
+Coloca en esta carpeta tus archivos de video para la sección de FAQ y Tutoriales.
+
+Archivo principal solicitado:
+- como-realizar-un-pedido.mp4
+
+Ruta en la web:
+- /videos/como-realizar-un-pedido.mp4
+
+Formatos recomendados:
+- MP4 (H.264 / AAC) para máxima compatibilidad con todos los navegadores móviles y de escritorio.
+- WebM
+================================================================================
