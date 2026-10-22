@@ -149,10 +149,11 @@ export default function CotizadorManager() {
     if (!q) return clientesList.slice(0, 10);
     return clientesList
       .filter((c) => {
+        const alias = (c.alias || "").toLowerCase();
         const nombre = (c.nombre || c.razon_social || "").toLowerCase();
         const rut = (c.rut || "").toLowerCase();
         const email = (c.correo || c.email || "").toLowerCase();
-        return nombre.includes(q) || rut.includes(q) || email.includes(q);
+        return alias.includes(q) || nombre.includes(q) || rut.includes(q) || email.includes(q);
       })
       .slice(0, 15);
   }, [clientesList, clientSearchQuery]);
@@ -872,7 +873,7 @@ export default function CotizadorManager() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="Escribe el nombre, RUT o correo para autocompletar..."
+                  placeholder="Escribe el alias, nombre, RUT o correo para autocompletar..."
                   value={clientSearchQuery}
                   onChange={(e) => {
                     setClientSearchQuery(e.target.value);
@@ -916,6 +917,11 @@ export default function CotizadorManager() {
                       >
                         <div>
                           <strong className="d-block text-truncate" style={{ maxWidth: "340px" }}>
+                            {c.alias && (
+                              <span className="badge bg-primary-subtle text-primary border border-primary-subtle me-1">
+                                {c.alias}
+                              </span>
+                            )}
                             {cName}
                           </strong>
                           <small className="text-muted">

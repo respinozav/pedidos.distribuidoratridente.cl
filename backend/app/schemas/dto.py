@@ -130,6 +130,7 @@ class AddressOutput(AddressInput, ORMModel):
 class CustomerInput(BaseModel):
     rut: str | None = Field(default=None, max_length=20)
     nombre: str | None = Field(default=None, max_length=180)
+    alias: str | None = Field(default=None, max_length=180)
     celular: str | None = Field(default=None, max_length=30)
     correo: EmailStr | None = None
     vendedor_id: UUID | None = None
@@ -137,14 +138,14 @@ class CustomerInput(BaseModel):
     dias_credito: int = Field(default=0, ge=0, le=365)
     activo: bool = True
 
-    @field_validator("rut", "nombre", "celular", mode="before")
+    @field_validator("rut", "nombre", "alias", "celular", mode="before")
     @classmethod
     def empty_values_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if isinstance(value, str) else value
 
     def model_post_init(self, __context: object) -> None:
-        if not any((self.rut, self.nombre, self.celular)):
-            raise ValueError("Debes indicar RUT, nombre o celular")
+        if not any((self.rut, self.nombre, self.alias, self.celular)):
+            raise ValueError("Debes indicar RUT, nombre, alias o celular")
 
 
 class CustomerOutput(CustomerInput, ORMModel):
@@ -176,9 +177,10 @@ class CustomerLogin(BaseModel):
 
 class CustomerProfileUpdate(BaseModel):
     nombre: str | None = Field(default=None, max_length=180)
+    alias: str | None = Field(default=None, max_length=180)
     celular: str | None = Field(default=None, max_length=30)
 
-    @field_validator("nombre", "celular", mode="before")
+    @field_validator("nombre", "alias", "celular", mode="before")
     @classmethod
     def empty_values_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if isinstance(value, str) else value
@@ -301,6 +303,7 @@ class OrderCustomerOutput(ORMModel):
     id: UUID
     rut: str | None
     nombre: str | None
+    alias: str | None = None
     celular: str | None
     dias_credito: int = 0
 
@@ -340,6 +343,7 @@ class CreditCustomerOutput(ORMModel):
     id: UUID
     rut: str | None
     nombre: str | None
+    alias: str | None = None
     celular: str | None
 
 
@@ -483,6 +487,7 @@ class IniciarVentaOutput(BaseModel):
 class CustomerSelectItemOutput(BaseModel):
     id: UUID
     nombre: str | None = None
+    alias: str | None = None
     rut: str | None = None
     correo: str | None = None
     celular: str | None = None
@@ -577,6 +582,7 @@ class ClienteCarteraItem(ORMModel):
     id: UUID
     rut: str | None = None
     nombre: str | None = None
+    alias: str | None = None
     correo: str | None = None
     celular: str | None = None
     activo: bool = True

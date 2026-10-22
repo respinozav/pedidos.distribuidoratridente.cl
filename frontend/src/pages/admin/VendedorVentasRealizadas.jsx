@@ -78,10 +78,11 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
     if (!search.trim()) return data.items;
     const q = search.trim().toLowerCase();
     return data.items.filter((item) => {
+      const clienteAlias = (item.cliente?.alias || "").toLowerCase();
       const clienteNombre = (item.cliente?.nombre || "").toLowerCase();
       const clienteRut = (item.cliente?.rut || "").toLowerCase();
       const pedidoId = (item.pedido_id || "").toLowerCase();
-      return clienteNombre.includes(q) || clienteRut.includes(q) || pedidoId.includes(q);
+      return clienteAlias.includes(q) || clienteNombre.includes(q) || clienteRut.includes(q) || pedidoId.includes(q);
     });
   }, [data.items, search]);
 
@@ -201,7 +202,7 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
               <input
                 className="form-control"
                 type="search"
-                placeholder="Nombre, RUT o código de pedido..."
+                placeholder="Alias, cliente, RUT o código de pedido..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -268,7 +269,16 @@ export default function VendedorVentasRealizadas({ onOpenGenerarVenta, isVendedo
                     </div>
 
                     <div>
-                      <strong>{venta.cliente?.nombre || "Sin razón social"}</strong>
+                      <strong>
+                        {venta.cliente?.alias ? (
+                          <>
+                            <span className="text-primary">{venta.cliente.alias}</span>
+                            <small className="d-block text-muted">{venta.cliente?.nombre || "Sin razón social"}</small>
+                          </>
+                        ) : (
+                          venta.cliente?.nombre || "Sin razón social"
+                        )}
+                      </strong>
                       <small>{venta.cliente?.rut ? `RUT: ${venta.cliente.rut}` : "Sin RUT"}</small>
                     </div>
 

@@ -818,8 +818,29 @@ def sync_product_to_defontana(product_id: UUID, database: DatabaseSession, _: Ad
 
 
 @router.get("/clientes", response_model=list[CustomerOutput], tags=["Clientes"])
-def list_customers(database: DatabaseSession, _: AdminUser) -> list[Cliente]:
-    return list(database.scalars(select(Cliente).options(selectinload(Cliente.direcciones)).where(Cliente.eliminado_at.is_(None))))
+def list_customers(
+    database: DatabaseSession,
+    _: AdminUser,
+    search: str | None = None,
+) -> list[Cliente]:
+    stmt = (
+        select(Cliente)
+        .options(selectinload(Cliente.direcciones))
+        .where(Cliente.eliminado_at.is_(None))
+    )
+    if search and search.strip():
+        q = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Cliente.alias).like(q),
+                func.lower(Cliente.nombre).like(q),
+                func.lower(Cliente.rut).like(q),
+                func.lower(Cliente.correo).like(q),
+                func.lower(Cliente.celular).like(q),
+            )
+        )
+    stmt = stmt.order_by(func.coalesce(Cliente.alias, Cliente.nombre, Cliente.rut).asc())
+    return list(database.scalars(stmt))
 
 
 @router.post("/clientes", response_model=CustomerOutput, status_code=status.HTTP_201_CREATED, tags=["Clientes"])
@@ -1508,14 +1529,15 @@ def list_vendedor_clients(database: DatabaseSession, _: AdminOrVendedorUser) -> 
     clients = list(
         database.scalars(
             select(Cliente)
-            .where(Cliente.activo.is_(True))
-            .order_by(func.coalesce(Cliente.nombre, Cliente.rut).asc())
+            .where(Cliente.activo.is_(True), Cliente.eliminado_at.is_(None))
+            .order_by(func.coalesce(Cliente.alias, Cliente.nombre, Cliente.rut).asc())
         )
     )
     return [
         CustomerSelectItemOutput(
             id=c.id,
             nombre=c.nombre,
+            alias=c.alias,
             rut=c.rut,
             correo=c.correo,
             celular=c.celular,
@@ -1759,7 +1781,8 @@ def list_admin_cartera(
         clientes_filtrados = [
             c
             for c in clientes_filtrados
-            if (c.nombre and q in c.nombre.lower())
+            if (c.alias and q in c.alias.lower())
+            or (c.nombre and q in c.nombre.lower())
             or (c.rut and q in c.rut.lower())
             or (c.correo and q in c.correo.lower())
             or (c.celular and q in c.celular.lower())
@@ -1774,6 +1797,7 @@ def list_admin_cartera(
                 id=c.id,
                 rut=c.rut,
                 nombre=c.nombre,
+                alias=c.alias,
                 correo=c.correo,
                 celular=c.celular,
                 activo=c.activo,

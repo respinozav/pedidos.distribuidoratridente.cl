@@ -314,7 +314,7 @@ export default function AdminCarteraManager() {
               <input
                 className="form-control"
                 type="search"
-                placeholder="Nombre, RUT, correo o celular..."
+                placeholder="Alias (fantasía), nombre, RUT, correo o celular..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -445,7 +445,14 @@ export default function AdminCarteraManager() {
                           />
                         </td>
                         <td>
-                          <div className="fw-bold text-dark">{client.nombre || "Sin nombre registrado"}</div>
+                          <div className="fw-bold text-dark">
+                            {client.nombre || "Sin nombre registrado"}
+                            {client.alias && (
+                              <span className="badge bg-light text-primary border ms-2" title={`Alias: ${client.alias}`}>
+                                {client.alias}
+                              </span>
+                            )}
+                          </div>
                           <small className="text-muted d-block font-monospace">RUT: {client.rut || "-"}</small>
                         </td>
                         <td>
