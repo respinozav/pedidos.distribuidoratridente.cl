@@ -46,8 +46,16 @@ from app.services.pricing import customer_product_box_price, customer_product_pr
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "pedidos_voz")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = "/tmp/pedidos_voz"
+try:
+    _default_upload = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "pedidos_voz")
+    os.makedirs(_default_upload, exist_ok=True)
+    UPLOAD_DIR = _default_upload
+except Exception:
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+    except Exception:
+        UPLOAD_DIR = "/tmp"
 
 
 def _get_gemini_api_key() -> str:
