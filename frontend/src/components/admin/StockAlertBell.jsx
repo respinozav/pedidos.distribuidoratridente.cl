@@ -6,11 +6,18 @@ import { api } from "../../services/api";
 let cachedAlertProducts = [];
 let hasFetchedAlerts = false;
 let isFetchingAlerts = false;
+let lastAlertFetchTime = 0;
+const ALERT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 const alertSubscribers = new Set();
 
-export async function refreshStockAlerts() {
+export async function refreshStockAlerts(force = false) {
+  const now = Date.now();
+  if (!force && hasFetchedAlerts && now - lastAlertFetchTime < ALERT_CACHE_TTL_MS) {
+    return;
+  }
   if (isFetchingAlerts) return;
   isFetchingAlerts = true;
+  lastAlertFetchTime = now;
   try {
     const res = await api.get("/admin/productos/alertas-stock");
     if (Array.isArray(res.data)) {
@@ -49,18 +56,15 @@ export default function StockAlertBell({ initialProducts = null }) {
       setAlertProducts(cachedAlertProducts);
     }
 
-    // Actualizar periódicamente cada 60 segundos o cuando la ventana recupere foco
-    const interval = setInterval(refreshStockAlerts, 60000);
-    const onFocus = () => refreshStockAlerts();
-    const onStockAlertRefresh = () => refreshStockAlerts();
+    // Actualizar periódicamente cada 5 minutos o ante evento explícito de cambio de stock
+    const interval = setInterval(() => refreshStockAlerts(true), ALERT_CACHE_TTL_MS);
+    const onStockAlertRefresh = () => refreshStockAlerts(true);
 
-    window.addEventListener("focus", onFocus);
     window.addEventListener("stock-alert-refresh", onStockAlertRefresh);
 
     return () => {
       alertSubscribers.delete(subscriber);
       clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
       window.removeEventListener("stock-alert-refresh", onStockAlertRefresh);
     };
   }, []);

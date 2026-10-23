@@ -33,7 +33,13 @@ class OrderService:
     def __init__(self, database: Session):
         self.database = database
 
-    def create(self, customer_id: UUID, payload: OrderCreate, vendedor_id: UUID | None = None) -> Pedido:
+    def create(
+        self,
+        customer_id: UUID,
+        payload: OrderCreate,
+        vendedor_id: UUID | None = None,
+        origen: str = "web",
+    ) -> Pedido:
         customer = self.database.get(Cliente, customer_id)
         address = self.database.get(Direccion, payload.direccion_id)
         if not customer or not customer.activo or not address or address.cliente_id != customer_id or not address.activo:
@@ -139,6 +145,7 @@ class OrderService:
             total=subtotal,
             detalles=details,
             vendedor_id=effective_vendedor_id,
+            origen=origen,
         )
         self.database.add(order)
 

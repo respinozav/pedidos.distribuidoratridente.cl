@@ -142,6 +142,7 @@ class Pedido(AuditMixin, Base):
     defontana_sincronizado: Mapped[bool] = mapped_column(Boolean, default=False)
     defontana_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     vendedor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True, index=True)
+    origen: Mapped[str] = mapped_column(String(30), default="web", server_default="web", index=True)
     cliente: Mapped[Cliente] = relationship(back_populates="pedidos")
     vendedor: Mapped["Usuario | None"] = relationship(foreign_keys=[vendedor_id])
     direccion: Mapped[Direccion] = relationship()
@@ -152,6 +153,7 @@ class Pedido(AuditMixin, Base):
         back_populates="pedido", cascade="all, delete-orphan", order_by="PedidoNotificacionLog.created_at.desc()"
     )
     venta_vendedor: Mapped["VentaVendedor | None"] = relationship(back_populates="pedido", uselist=False, cascade="all, delete-orphan")
+    pedido_voz: Mapped["PedidoVoz | None"] = relationship(back_populates="pedido", uselist=False)
 
 
 class Credito(AuditMixin, Base):
@@ -543,6 +545,45 @@ class CotizacionProducto(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     cotizacion: Mapped[CotizacionCliente] = relationship(back_populates="items")
+
+
+class PedidoVoz(Base):
+    __tablename__ = "pedidos_voz"
+    __table_args__ = (
+        Index("ix_pedidos_voz_usuario_id", "usuario_id"),
+        Index("ix_pedidos_voz_cliente_id", "cliente_id"),
+        Index("ix_pedidos_voz_estado", "estado"),
+        Index("ix_pedidos_voz_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    usuario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    cliente_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    direccion_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("direcciones.id", ondelete="SET NULL"), nullable=True
+    )
+    pedido_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pedidos.id", ondelete="SET NULL"), nullable=True, unique=True
+    )
+    audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcripcion: Mapped[str] = mapped_column(Text)
+    estado: Mapped[str] = mapped_column(String(30), default="BORRADOR", index=True)
+    lineas_interpretadas: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    lineas_editadas_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_estimado: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    notas: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    usuario: Mapped[Usuario] = relationship("Usuario")
+    cliente: Mapped[Cliente | None] = relationship("Cliente")
+    direccion: Mapped[Direccion | None] = relationship("Direccion")
+    pedido: Mapped[Pedido | None] = relationship("Pedido", back_populates="pedido_voz")
+
 
 
 

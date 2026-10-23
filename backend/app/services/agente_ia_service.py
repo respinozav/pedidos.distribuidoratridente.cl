@@ -17,89 +17,111 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 SYSTEM_INSTRUCTION = """
-Eres el **Agente Tridente IA**, el asistente inteligente de analítica comercial, rotación de inventario y abastecimiento de Distribuidora Tridente.
-Tu objetivo es asesorar a los administradores, dueños y ejecutivos comerciales de la empresa.
+Eres el Agente Tridente IA, asistente interno de Distribuidora Tridente (mayorista de confites, snacks, tabaco y abarrotes en la Región de Coquimbo). Hablas con el dueño y el equipo de ventas.
 
-AUDIENCIA Y TONO:
-- Tu interlocutor es un usuario comercial/administrativo, **NO ES INFORMÁTICO NI PROGRAMADOR**.
-- **ESTÁ ESTRICTAMENTE PROHIBIDO responder con objetos JSON, código fuente o estructuras de programación en el texto que lee el usuario.**
-- NUNCA uses bloques de código con sintaxis técnica como `{"clave": "valor"}` o `[{"id": 1}]`.
-- NUNCA menciones nombres de tecnologías internas como PostgreSQL, PostgREST, SQL o bases de datos al responder. Para el usuario simplemente estás consultando el catálogo y las ventas de Distribuidora Tridente.
-- Comunícate siempre en un tono profesional, claro, ejecutivo y cordial en español (Chile).
+Forma de responder:
+- Español de Chile, directo y breve. Sin saludos formales ni "Estimado equipo".
+- Primera línea = la respuesta con su número (ej.: "Del 1 al 21 de octubre vendimos $69.569.224 en 135 pedidos.").
+- Indica siempre el período y si incluye o excluye pedidos cancelados.
+- Montos en pesos chilenos con punto de miles ($1.234.567).
+- Tablas solo cuando haya 3 o más filas. Máximo 3 recomendaciones, concretas y basadas en los datos.
 
-REGLA DE ORO: SIEMPRE RESPONDE CON TABLAS MARKDOWN
-1. Toda lista de productos, stock, compras, pedidos, clientes, precios o métricas DEBE presentarse obligatoriamente en formato de **TABLA MARKDOWN** (`| Encabezado | ... |`).
-   Ejemplo de tabla obligatoria:
-   | Código | Producto | Stock Actual | Precio | Estado |
-   | :--- | :--- | :---: | :---: | :--- |
-   | PROD-01 | Arroz Extra 1kg | 24 un. | $1.290 | Disponible ✅ |
-   | PROD-05 | Aceite Vegetal 900ml | 4 un. | $2.190 | Stock Crítico ⚠️ |
+Datos:
+- Usa siempre las herramientas para cifras. Nunca estimes ni inventes montos, stock ni clientes.
+- Para ventas, pedidos y clientes, consulta TODOS los pedidos del rango de fechas pedido usando la herramienta `consultar_ventas_periodo` o `consultar_top_clientes`.
+- Si no indican fechas, usa el mes en curso y dilo explícitamente.
+- Si una herramienta falla o los datos están incompletos, dilo claramente y no entregues cifras parciales como totales.
+- Si no tienes un dato, responde "No tengo ese dato en el sistema".
+- Para consultar productos con bajo stock, usa `consultar_productos_stock_critico`.
 
-2. Formato de datos en las tablas:
-   - Precios: siempre con formato de moneda en pesos chilenos (ej: `$1.500`, `$24.990`).
-   - Cantidades: siempre con unidad de medida clara (ej: `15 un.`, `8 cajas`, `0 un. (Agotado 🚨)`).
-   - Fechas: formato legible día/mes/año (ej: `14/10/2026`).
-
-3. Complementa la tabla con un análisis ejecutivo:
-   - Inicia con una breve introducción directa al grano.
-   - Presenta la tabla con los datos solicitados.
-   - Concluye con recomendaciones comerciales prácticas (ej: sugerencias de compra, clientes que han dejado de comprar, etc.).
-
-HERRAMIENTAS EN TIEMPO REAL:
-Tienes herramientas disponibles para consultar el catálogo de productos y ventas en tiempo real:
-1. `consultar_productos`: busca productos por nombre/código, stock o estado.
-2. `consultar_pedidos_recientes`: consulta pedidos y compras de clientes en un rango de días.
-3. `consultar_metricas_generales`: obtiene métricas consolidadas (top más vendidos, total facturado, stock crítico).
-DEBES utilizarlas para responder con datos reales y actualizados. No inventes números ni productos.
-
-GRÁFICOS Y PREDICCIONES INTERACTIVAS (OPCIONAL):
-Si el usuario te pide expresamente un gráfico o una predicción visual, presenta primero tu explicación y tu TABLA con los datos para el usuario, y luego, al final absoluto de tu mensaje, incluye el bloque técnico de datos para el motor gráfico con uno de estos formatos:
+Gráficos:
+- Cuando pidan un gráfico, entrega los datos estructurados con valores numéricos limpios (números enteros o decimales puros, sin puntos de miles ni signo $).
+- Si solicitan gráfico o visualización, presenta primero tu explicación y tu tabla con los datos para el usuario, y luego, al final absoluto de tu mensaje, incluye el bloque técnico de datos para el motor gráfico con el siguiente formato:
 
 ```json
 {
   "type": "chart",
   "chartType": "bar",
-  "title": "Top 5 Productos más Vendidos",
-  "description": "Comparativa de unidades vendidas",
+  "title": "Top Clientes con Mayor Compra",
+  "description": "Período consultado",
   "data": {
-    "labels": ["Prod A", "Prod B"],
+    "labels": ["Cliente 1", "Cliente 2"],
     "datasets": [
       {
-        "label": "Unidades",
-        "data": [120, 85],
-        "backgroundColor": ["#0ea5e9", "#10b981"]
+        "label": "Monto Comprado ($)",
+        "data": [3624667, 2486101]
       }
     ]
   }
 }
 ```
-
-o para predicción:
-```json
-{
-  "type": "prediction",
-  "title": "Sugerencias de Reabastecimiento Crítico",
-  "items": [
-    {
-      "codigo": "PROD-01",
-      "nombre": "Nombre del Producto",
-      "stock_actual": 4,
-      "ventas_periodo": 45,
-      "dias_cobertura_estimados": 3,
-      "sugerencia_compra": 50
-    }
-  ]
-}
-```
-Nota: El sistema extraerá automáticamente este bloque para dibujar el gráfico y lo ocultará del texto del mensaje para que el usuario nunca vea código JSON. Por eso es vital que antes del bloque hayas incluido la tabla con los datos para que el usuario pueda leerla directamente.
 """
 
 GEMINI_TOOLS_DECLARATION = [
     {
         "functionDeclarations": [
             {
+                "name": "consultar_ventas_periodo",
+                "description": "Calcula los totales exactos de ventas, facturación y pedidos en un rango de fechas sobre TODOS los pedidos de la base de datos (sin límites ni recortes). Coincide al 100% con el Dashboard comercial.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "fecha_desde": {
+                            "type": "STRING",
+                            "description": "Fecha inicio del rango en formato YYYY-MM-DD (ej: '2026-10-01'). Si no se indica, usa el inicio del mes actual.",
+                        },
+                        "fecha_hasta": {
+                            "type": "STRING",
+                            "description": "Fecha término del rango en formato YYYY-MM-DD (ej: '2026-10-21'). Si no se indica, usa la fecha actual.",
+                        },
+                        "incluir_cancelados": {
+                            "type": "BOOLEAN",
+                            "description": "Si es true incluye pedidos cancelados. Por defecto false (excluye cancelados, igual que el Dashboard).",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "consultar_top_clientes",
+                "description": "Obtiene el ranking de los clientes con mayores compras en un rango de fechas con valores numéricos limpios listos para graficar y tabular.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "fecha_desde": {
+                            "type": "STRING",
+                            "description": "Fecha inicial YYYY-MM-DD.",
+                        },
+                        "fecha_hasta": {
+                            "type": "STRING",
+                            "description": "Fecha final YYYY-MM-DD.",
+                        },
+                        "limite": {
+                            "type": "INTEGER",
+                            "description": "Cantidad de clientes en el ranking (por defecto 10).",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "consultar_productos_stock_critico",
+                "description": "Consulta productos activos con stock menor o igual al umbral crítico devolviendo la lista completa sin cortes.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "stock_maximo": {
+                            "type": "INTEGER",
+                            "description": "Cantidad de stock máximo para considerar crítico (por defecto 10).",
+                        },
+                        "limite": {
+                            "type": "INTEGER",
+                            "description": "Máximo de productos a listar (por defecto 50).",
+                        },
+                    },
+                },
+            },
+            {
                 "name": "consultar_productos",
-                "description": "Consulta productos en el catálogo de Distribuidora Tridente por término de búsqueda, stock o estado activo.",
+                "description": "Busca productos en el catálogo de Distribuidora Tridente por término de búsqueda, stock o estado activo.",
                 "parameters": {
                     "type": "OBJECT",
                     "properties": {
@@ -124,13 +146,21 @@ GEMINI_TOOLS_DECLARATION = [
             },
             {
                 "name": "consultar_pedidos_recientes",
-                "description": "Consulta los pedidos recientes y sus detalles de venta en tiempo real.",
+                "description": "Consulta los pedidos recientes y sus detalles de venta con filtros de fecha o estado.",
                 "parameters": {
                     "type": "OBJECT",
                     "properties": {
+                        "fecha_desde": {
+                            "type": "STRING",
+                            "description": "Fecha inicial YYYY-MM-DD (opcional).",
+                        },
+                        "fecha_hasta": {
+                            "type": "STRING",
+                            "description": "Fecha final YYYY-MM-DD (opcional).",
+                        },
                         "dias_historial": {
                             "type": "INTEGER",
-                            "description": "Cantidad de días hacia atrás a consultar (ej. 7, 30, 60).",
+                            "description": "Cantidad de días hacia atrás si no se especifican fechas (ej. 7, 30).",
                         },
                         "estado_filtro": {
                             "type": "STRING",
@@ -145,13 +175,21 @@ GEMINI_TOOLS_DECLARATION = [
             },
             {
                 "name": "consultar_metricas_generales",
-                "description": "Obtiene métricas clave: total pedidos, facturación total, ticket promedio, top 10 productos más vendidos y productos con stock crítico.",
+                "description": "Obtiene métricas consolidadas: total pedidos, facturación total, ticket promedio, top productos y stock crítico.",
                 "parameters": {
                     "type": "OBJECT",
                     "properties": {
+                        "fecha_desde": {
+                            "type": "STRING",
+                            "description": "Fecha inicial YYYY-MM-DD (opcional).",
+                        },
+                        "fecha_hasta": {
+                            "type": "STRING",
+                            "description": "Fecha final YYYY-MM-DD (opcional).",
+                        },
                         "dias": {
                             "type": "INTEGER",
-                            "description": "Días del periodo para el análisis (por defecto 30).",
+                            "description": "Días del periodo para el análisis si no se indican fechas (por defecto 30).",
                         },
                     },
                 },
@@ -204,11 +242,43 @@ class AgenteIAService:
         self.usuario = usuario
         self.postgrest = PostgrestService(db)
         self.api_key = settings.gemini_api_key
+        self.ultimo_resultado_verificado = False
+        self.ultimo_periodo = None
+        self.ultima_fuente = None
 
     def ejecutar_herramienta(self, nombre: str, args: dict[str, Any]) -> dict[str, Any]:
         """Ejecuta la función solicitada por Gemini vía PostgREST o fallback local."""
         logger.info("Agente IA ejecutando herramienta '%s' con args %s", nombre, args)
-        if nombre == "consultar_productos":
+        if nombre == "consultar_ventas_periodo":
+            res = self.postgrest.consultar_ventas_periodo(
+                fecha_desde=args.get("fecha_desde"),
+                fecha_hasta=args.get("fecha_hasta"),
+                incluir_cancelados=args.get("incluir_cancelados", False),
+            )
+            self.ultimo_resultado_verificado = res.get("verificado", False)
+            self.ultimo_periodo = res.get("periodo")
+            self.ultima_fuente = res.get("fuente")
+            return res
+        elif nombre == "consultar_top_clientes":
+            res = self.postgrest.consultar_top_clientes(
+                fecha_desde=args.get("fecha_desde"),
+                fecha_hasta=args.get("fecha_hasta"),
+                limite=args.get("limite", 10),
+            )
+            self.ultimo_resultado_verificado = res.get("verificado", False)
+            self.ultimo_periodo = res.get("periodo")
+            self.ultima_fuente = "Base de datos Tridente (todos los pedidos)"
+            return res
+        elif nombre == "consultar_productos_stock_critico":
+            res = self.postgrest.consultar_productos_stock_critico(
+                stock_maximo=args.get("stock_maximo", 10),
+                limite=args.get("limite", 50),
+            )
+            self.ultimo_resultado_verificado = res.get("verificado", False)
+            self.ultimo_periodo = "Inventario actual"
+            self.ultima_fuente = res.get("fuente")
+            return res
+        elif nombre == "consultar_productos":
             return {
                 "productos": self.postgrest.consultar_productos(
                     termino_busqueda=args.get("termino_busqueda", ""),
@@ -218,19 +288,27 @@ class AgenteIAService:
                 )
             }
         elif nombre == "consultar_pedidos_recientes":
-            return {
-                "pedidos": self.postgrest.consultar_pedidos_recientes(
-                    dias_historial=args.get("dias_historial", 30),
-                    estado_filtro=args.get("estado_filtro", None),
-                    limite=args.get("limite", 35),
-                )
-            }
+            res = self.postgrest.consultar_pedidos_recientes(
+                fecha_desde=args.get("fecha_desde"),
+                fecha_hasta=args.get("fecha_hasta"),
+                dias_historial=args.get("dias_historial", 30),
+                estado_filtro=args.get("estado_filtro", None),
+                limite=args.get("limite", 35),
+            )
+            self.ultimo_resultado_verificado = res.get("verificado", False)
+            self.ultimo_periodo = res.get("periodo")
+            self.ultima_fuente = res.get("fuente")
+            return res
         elif nombre == "consultar_metricas_generales":
-            return {
-                "metricas": self.postgrest.consultar_metricas_generales(
-                    dias=args.get("dias", 30)
-                )
-            }
+            res = self.postgrest.consultar_metricas_generales(
+                fecha_desde=args.get("fecha_desde"),
+                fecha_hasta=args.get("fecha_hasta"),
+                dias=args.get("dias", 30),
+            )
+            self.ultimo_resultado_verificado = res.get("verificado", False)
+            self.ultimo_periodo = res.get("periodo")
+            self.ultima_fuente = res.get("fuente")
+            return res
         return {"error": f"Herramienta '{nombre}' desconocida."}
 
     def _extraer_datos_estructurados(self, texto: str) -> tuple[str, dict[str, Any] | None]:
@@ -248,7 +326,6 @@ class AgenteIAService:
 
         for contenido_bloque in bloques:
             contenido_trim = contenido_bloque.strip()
-            # Intentar parsear como JSON si tiene forma de estructura
             if (contenido_trim.startswith("{") and contenido_trim.endswith("}")) or (
                 contenido_trim.startswith("[") and contenido_trim.endswith("]")
             ):
@@ -257,17 +334,14 @@ class AgenteIAService:
                     if isinstance(parsed, dict) and parsed.get("type") in ("chart", "prediction"):
                         if not datos_estructurados:
                             datos_estructurados = parsed
-                        # Eliminar el bloque de código del texto para no mostrar JSON al usuario
                         texto_limpio = re.sub(
                             r"```(?:json)?\s*" + re.escape(contenido_bloque) + r"\s*```",
                             "",
                             texto_limpio,
                         )
                     else:
-                        # Si es un JSON de datos (ej: lista de productos o métricas), convertir a tabla Markdown
                         tabla_md = _json_a_tabla_markdown(parsed)
                         if tabla_md:
-                            # Reemplazar el bloque de código técnico por una tabla Markdown elegante
                             texto_limpio = re.sub(
                                 r"```(?:json)?\s*" + re.escape(contenido_bloque) + r"\s*```",
                                 f"\n\n{tabla_md}\n\n",
@@ -318,6 +392,37 @@ class AgenteIAService:
             elif datos_estructurados.get("type") == "prediction":
                 texto_limpio = f"A continuación se presentan las estimaciones: **{datos_estructurados.get('title', 'Sugerencias de Abastecimiento')}**."
 
+        # 5. Sanitizar datos numéricos de gráficos (limpiar $, puntos y comas para que Chart.js nunca falle)
+        if datos_estructurados and datos_estructurados.get("type") == "chart":
+            chart_data = datos_estructurados.get("data", {})
+            datasets = chart_data.get("datasets", [])
+            for ds in datasets:
+                cleaned_numbers = []
+                for val in ds.get("data", []):
+                    if isinstance(val, (int, float)):
+                        cleaned_numbers.append(val)
+                    else:
+                        s_val = re.sub(r"[$ \s]", "", str(val)).replace(".", "").replace(",", ".")
+                        try:
+                            cleaned_numbers.append(float(s_val) if "." in s_val else int(s_val))
+                        except Exception:
+                            cleaned_numbers.append(0)
+                ds["data"] = cleaned_numbers
+
+        # 6. Adjuntar metadatos de verificación (Problema 2 resuelto)
+        if self.ultimo_resultado_verificado:
+            if not datos_estructurados:
+                datos_estructurados = {}
+            datos_estructurados["verificado"] = True
+            datos_estructurados["periodo"] = self.ultimo_periodo
+            datos_estructurados["fuente"] = self.ultima_fuente
+        elif self.ultimo_periodo:
+            if not datos_estructurados:
+                datos_estructurados = {}
+            datos_estructurados["verificado"] = False
+            datos_estructurados["periodo"] = self.ultimo_periodo
+            datos_estructurados["fuente"] = self.ultima_fuente
+
         return texto_limpio, datos_estructurados
 
     def procesar_mensaje(self, chat_id: UUID, mensaje_usuario: str) -> dict[str, Any]:
@@ -325,8 +430,20 @@ class AgenteIAService:
         Orquesta la conversación con Gemini usando HTTP REST puro vía httpx:
         - Cero dependencias externas incompatibles.
         - Soporta Function Calling nativo con PostgREST.
-        - Fallback a modelos alternativos en caso de rate-limit o 503.
+        - Reintento automático con backoff ante rate-limit o 503.
         """
+        import time
+
+        # Limpiar texto de dictado por voz si viene con texto basura (Problema 5 resuelto)
+        mensaje_limpio = re.sub(
+            r"^(?:🎙️?\s*escuchando(?:\s+voz|\s+tu\s+voz)?[\s,\.:-]*habla(?:\s+con\s+claridad|\s+con\s+naturalidad)?(?:[\s,\.:-]*ya)?)+",
+            "",
+            mensaje_usuario,
+            flags=re.IGNORECASE,
+        ).strip()
+        if not mensaje_limpio:
+            mensaje_limpio = mensaje_usuario.strip()
+
         chat = self.db.scalar(
             select(IAChat)
             .options(selectinload(IAChat.mensajes))
@@ -339,7 +456,7 @@ class AgenteIAService:
         msg_user = IAMensaje(
             chat_id=chat.id,
             rol="user",
-            contenido=mensaje_usuario,
+            contenido=mensaje_limpio,
             datos_estructurados=None,
             herramientas_usadas=None,
         )
@@ -347,8 +464,8 @@ class AgenteIAService:
         self.db.flush()
 
         if chat.titulo == "Nueva conversación":
-            titulo_auto = mensaje_usuario.strip()[:40]
-            if len(mensaje_usuario.strip()) > 40:
+            titulo_auto = mensaje_limpio.strip()[:40]
+            if len(mensaje_limpio.strip()) > 40:
                 titulo_auto += "..."
             chat.titulo = titulo_auto
 
@@ -375,6 +492,7 @@ class AgenteIAService:
                 "contenido": msg_ia.contenido,
                 "datos_estructurados": None,
                 "herramientas_usadas": None,
+                "verificado": False,
                 "created_at": msg_ia.created_at.isoformat(),
             }
 
@@ -399,14 +517,13 @@ class AgenteIAService:
                 if turno["role"] != contents[-1]["role"]:
                     contents.append(turno)
                 else:
-                    # Mismo rol consecutivo: concatenar texto para mantener alternancia
                     contents[-1]["parts"][0]["text"] += f"\n\n{turno['parts'][0]['text']}"
 
         # Agregar el mensaje actual del usuario garantizando alternancia
         if contents and contents[-1]["role"] == "user":
-            contents[-1]["parts"][0]["text"] += f"\n\n{mensaje_usuario}"
+            contents[-1]["parts"][0]["text"] += f"\n\n{mensaje_limpio}"
         else:
-            contents.append({"role": "user", "parts": [{"text": mensaje_usuario}]})
+            contents.append({"role": "user", "parts": [{"text": mensaje_limpio}]})
 
         modelo_env = getattr(settings, "gemini_model", None)
         if modelo_env in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"):
@@ -420,90 +537,98 @@ class AgenteIAService:
             "gemini-3.1-flash-lite",
             "gemini-3.8-flash",
         ]
-        # Eliminar duplicados manteniendo orden de prioridad
         modelos_candidatos = list(dict.fromkeys(lista_base))
 
         herramientas_ejecutadas: list[str] = []
         texto_final = ""
         errores_intentos: list[str] = []
 
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=45.0) as client:
             for modelo in modelos_candidatos:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={self.api_key}"
-                try:
-                    payload = {
-                        "contents": contents,
-                        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
-                        "tools": GEMINI_TOOLS_DECLARATION,
-                        "generationConfig": {
-                            "temperature": 0.3,
-                            "maxOutputTokens": 2048,
-                        },
-                    }
+                exito_modelo = False
 
-                    # Bucle de Function Calling (máximo 4 iteraciones)
-                    for iteracion in range(4):
-                        res = client.post(url, json=payload)
-                        if res.status_code != 200:
-                            err_info = f"[{modelo}] HTTP {res.status_code}: {res.text[:120]}"
-                            logger.warning("Gemini error: %s", err_info)
-                            errores_intentos.append(err_info)
-                            break
+                for intento in range(3):
+                    try:
+                        payload = {
+                            "contents": contents,
+                            "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+                            "tools": GEMINI_TOOLS_DECLARATION,
+                            "generationConfig": {
+                                "temperature": 0.2,
+                                "maxOutputTokens": 4096,
+                            },
+                        }
 
-                        res_json = res.json()
-                        candidates = res_json.get("candidates", [])
-                        if not candidates:
-                            err_info = f"[{modelo}] Sin candidatos en respuesta: {str(res_json)[:100]}"
-                            logger.warning(err_info)
-                            errores_intentos.append(err_info)
-                            break
+                        # Bucle de Function Calling (máximo 5 iteraciones)
+                        for iteracion in range(5):
+                            res = client.post(url, json=payload)
+                            if res.status_code != 200:
+                                err_info = f"[{modelo}] HTTP {res.status_code}: {res.text[:120]}"
+                                logger.warning("Gemini error intento %d: %s", intento + 1, err_info)
+                                errores_intentos.append(err_info)
+                                if res.status_code in (429, 500, 502, 503, 504) and intento < 2:
+                                    time.sleep(1.5)
+                                break
 
-                        content_candidate = candidates[0].get("content", {})
-                        parts = content_candidate.get("parts", [])
+                            res_json = res.json()
+                            candidates = res_json.get("candidates", [])
+                            if not candidates:
+                                err_info = f"[{modelo}] Sin candidatos en respuesta: {str(res_json)[:100]}"
+                                logger.warning(err_info)
+                                errores_intentos.append(err_info)
+                                break
 
-                        # Verificar si hay functionCall
-                        function_calls = [p.get("functionCall") for p in parts if "functionCall" in p]
-                        if not function_calls:
-                            # Tenemos respuesta de texto final
-                            textos = [p.get("text", "") for p in parts if "text" in p]
-                            texto_final = "\n".join(textos).strip()
-                            break
+                            content_candidate = candidates[0].get("content", {})
+                            parts = content_candidate.get("parts", [])
 
-                        # Ejecutar llamadas a herramientas y enviar respuestas a Gemini
-                        # Agregar el mensaje del modelo con sus functionCalls a contents
-                        payload["contents"].append(content_candidate)
+                            # Verificar si hay functionCall
+                            function_calls = [p.get("functionCall") for p in parts if "functionCall" in p]
+                            if not function_calls:
+                                textos = [p.get("text", "") for p in parts if "text" in p]
+                                texto_final = "\n".join(textos).strip()
+                                exito_modelo = True
+                                break
 
-                        response_parts = []
-                        for fc in function_calls:
-                            fn_name = fc.get("name")
-                            fn_args = fc.get("args", {})
-                            herramientas_ejecutadas.append(fn_name)
-                            tool_result = self.ejecutar_herramienta(fn_name, fn_args)
-                            response_parts.append(
-                                {
-                                    "functionResponse": {
-                                        "name": fn_name,
-                                        "response": {"result": tool_result},
+                            # Agregar el mensaje del modelo con sus functionCalls a contents
+                            payload["contents"].append(content_candidate)
+
+                            response_parts = []
+                            for fc in function_calls:
+                                fn_name = fc.get("name")
+                                fn_args = fc.get("args", {})
+                                herramientas_ejecutadas.append(fn_name)
+                                tool_result = self.ejecutar_herramienta(fn_name, fn_args)
+                                response_parts.append(
+                                    {
+                                        "functionResponse": {
+                                            "name": fn_name,
+                                            "response": {"result": tool_result},
+                                        }
                                     }
+                                )
+
+                            # Enviar respuestas de funciones
+                            payload["contents"].append(
+                                {
+                                    "role": "user",
+                                    "parts": response_parts,
                                 }
                             )
 
-                        # Enviar las respuestas de las funciones
-                        payload["contents"].append(
-                            {
-                                "role": "user",
-                                "parts": response_parts,
-                            }
-                        )
+                        if exito_modelo and texto_final:
+                            break
 
-                    if texto_final:
-                        break
+                    except Exception as ex:
+                        err_info = f"[{modelo}] Excepción intento {intento + 1}: {type(ex).__name__} {str(ex)[:120]}"
+                        logger.warning(err_info)
+                        errores_intentos.append(err_info)
+                        if intento < 2:
+                            time.sleep(1.0)
+                        continue
 
-                except Exception as ex:
-                    err_info = f"[{modelo}] Excepción {type(ex).__name__}: {str(ex)[:120]}"
-                    logger.warning("Fallo llamando a modelo: %s", err_info)
-                    errores_intentos.append(err_info)
-                    continue
+                if texto_final:
+                    break
 
         if not texto_final:
             detalle_fallos = " // ".join(errores_intentos) if errores_intentos else "Sin respuesta de modelos"
@@ -514,6 +639,7 @@ class AgenteIAService:
             )
 
         texto_limpio, datos_estructurados = self._extraer_datos_estructurados(texto_final)
+        es_verificado = bool(datos_estructurados and datos_estructurados.get("verificado") is True)
 
         msg_ia = IAMensaje(
             chat_id=chat.id,
@@ -534,5 +660,6 @@ class AgenteIAService:
             "contenido": msg_ia.contenido,
             "datos_estructurados": msg_ia.datos_estructurados,
             "herramientas_usadas": msg_ia.herramientas_usadas,
+            "verificado": es_verificado,
             "created_at": msg_ia.created_at.isoformat(),
         }

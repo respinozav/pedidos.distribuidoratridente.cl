@@ -20,6 +20,7 @@ import VendedorVentasRealizadas from "./pages/admin/VendedorVentasRealizadas";
 import AdminVentasManager from "./pages/admin/AdminVentasManager";
 import AdminCarteraManager from "./pages/admin/AdminCarteraManager";
 import AgenteTridenteIA from "./pages/admin/AgenteTridenteIA";
+import PedidosVoz from "./pages/admin/PedidosVoz";
 import FaqTutorials from "./components/FaqTutorials";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
@@ -1759,17 +1760,27 @@ async function loadCredits() {
   return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">COBRANZAS</p><h1>Créditos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de cuentas por cobrar</span><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">CRÉDITOS</p><h2>{paidFilter === "pending" ? "Créditos pendientes" : "Historial de créditos pagados"}</h2><p>Controla los plazos de pago registrados al entregar los pedidos.</p></div><div className="summary-metric"><span>{credits.length}</span><small>{paidFilter === "pending" ? "Pendientes de pago" : "Pagados"}</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de créditos</h2><p>Consulta vencimientos y registra pagos recibidos.</p></div><span className="panel-count">{credits.length} registros</span></div><div className="credit-filters"><label htmlFor="credit-status">Vista</label><select id="credit-status" className="form-select" value={paidFilter} onChange={(event) => setPaidFilter(event.target.value)}><option value="pending">Pendientes</option><option value="paid">Historial pagados</option></select></div>{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando créditos...</p> : <div className="credit-table mt-4"><div className="credit-table-head"><span>Cliente</span><span>Pedido</span><span>Días crédito</span><span>Entrega</span><span>Días al vencimiento</span><span>Vencimiento</span><span>{paidFilter === "paid" ? "Fecha pago" : "Acciones"}</span></div>{credits.length ? credits.map((credit) => <article className="credit-row" key={credit.id}><div><strong>{customerName(credit)}</strong><small>{credit.cliente?.rut || credit.cliente?.celular || "Sin identificador"}</small></div><strong>#{credit.pedido?.id?.slice(0, 8).toUpperCase()}</strong><span>{credit.dias_credito}</span><span>{dateFormatter.format(new Date(credit.fecha_entrega))}</span><div>{renderDueDaysBadge(credit)}</div><span>{dateFormatter.format(new Date(credit.fecha_vencimiento))}</span>{paidFilter === "paid" ? <span>{credit.fecha_pago ? dateFormatter.format(new Date(credit.fecha_pago)) : "-"}</span> : <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => { setPaymentDate(new Date().toISOString().slice(0, 10)); setSelectedCredit(credit); }}>Marcar pagado</button>}</article>) : <p className="history-filter-empty">No hay créditos {paidFilter === "pending" ? "pendientes" : "pagados"}.</p>}</div>}</section></div>{selectedCredit && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="credit-payment-title"><header><div><p className="eyebrow">REGISTRAR PAGO</p><h2 id="credit-payment-title">¿Confirmar pago del crédito?</h2></div><button className="icon-button" type="button" onClick={() => setSelectedCredit(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El crédito del pedido <strong>#{selectedCredit.pedido?.id?.slice(0, 8).toUpperCase()}</strong> quedará marcado como pagado.</p><label className="form-label" htmlFor="credit-payment-date">Fecha de pago</label><input id="credit-payment-date" className="form-control" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /></div><footer><button className="btn btn-light" type="button" disabled={saving} onClick={() => setSelectedCredit(null)}>No</button><button className="btn btn-primary" type="button" disabled={saving || !paymentDate} onClick={confirmPayment}>{saving ? "Guardando..." : "Sí, marcar pagado"}</button></footer></section></div>}</>;
 }
 
-function AdminSalesDashboard() {
+function AdminSalesDashboard({ onNavigateToSection }) {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = `${today.slice(0, 7)}-01`;
   const [orders, setOrders] = useState([]);
   const [filters, setFilters] = useState({ desde: monthStart, hasta: today });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [voiceMetrics, setVoiceMetrics] = useState(null);
 
   useEffect(() => {
     api.get("/pedidos").then(({ data }) => setOrders(data)).catch((requestError) => setError(requestError.response?.data?.detail ?? "No fue posible cargar los indicadores.")).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const params = {};
+    if (filters.desde) params.fecha_desde = `${filters.desde}T00:00:00Z`;
+    if (filters.hasta) params.fecha_hasta = `${filters.hasta}T23:59:59Z`;
+    api.get("/admin/pedidos-voz/metricas", { params })
+      .then(({ data }) => setVoiceMetrics(data))
+      .catch((err) => console.warn("No se pudieron cargar métricas de voz:", err));
+  }, [filters.desde, filters.hasta]);
 
   const getOrderState = (order) => (typeof order.estado === "string" ? order.estado : order.estado?.nombre || "");
 
@@ -1800,7 +1811,222 @@ function AdminSalesDashboard() {
   const maxCustomerTotal = customerRanking[0]?.total ?? 1;
   const maxProductUnits = productRanking[0]?.units ?? 1;
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">ANALÍTICA</p><h1>Dashboard</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Resumen comercial</span><StockAlertBell /></div></header><div className="admin-content dashboard-content"><section className="dashboard-hero"><div><p className="eyebrow">VENTAS</p><h2>Visión comercial</h2><p>Ventas y comportamiento de compra durante el periodo seleccionado.</p></div><div className="dashboard-date-filters"><label>Desde<input className="form-control" type="date" value={filters.desde} max={filters.hasta || undefined} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label>Hasta<input className="form-control" type="date" value={filters.hasta} min={filters.desde || undefined} max={today} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div></section>{error && <div className="alert alert-danger">{error}</div>}{loading ? <p className="text-secondary">Cargando indicadores...</p> : <><section className="dashboard-metrics"><article><span>VENTAS TOTALES</span><strong>{money.format(totalSales)}</strong><small>{salesOrders.length} pedidos no cancelados</small></article><article><span>CLIENTE PRINCIPAL</span><strong>{customerRanking[0]?.name || "Sin compras"}</strong><small>{customerRanking[0] ? money.format(customerRanking[0].total) : "-"}</small></article><article><span>PRODUCTO LÍDER</span><strong>{productRanking[0]?.name || "Sin ventas"}</strong><small>{productRanking[0] ? `${productRanking[0].units} unidades vendidas` : "-"}</small></article><article><span>UNIDADES VENDIDAS</span><strong>{totalUnits}</strong><small>En el periodo seleccionado</small></article></section><section className="dashboard-grid"><section className="content-panel dashboard-ranking"><div className="panel-heading"><div><h2>Clientes con más compras</h2><p>Ordenados de mayor a menor monto comprado.</p></div><span className="panel-count">{customerRanking.length} clientes</span></div>{customerRanking.length ? <ol className="ranking-list">{customerRanking.map((customer, index) => <li key={customer.id}><span className="ranking-position">{index + 1}</span><div className="ranking-main"><strong>{customer.name}</strong><small>{customer.orders} pedido{customer.orders === 1 ? "" : "s"}</small><i><b style={{ width: `${(customer.total / maxCustomerTotal) * 100}%` }} /></i></div><strong className="ranking-value">{money.format(customer.total)}</strong></li>)}</ol> : <p className="history-filter-empty">No hay compras en el periodo seleccionado.</p>}</section><section className="content-panel dashboard-ranking"><div className="panel-heading"><div><h2>Productos más vendidos</h2><p>Ordenados por cantidad de unidades vendidas.</p></div><span className="panel-count">{productRanking.length} productos</span></div>{productRanking.length ? <ol className="ranking-list">{productRanking.map((product, index) => <li key={product.id}><span className="ranking-position">{index + 1}</span><div className="ranking-main"><strong>{product.name}</strong><small>{product.units} unidades · {money.format(product.total)}</small><i><b style={{ width: `${(product.units / maxProductUnits) * 100}%` }} /></i></div><strong className="ranking-value">{product.units}</strong></li>)}</ol> : <p className="history-filter-empty">No hay ventas de productos en el periodo seleccionado.</p>}</section></section></>}</div></>;
+  return (
+    <>
+      <header className="admin-topbar">
+        <div className="topbar-title">
+          <p className="eyebrow mb-1">ANALÍTICA</p>
+          <h1>Dashboard</h1>
+        </div>
+        <div className="topbar-actions">
+          <span className="topbar-date d-none d-sm-inline">Resumen comercial</span>
+          <StockAlertBell />
+        </div>
+      </header>
+      <div className="admin-content dashboard-content">
+        <section className="dashboard-hero">
+          <div>
+            <p className="eyebrow">VENTAS</p>
+            <h2>Visión comercial</h2>
+            <p>Ventas y comportamiento de compra durante el periodo seleccionado.</p>
+          </div>
+          <div className="dashboard-date-filters">
+            <label>
+              Desde
+              <input
+                className="form-control"
+                type="date"
+                value={filters.desde}
+                max={filters.hasta || undefined}
+                onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))}
+              />
+            </label>
+            <label>
+              Hasta
+              <input
+                className="form-control"
+                type="date"
+                value={filters.hasta}
+                min={filters.desde || undefined}
+                max={today}
+                onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))}
+              />
+            </label>
+          </div>
+        </section>
+        {error && <div className="alert alert-danger">{error}</div>}
+        {loading ? (
+          <p className="text-secondary">Cargando indicadores...</p>
+        ) : (
+          <>
+            <section className="dashboard-metrics">
+              <article>
+                <span>VENTAS TOTALES</span>
+                <strong>{money.format(totalSales)}</strong>
+                <small>{salesOrders.length} pedidos no cancelados</small>
+              </article>
+              <article>
+                <span>CLIENTE PRINCIPAL</span>
+                <strong>{customerRanking[0]?.name || "Sin compras"}</strong>
+                <small>{customerRanking[0] ? money.format(customerRanking[0].total) : "-"}</small>
+              </article>
+              <article>
+                <span>PRODUCTO LÍDER</span>
+                <strong>{productRanking[0]?.name || "Sin ventas"}</strong>
+                <small>{productRanking[0] ? `${productRanking[0].units} unidades vendidas` : "-"}</small>
+              </article>
+              <article>
+                <span>UNIDADES VENDIDAS</span>
+                <strong>{totalUnits}</strong>
+                <small>En el periodo seleccionado</small>
+              </article>
+            </section>
+
+            {/* Bloque Pedidos por Voz en el Dashboard */}
+            {voiceMetrics && (
+              <section className="content-panel mt-3 mb-4 p-4 border rounded-4 bg-white shadow-sm">
+                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="p-2 rounded-3 bg-success-subtle text-success">
+                      <Mic size={22} />
+                    </span>
+                    <div>
+                      <h2 className="h5 m-0 font-weight-bold text-dark">Pedidos por Voz</h2>
+                      <p className="text-secondary small m-0">Canal de dictado con IA para agilizar pedidos en terreno y oficina.</p>
+                    </div>
+                  </div>
+                  {onNavigateToSection && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
+                      onClick={() => onNavigateToSection("pedidos_voz")}
+                    >
+                      <Mic size={14} /> Ir a Pedidos por voz
+                    </button>
+                  )}
+                </div>
+
+                <div className="row g-3">
+                  <div className="col-12 col-md-3">
+                    <div className="p-3 bg-light rounded-3 border">
+                      <span className="small text-secondary font-weight-bold text-uppercase d-block">Dictados Totales</span>
+                      <strong className="h4 text-dark font-weight-bold d-block mt-1">{voiceMetrics.dictados_total}</strong>
+                      <small className="text-muted">En el periodo</small>
+                    </div>
+                  </div>
+                  <div className="col-12 col-md-3">
+                    <div className="p-3 bg-light rounded-3 border">
+                      <span className="small text-secondary font-weight-bold text-uppercase d-block">Confirmados / Descartados</span>
+                      <strong className="h4 text-dark font-weight-bold d-block mt-1">
+                        <span className="text-success">{voiceMetrics.confirmados}</span> / <span className="text-muted">{voiceMetrics.descartados}</span>
+                      </strong>
+                      <small className="text-muted">{voiceMetrics.confirmados} convertidos a pedido</small>
+                    </div>
+                  </div>
+                  <div className="col-12 col-md-3">
+                    <div className="p-3 bg-light rounded-3 border">
+                      <span className="small text-secondary font-weight-bold text-uppercase d-block">Monto Confirmado por Voz</span>
+                      <strong className="h4 text-success font-weight-bold d-block mt-1">{money.format(voiceMetrics.monto_confirmado_voz)}</strong>
+                      <small className="badge bg-success-subtle text-success font-weight-bold">{voiceMetrics.porcentaje_ventas_voz}% del total</small>
+                    </div>
+                  </div>
+                  <div className="col-12 col-md-3">
+                    <div className="p-3 bg-light rounded-3 border">
+                      <span className="small text-secondary font-weight-bold text-uppercase d-block">Borradores Pendientes</span>
+                      <strong className="h4 text-warning-emphasis font-weight-bold d-block mt-1">{voiceMetrics.borradores_pendientes_count}</strong>
+                      <small className="text-muted">Pendientes de revisión</small>
+                    </div>
+                  </div>
+                </div>
+
+                {voiceMetrics.borradores_pendientes?.length > 0 && (
+                  <div className="mt-3 pt-3 border-top">
+                    <span className="small font-weight-bold text-secondary d-block mb-2">Borradores pendientes con acceso directo:</span>
+                    <div className="d-flex flex-wrap gap-2">
+                      {voiceMetrics.borradores_pendientes.map((b) => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+                          onClick={() => onNavigateToSection && onNavigateToSection("pedidos_voz")}
+                        >
+                          <AlertTriangle size={14} className="text-warning" />
+                          <span>{b.cliente_nombre}: {money.format(b.total_estimado)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            <section className="dashboard-grid">
+              <section className="content-panel dashboard-ranking">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Clientes con más compras</h2>
+                    <p>Ordenados de mayor a menor monto comprado.</p>
+                  </div>
+                  <span className="panel-count">{customerRanking.length} clientes</span>
+                </div>
+                {customerRanking.length ? (
+                  <ol className="ranking-list">
+                    {customerRanking.map((customer, index) => (
+                      <li key={customer.id}>
+                        <span className="ranking-position">{index + 1}</span>
+                        <div className="ranking-main">
+                          <strong>{customer.name}</strong>
+                          <small>
+                            {customer.orders} pedido{customer.orders === 1 ? "" : "s"}
+                          </small>
+                          <i>
+                            <b style={{ width: `${(customer.total / maxCustomerTotal) * 100}%` }} />
+                          </i>
+                        </div>
+                        <strong className="ranking-value">{money.format(customer.total)}</strong>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="history-filter-empty">No hay compras en el periodo seleccionado.</p>
+                )}
+              </section>
+              <section className="content-panel dashboard-ranking">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Productos más vendidos</h2>
+                    <p>Ordenados por cantidad de unidades vendidas.</p>
+                  </div>
+                  <span className="panel-count">{productRanking.length} productos</span>
+                </div>
+                {productRanking.length ? (
+                  <ol className="ranking-list">
+                    {productRanking.map((product, index) => (
+                      <li key={product.id}>
+                        <span className="ranking-position">{index + 1}</span>
+                        <div className="ranking-main">
+                          <strong>{product.name}</strong>
+                          <small>
+                            {product.units} unidades · {money.format(product.total)}
+                          </small>
+                          <i>
+                            <b style={{ width: `${(product.units / maxProductUnits) * 100}%` }} />
+                          </i>
+                        </div>
+                        <strong className="ranking-value">{product.units}</strong>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="history-filter-empty">No hay ventas de productos en el periodo seleccionado.</p>
+                )}
+              </section>
+            </section>
+          </>
+        )}
+      </div>
+    </>
+  );
 }
 
 function AdminDashboard({ onLogout, onStartVendorSale, initialSection }) {
@@ -1843,8 +2069,8 @@ const [loading, setLoading] = useState(true);
     (!adminProfile && storedRole === "VENDEDOR");
   const isAdmin = !isColaborador && !isVendedor;
 
-  const allowedColaboradorKeys = ["categories", "products", "orders", "profile", "cotizador", "faq"];
-  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "credits", "customers", "profile", "faq"];
+  const allowedColaboradorKeys = ["categories", "products", "orders", "pedidos_voz", "profile", "cotizador", "faq"];
+  const allowedVendedorKeys = ["vendedor_ventas_realizadas", "products", "orders", "pedidos_voz", "credits", "customers", "profile", "faq"];
 
   const initialDefaultSection = isVendedor
     ? (initialSection && allowedVendedorKeys.includes(initialSection)
@@ -2057,6 +2283,7 @@ const [loading, setLoading] = useState(true);
     [FolderTree, "Categorías", "categories", true],
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
+    [Mic, "Pedidos por voz", "pedidos_voz", true],
     [DollarSign, "Créditos", "credits", true],
     [Megaphone, "Publicidad", "publicidad", true],
     [Calculator, "Cotizador", "cotizador", true],
@@ -2068,6 +2295,7 @@ const [loading, setLoading] = useState(true);
     [ShoppingBag, "Mis Ventas", "vendedor_ventas_realizadas", true],
     [Package, "Productos", "products", true],
     [ClipboardList, "Pedidos", "orders", true],
+    [Mic, "Pedidos por voz", "pedidos_voz", true],
     [DollarSign, "Créditos", "credits", true],
     [HelpCircle, "Tutoriales y FAQ", "faq", true],
   ];
@@ -2240,7 +2468,7 @@ const [loading, setLoading] = useState(true);
         </section>
       ) : activeSection === "summary" ? (
         <section className="admin-workspace">
-          <AdminSalesDashboard />
+          <AdminSalesDashboard onNavigateToSection={setSection} />
         </section>
       ) : activeSection === "admin_ventas" ? (
         <section className="admin-workspace">
@@ -2257,6 +2485,10 @@ const [loading, setLoading] = useState(true);
       ) : activeSection === "orders" ? (
         <section className="admin-workspace">
           <AdminOrderManager />
+        </section>
+      ) : activeSection === "pedidos_voz" ? (
+        <section className="admin-workspace">
+          <PedidosVoz onNavigateToOrders={(orderId) => setSection("orders")} />
         </section>
       ) : activeSection === "credits" ? (
         <section className="admin-workspace">

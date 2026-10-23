@@ -547,14 +547,32 @@
 .tools-used-badge {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
   border-radius: 6px;
-  padding: 3px 8px;
+  padding: 4px 10px;
   font-size: 0.74rem;
   margin-bottom: 10px;
+}
+
+.tools-used-badge.is-verified {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  box-shadow: 0 1px 3px rgba(34, 197, 94, 0.1);
+}
+
+.tools-used-badge.is-neutral {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.badge-periodo {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #64748b;
+  margin-left: 2px;
 }
 
 .message-timestamp {
@@ -573,8 +591,14 @@
    COMPONENTES DINÁMICOS (GRÁFICOS & PREDICCIÓN)
    ========================================== */
 
+.message-bubble.has-dynamic-content {
+  width: 100%;
+  max-width: 95%;
+}
+
 .message-dynamic-content {
   margin-top: 14px;
+  width: 100%;
 }
 
 .ia-chart-card {
@@ -583,6 +607,8 @@
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .ia-chart-header {
@@ -613,8 +639,9 @@
 
 .ia-chart-canvas-wrap {
   position: relative;
-  height: 280px;
+  height: 320px;
   width: 100%;
+  min-width: 0;
 }
 
 /* Tarjeta de Predicción */

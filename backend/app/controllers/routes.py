@@ -9,7 +9,8 @@ from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -53,6 +54,7 @@ from app.models.entities import (
     IAMensaje,
     Pedido,
     PedidoNotificacionLog,
+    PedidoVoz,
     Producto,
     Publicidad,
     Rol,
@@ -63,6 +65,15 @@ from app.models.entities import (
 from app.repositories.base import Repository
 from app.repositories.system_settings_repository import SystemSettingsRepository
 from app.services.agente_ia_service import AgenteIAService
+from app.services.pedidos_voz_service import (
+    UPLOAD_DIR,
+    confirmar_pedido_voz,
+    descartar_pedido_voz,
+    interpretar_pedido_dictado,
+    listar_pedidos_voz,
+    obtener_metricas_dashboard_voz,
+    transcribir_audio_archivo,
+)
 from app.schemas.dto import (
     AddressInput,
     AddressOutput,
@@ -72,6 +83,8 @@ from app.schemas.dto import (
     AvisoStockOutput,
     CategoryInput,
     CategoryOutput,
+    ConfirmarPedidoVozInput,
+    InterpretarVozInput,
     CreditOutput,
     CreditPaymentInput,
     CustomerCreate,
@@ -2095,6 +2108,185 @@ def cotizador_historial_cotizante(
 ) -> list[dict[str, Any]]:
     """Obtiene el historial de cotizaciones con fecha y detalle de productos cotizados para un cliente."""
     return obtener_historial_cotizante(database, identificador=identificador)
+
+
+# ==============================================================================
+# ENDPOINTS DE PEDIDOS POR VOZ (ADMINISTRADOR Y VENDEDOR)
+# ==============================================================================
+
+@router.post("/admin/pedidos-voz/transcribir-audio", tags=["Pedidos por Voz"])
+async def pedidos_voz_transcribir_audio(
+    file: UploadFile = File(...),
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+) -> dict[str, Any]:
+    """Recibe un archivo de audio (WhatsApp, nota de voz, micrófono) y devuelve la transcripción."""
+    content_type = file.content_type or "audio/ogg"
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El archivo de audio está vacío")
+
+    ext = "ogg"
+    if "mp3" in content_type or file.filename.endswith(".mp3"):
+        ext = "mp3"
+    elif "wav" in content_type or file.filename.endswith(".wav"):
+        ext = "wav"
+    elif "m4a" in content_type or file.filename.endswith(".m4a"):
+        ext = "m4a"
+    elif "webm" in content_type or file.filename.endswith(".webm"):
+        ext = "webm"
+
+    import uuid as _uuid
+    import os as _os
+    filename = f"{_uuid.uuid4().hex}.{ext}"
+    file_path = _os.path.join(UPLOAD_DIR, filename)
+    with open(file_path, "wb") as f:
+        f.write(file_bytes)
+
+    transcripcion = transcribir_audio_archivo(file_bytes, content_type)
+    audio_url = f"/api/admin/pedidos-voz/audio/{filename}"
+
+    return {
+        "ok": True,
+        "transcripcion": transcripcion,
+        "audio_url": audio_url,
+    }
+
+
+@router.get("/admin/pedidos-voz/audio/{filename}", tags=["Pedidos por Voz"])
+def pedidos_voz_obtener_audio(
+    filename: str,
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+) -> FileResponse:
+    """Devuelve el archivo de audio para reproducción."""
+    import os as _os
+    safe_name = _os.path.basename(filename)
+    file_path = _os.path.join(UPLOAD_DIR, safe_name)
+    if not _os.path.exists(file_path):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Archivo de audio no encontrado")
+    return FileResponse(file_path)
+
+
+@router.post("/admin/pedidos-voz/interpretar", tags=["Pedidos por Voz"])
+def pedidos_voz_interpretar(
+    payload: InterpretarVozInput,
+    database: DatabaseSession,
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+) -> dict[str, Any]:
+    """Interpreta la transcripción con IA, matchea clientes/productos y genera un borrador."""
+    return interpretar_pedido_dictado(
+        db=database,
+        usuario_id=current_user.id,
+        transcripcion=payload.transcripcion,
+        audio_url=payload.audio_url,
+    )
+
+
+@router.get("/admin/pedidos-voz", tags=["Pedidos por Voz"])
+def pedidos_voz_listar(
+    database: DatabaseSession,
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+    fecha_desde: datetime | None = None,
+    fecha_hasta: datetime | None = None,
+    cliente_id: UUID | None = None,
+    usuario_id: UUID | None = None,
+    estado: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    """Lista pedidos por voz con filtros y métricas."""
+    return listar_pedidos_voz(
+        db=database,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cliente_id=cliente_id,
+        usuario_id=usuario_id,
+        estado=estado,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/admin/pedidos-voz/metricas", tags=["Pedidos por Voz"])
+def pedidos_voz_metricas(
+    database: DatabaseSession,
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+    fecha_desde: datetime | None = None,
+    fecha_hasta: datetime | None = None,
+) -> dict[str, Any]:
+    """Métricas de pedidos por voz para el Dashboard."""
+    return obtener_metricas_dashboard_voz(
+        db=database,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+    )
+
+
+@router.get("/admin/pedidos-voz/{id}", tags=["Pedidos por Voz"])
+def pedidos_voz_detalle(
+    id: UUID,
+    database: DatabaseSession,
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+) -> dict[str, Any]:
+    """Obtiene el detalle completo de un pedido por voz."""
+    pv = database.get(PedidoVoz, id)
+    if not pv:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido por voz no encontrado")
+
+    cliente_data = None
+    if pv.cliente:
+        cliente_data = {
+            "id": str(pv.cliente.id),
+            "rut": pv.cliente.rut,
+            "nombre": pv.cliente.nombre,
+            "alias": pv.cliente.alias,
+        }
+
+    return {
+        "id": str(pv.id),
+        "created_at": pv.created_at.isoformat(),
+        "usuario_id": str(pv.usuario_id),
+        "dictado_por": pv.usuario.nombre if pv.usuario else "Desconocido",
+        "cliente": cliente_data,
+        "direccion_id": str(pv.direccion_id) if pv.direccion_id else None,
+        "total": float(pv.total_estimado),
+        "estado": pv.estado,
+        "lineas_editadas_count": pv.lineas_editadas_count,
+        "audio_url": pv.audio_url,
+        "transcripcion": pv.transcripcion,
+        "pedido_id": str(pv.pedido_id) if pv.pedido_id else None,
+        "lineas": pv.lineas_interpretadas or [],
+        "notas": pv.notas,
+    }
+
+
+@router.post("/admin/pedidos-voz/{id}/confirmar", tags=["Pedidos por Voz"])
+def pedidos_voz_confirmar(
+    id: UUID,
+    payload: ConfirmarPedidoVozInput,
+    database: DatabaseSession,
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+) -> dict[str, Any]:
+    """Confirma el pedido por voz creando el pedido definitivo en el sistema con origen='voz'."""
+    return confirmar_pedido_voz(
+        db=database,
+        pedido_voz_id=id,
+        usuario_id=current_user.id,
+        cliente_id=payload.cliente_id,
+        direccion_id=payload.direccion_id,
+        lineas=payload.lineas,
+        notas=payload.notas,
+    )
+
+
+@router.post("/admin/pedidos-voz/{id}/descartar", tags=["Pedidos por Voz"])
+def pedidos_voz_descartar(
+    id: UUID,
+    database: DatabaseSession,
+    current_user: Usuario = Depends(AdminOrVendedorUser),
+) -> dict[str, Any]:
+    """Descarta un borrador de pedido por voz."""
+    return descartar_pedido_voz(db=database, pedido_voz_id=id)
+
 
 
 

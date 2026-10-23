@@ -37,6 +37,14 @@ const DEFAULT_COLORS = [
   "#64748b", // Slate 500
 ];
 
+const sanitizeNumber = (val) => {
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  const cleaned = String(val).replace(/[$ \s]/g, "").replace(/\./g, "").replace(/,/g, ".");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+};
+
 export default function IAChartRenderer({ chartData }) {
   if (!chartData || !chartData.data) {
     return null;
@@ -44,11 +52,12 @@ export default function IAChartRenderer({ chartData }) {
 
   const { chartType = "bar", title, description, data } = chartData;
 
-  // Asegurar colores armónicos si no vienen provistos
+  // Asegurar colores armónicos y datos numéricos estrictamente limpios (Problema 6 resuelto)
   const formattedData = {
     labels: data.labels || [],
     datasets: (data.datasets || []).map((dataset, idx) => ({
       ...dataset,
+      data: (dataset.data || []).map(sanitizeNumber),
       backgroundColor:
         dataset.backgroundColor ||
         (chartType === "pie" || chartType === "doughnut"
@@ -61,6 +70,11 @@ export default function IAChartRenderer({ chartData }) {
       tension: 0.35,
     })),
   };
+
+  const isCurrency =
+    (formattedData.datasets[0]?.data || []).some((v) => v > 1000) ||
+    /monto|pesos|\$|venta|comprado/i.test(title || "") ||
+    /monto|pesos|\$|venta|comprado/i.test(formattedData.datasets[0]?.label || "");
 
   const options = {
     responsive: true,
@@ -79,6 +93,16 @@ export default function IAChartRenderer({ chartData }) {
         bodyFont: { family: "Inter, system-ui, sans-serif", size: 12 },
         padding: 10,
         cornerRadius: 8,
+        callbacks: {
+          label: (ctx) => {
+            const rawVal = ctx.raw || 0;
+            const dsLabel = ctx.dataset.label || "Valor";
+            if (isCurrency) {
+              return ` ${dsLabel}: $${Number(rawVal).toLocaleString("es-CL")}`;
+            }
+            return ` ${dsLabel}: ${Number(rawVal).toLocaleString("es-CL")}`;
+          },
+        },
       },
     },
     scales:
@@ -87,11 +111,22 @@ export default function IAChartRenderer({ chartData }) {
         : {
             x: {
               grid: { display: false },
-              ticks: { color: "#64748b", font: { size: 11 } },
+              ticks: { color: "#64748b", font: { size: 11 }, maxRotation: 45, minRotation: 0 },
             },
             y: {
               grid: { color: "#f1f5f9" },
-              ticks: { color: "#64748b", font: { size: 11 } },
+              ticks: {
+                color: "#64748b",
+                font: { size: 11 },
+                callback: (val) => {
+                  if (isCurrency) {
+                    if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+                    if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+                    return `$${val}`;
+                  }
+                  return val;
+                },
+              },
             },
           },
   };

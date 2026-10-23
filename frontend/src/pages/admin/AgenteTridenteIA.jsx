@@ -20,6 +20,8 @@ import {
   Cpu,
   Mic,
   MicOff,
+  CheckCircle2,
+  Info,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { api } from "../../services/api";
@@ -52,11 +54,22 @@ const QUICK_PROMPTS = [
 
 const mapearNombreHerramienta = (nombre) => {
   const mapa = {
+    consultar_ventas_periodo: "Ventas y pedidos oficiales",
+    consultar_top_clientes: "Ranking clientes por compras",
+    consultar_productos_stock_critico: "Inventario crítico y alertas",
     consultar_productos: "Catálogo de productos",
-    consultar_pedidos_recientes: "Historial de ventas",
+    consultar_pedidos_recientes: "Historial de pedidos",
     consultar_metricas_generales: "Métricas comerciales",
   };
   return mapa[nombre] || nombre.replace(/_/g, " ");
+};
+
+const limpiarTextoDictado = (text) => {
+  if (!text) return "";
+  return text
+    .replace(/^(?:🎙️?\s*escuchando(?:\s+voz|\s+tu\s+voz)?[\s,\.:-]*habla(?:\s+con\s+claridad|\s+con\s+naturalidad)?(?:[\s,\.:-]*ya)?)+/gi, "")
+    .replace(/^escuchando\s+voz\s+habla\s+con\s+claridad\s*ya?/gi, "")
+    .trim();
 };
 
 export default function AgenteTridenteIA() {
@@ -282,7 +295,8 @@ export default function AgenteTridenteIA() {
       setIsListening(false);
     }
 
-    const text = (textToSend !== null ? textToSend : inputMessage).trim();
+    const rawText = (textToSend !== null ? textToSend : inputMessage).trim();
+    const text = limpiarTextoDictado(rawText);
     if (!text || sendingMessage) return;
 
     let currentChatId = activeChatId;
@@ -540,17 +554,37 @@ export default function AgenteTridenteIA() {
                       </div>
                     )}
 
-                    <div className="message-bubble">
-                      {/* Badge de herramientas utilizadas */}
-                      {!isUser && msg.herramientas_usadas && msg.herramientas_usadas.length > 0 && (
-                        <div className="tools-used-badge">
-                          <Database size={12} className="text-info" />
+                    <div className={`message-bubble ${msg.datos_estructurados ? "has-dynamic-content" : ""}`}>
+                      {/* Sello de Información Verificada (Problema 2 resuelto) */}
+                      {!isUser && (msg.verificado === true || msg.datos_estructurados?.verificado === true) && (
+                        <div className="tools-used-badge is-verified">
+                          <CheckCircle2 size={13} className="text-success" />
                           <span>Información verificada:</span>
                           <strong>
-                            {msg.herramientas_usadas.map(mapearNombreHerramienta).join(" • ")}
+                            {msg.datos_estructurados?.fuente || "Base de datos Tridente"}
                           </strong>
+                          {msg.datos_estructurados?.periodo && (
+                            <span className="badge-periodo">({msg.datos_estructurados.periodo})</span>
+                          )}
                         </div>
                       )}
+
+                      {/* Fuente consultada cuando los datos no son 100% verificados o son parciales */}
+                      {!isUser &&
+                        !(msg.verificado === true || msg.datos_estructurados?.verificado === true) &&
+                        msg.herramientas_usadas &&
+                        msg.herramientas_usadas.length > 0 && (
+                          <div className="tools-used-badge is-neutral">
+                            <Info size={13} className="text-secondary" />
+                            <span>Fuente consultada:</span>
+                            <strong>
+                              {msg.herramientas_usadas.map(mapearNombreHerramienta).join(" • ")}
+                            </strong>
+                            {msg.datos_estructurados?.periodo && (
+                              <span className="badge-periodo">({msg.datos_estructurados.periodo})</span>
+                            )}
+                          </div>
+                        )}
 
                       {/* Contenido en Markdown con soporte para Tablas GFM */}
                       <div className="message-text-content">
@@ -621,7 +655,7 @@ export default function AgenteTridenteIA() {
             <div className="speech-listening-banner">
               <span className="speech-pulse-indicator"></span>
               <span className="speech-listening-text">
-                Escuchando voz... habla con claridad y se irá escribiendo en tiempo real
+                🎙️ Dictado activo... Di tu consulta con naturalidad
               </span>
               <button
                 type="button"

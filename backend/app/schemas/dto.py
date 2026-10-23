@@ -660,8 +660,13 @@ class IASendMessageInput(BaseModel):
     mensaje: str = Field(min_length=1, max_length=4000)
 
 
+class InterpretarVozInput(BaseModel):
+    transcripcion: str = Field(min_length=1)
+    audio_url: str | None = None
 
 
-
-
-
+class ConfirmarPedidoVozInput(BaseModel):
+    cliente_id: UUID
+    direccion_id: UUID
+    lineas: list[dict[str, Any]]
+    notas: str | None = None
