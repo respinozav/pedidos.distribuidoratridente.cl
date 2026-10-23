@@ -2116,8 +2116,8 @@ def cotizador_historial_cotizante(
 
 @router.post("/admin/pedidos-voz/transcribir-audio", tags=["Pedidos por Voz"])
 async def pedidos_voz_transcribir_audio(
+    current_user: AdminOrVendedorUser,
     file: UploadFile = File(...),
-    current_user: Usuario = Depends(AdminOrVendedorUser),
 ) -> dict[str, Any]:
     """Recibe un archivo de audio (WhatsApp, nota de voz, micrófono) y devuelve la transcripción."""
     content_type = file.content_type or "audio/ogg"
@@ -2155,7 +2155,7 @@ async def pedidos_voz_transcribir_audio(
 @router.get("/admin/pedidos-voz/audio/{filename}", tags=["Pedidos por Voz"])
 def pedidos_voz_obtener_audio(
     filename: str,
-    current_user: Usuario = Depends(AdminOrVendedorUser),
+    current_user: AdminOrVendedorUser,
 ) -> FileResponse:
     """Devuelve el archivo de audio para reproducción."""
     import os as _os
@@ -2170,7 +2170,7 @@ def pedidos_voz_obtener_audio(
 def pedidos_voz_interpretar(
     payload: InterpretarVozInput,
     database: DatabaseSession,
-    current_user: Usuario = Depends(AdminOrVendedorUser),
+    current_user: AdminOrVendedorUser,
 ) -> dict[str, Any]:
     """Interpreta la transcripción con IA, matchea clientes/productos y genera un borrador."""
     return interpretar_pedido_dictado(
@@ -2184,7 +2184,7 @@ def pedidos_voz_interpretar(
 @router.get("/admin/pedidos-voz", tags=["Pedidos por Voz"])
 def pedidos_voz_listar(
     database: DatabaseSession,
-    current_user: Usuario = Depends(AdminOrVendedorUser),
+    current_user: AdminOrVendedorUser,
     fecha_desde: datetime | None = None,
     fecha_hasta: datetime | None = None,
     cliente_id: UUID | None = None,
@@ -2209,7 +2209,7 @@ def pedidos_voz_listar(
 @router.get("/admin/pedidos-voz/metricas", tags=["Pedidos por Voz"])
 def pedidos_voz_metricas(
     database: DatabaseSession,
-    current_user: Usuario = Depends(AdminOrVendedorUser),
+    current_user: AdminOrVendedorUser,
     fecha_desde: datetime | None = None,
     fecha_hasta: datetime | None = None,
 ) -> dict[str, Any]:
@@ -2225,7 +2225,7 @@ def pedidos_voz_metricas(
 def pedidos_voz_detalle(
     id: UUID,
     database: DatabaseSession,
-    current_user: Usuario = Depends(AdminOrVendedorUser),
+    current_user: AdminOrVendedorUser,
 ) -> dict[str, Any]:
     """Obtiene el detalle completo de un pedido por voz."""
     pv = database.get(PedidoVoz, id)
@@ -2264,7 +2264,7 @@ def pedidos_voz_confirmar(
     id: UUID,
     payload: ConfirmarPedidoVozInput,
     database: DatabaseSession,
-    current_user: Usuario = Depends(AdminOrVendedorUser),
+    current_user: AdminOrVendedorUser,
 ) -> dict[str, Any]:
     """Confirma el pedido por voz creando el pedido definitivo en el sistema con origen='voz'."""
     return confirmar_pedido_voz(
@@ -2282,7 +2282,7 @@ def pedidos_voz_confirmar(
 def pedidos_voz_descartar(
     id: UUID,
     database: DatabaseSession,
-    current_user: Usuario = Depends(AdminOrVendedorUser),
+    current_user: AdminOrVendedorUser,
 ) -> dict[str, Any]:
     """Descarta un borrador de pedido por voz."""
     return descartar_pedido_voz(db=database, pedido_voz_id=id)

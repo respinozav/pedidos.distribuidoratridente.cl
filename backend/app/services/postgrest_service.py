@@ -37,21 +37,30 @@ def _parse_fechas_periodo(
     dias_defecto: int = 30,
 ) -> tuple[datetime, datetime, str]:
     """
-    Parsea de forma robusta fechas de inicio y fin en UTC.
+    Parsea de forma robusta fechas de inicio y fin en zona horaria America/Santiago y las convierte a UTC.
+    Garantiza que la hora de corte cubra el día chileno completo (00:00:00 a 23:59:59.999999).
     Si no se especifican, toma por defecto el mes en curso (desde el 1 del mes hasta el día actual).
-    Retorna (dt_inicio, dt_fin, texto_periodo_legible).
+    Retorna (dt_inicio_utc, dt_fin_utc, texto_periodo_legible).
     """
-    now = datetime.now(UTC)
+    try:
+        from zoneinfo import ZoneInfo
+        tz_chile = ZoneInfo("America/Santiago")
+    except Exception:
+        tz_chile = UTC
+
+    now_chile = datetime.now(tz_chile)
+    now_utc = now_chile.astimezone(UTC)
 
     # 1. Resolver fecha_desde
     dt_desde = None
     if isinstance(fecha_desde, datetime):
-        dt_desde = fecha_desde.astimezone(UTC) if fecha_desde.tzinfo else fecha_desde.replace(tzinfo=UTC)
+        dt_desde = fecha_desde.astimezone(UTC) if fecha_desde.tzinfo else fecha_desde.replace(tzinfo=tz_chile).astimezone(UTC)
     elif isinstance(fecha_desde, str) and fecha_desde.strip():
         txt = fecha_desde.strip().split("T")[0]
         for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
             try:
-                dt_desde = datetime.strptime(txt, fmt).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=UTC)
+                local_dt = datetime.strptime(txt, fmt).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=tz_chile)
+                dt_desde = local_dt.astimezone(UTC)
                 break
             except ValueError:
                 pass
@@ -59,36 +68,43 @@ def _parse_fechas_periodo(
     # 2. Resolver fecha_hasta
     dt_hasta = None
     if isinstance(fecha_hasta, datetime):
-        dt_hasta = fecha_hasta.astimezone(UTC) if fecha_hasta.tzinfo else fecha_hasta.replace(tzinfo=UTC)
+        dt_hasta = fecha_hasta.astimezone(UTC) if fecha_hasta.tzinfo else fecha_hasta.replace(tzinfo=tz_chile).astimezone(UTC)
     elif isinstance(fecha_hasta, str) and fecha_hasta.strip():
         txt = fecha_hasta.strip().split("T")[0]
         for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
             try:
-                dt_hasta = datetime.strptime(txt, fmt).replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=UTC)
+                local_dt = datetime.strptime(txt, fmt).replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=tz_chile)
+                dt_hasta = local_dt.astimezone(UTC)
                 break
             except ValueError:
                 pass
 
-    # Si ninguna fecha fue indicada: usar mes en curso
+    # Si ninguna fecha fue indicada: usar mes en curso en horario chileno
     if dt_desde is None and dt_hasta is None:
-        dt_desde = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        dt_hasta = now
-        texto_periodo = f"mes en curso ({now.strftime('%B %Y')})"
+        dt_desde = now_chile.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+        dt_hasta = now_utc
+        mes_nombre = MESES_ES.get(now_chile.month, "octubre")
+        texto_periodo = f"mes en curso ({mes_nombre} {now_chile.year})"
     elif dt_desde is not None and dt_hasta is None:
-        dt_hasta = now
-        texto_periodo = f"desde {dt_desde.strftime('%d/%m/%Y')} hasta hoy"
+        dt_hasta = now_utc
+        local_desde = dt_desde.astimezone(tz_chile)
+        texto_periodo = f"desde {local_desde.strftime('%d/%m/%Y')} hasta hoy"
     elif dt_desde is None and dt_hasta is not None:
         dt_desde = dt_hasta - timedelta(days=dias_defecto)
-        texto_periodo = f"últimos {dias_defecto} días hasta {dt_hasta.strftime('%d/%m/%Y')}"
+        local_hasta = dt_hasta.astimezone(tz_chile)
+        texto_periodo = f"últimos {dias_defecto} días hasta {local_hasta.strftime('%d/%m/%Y')}"
     else:
         # Ambos definidos
-        if dt_desde.year == dt_hasta.year and dt_desde.month == dt_hasta.month:
-            mes_nombre = MESES_ES.get(dt_desde.month, "")
-            texto_periodo = f"{dt_desde.day} al {dt_hasta.day} de {mes_nombre} de {dt_desde.year}"
+        local_d = dt_desde.astimezone(tz_chile)
+        local_h = dt_hasta.astimezone(tz_chile)
+        if local_d.year == local_h.year and local_d.month == local_h.month:
+            mes_nombre = MESES_ES.get(local_d.month, "")
+            texto_periodo = f"{local_d.day} al {local_h.day} de {mes_nombre} de {local_d.year}"
         else:
-            texto_periodo = f"{dt_desde.strftime('%d/%m/%Y')} al {dt_hasta.strftime('%d/%m/%Y')}"
+            texto_periodo = f"{local_d.strftime('%d/%m/%Y')} al {local_h.strftime('%d/%m/%Y')}"
 
     return dt_desde, dt_hasta, texto_periodo
+
 
 
 class PostgrestService:
@@ -624,3 +640,74 @@ class PostgrestService:
             "fuente": "Base de datos Tridente (Dashboard y catálogo oficial)",
         }
 
+    def consultar_creditos_morosos(self, dias_vencido_min: int = 0) -> dict[str, Any]:
+        """
+        Consulta el estado de créditos comerciales, morosidad y cuentas por cobrar.
+        Permite identificar clientes con crédito vencido, montos adeudados y días de atraso.
+        """
+        from app.models.entities import Credito
+        try:
+            from zoneinfo import ZoneInfo
+            tz_chile = ZoneInfo("America/Santiago")
+        except Exception:
+            tz_chile = UTC
+        now = datetime.now(tz_chile).astimezone(UTC)
+
+        query = (
+            select(Credito)
+            .options(selectinload(Credito.cliente), selectinload(Credito.pedido))
+            .where(Credito.pagado.is_(False))
+            .order_by(Credito.fecha_vencimiento.asc())
+        )
+        creditos_pendientes = self.db.scalars(query).all()
+
+        total_pendientes = len(creditos_pendientes)
+        monto_total_pendiente = sum(float(c.monto) for c in creditos_pendientes)
+
+        vencidos = []
+        por_vencer = []
+
+        for c in creditos_pendientes:
+            fv = c.fecha_vencimiento
+            if fv.tzinfo is None:
+                fv = fv.replace(tzinfo=UTC)
+            fv_local = fv.astimezone(tz_chile)
+
+            dias_diff = (now - fv).days
+            item = {
+                "credito_id": str(c.id),
+                "cliente": c.cliente.nombre if c.cliente else "Desconocido",
+                "cliente_rut": c.cliente.rut if c.cliente else "",
+                "cliente_alias": c.cliente.alias if c.cliente else None,
+                "monto": float(c.monto),
+                "monto_formateado": _formatear_pesos(c.monto),
+                "dias_credito": c.dias_credito,
+                "fecha_vencimiento": fv_local.strftime("%d/%m/%Y"),
+                "pedido_codigo": c.pedido.codigo if c.pedido else None,
+            }
+            if fv < now:
+                item["dias_vencido"] = max(1, dias_diff)
+                item["estado_credito"] = "Vencido"
+                vencidos.append(item)
+            else:
+                item["dias_por_vencer"] = abs(dias_diff)
+                item["estado_credito"] = "Vigente"
+                por_vencer.append(item)
+
+        monto_vencido = sum(v["monto"] for v in vencidos)
+        monto_vigente = sum(pv["monto"] for pv in por_vencer)
+
+        return {
+            "periodo": "al día de hoy",
+            "total_creditos_pendientes": total_pendientes,
+            "monto_total_pendiente": monto_total_pendiente,
+            "monto_total_pendiente_formateado": _formatear_pesos(monto_total_pendiente),
+            "creditos_vencidos_count": len(vencidos),
+            "monto_vencido": monto_vencido,
+            "monto_vencido_formateado": _formatear_pesos(monto_vencido),
+            "creditos_vigentes_count": len(por_vencer),
+            "monto_vigente": monto_vigente,
+            "monto_vigente_formateado": _formatear_pesos(monto_vigente),
+            "creditos_vencidos": vencidos[:15],
+            "resumen": f"Existen {len(vencidos)} créditos vencidos por un total de {_formatear_pesos(monto_vencido)}, y {len(por_vencer)} créditos vigentes por {_formatear_pesos(monto_vigente)}."
+        }

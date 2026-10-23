@@ -33,6 +33,8 @@ Datos:
 - Si una herramienta falla o los datos están incompletos, dilo claramente y no entregues cifras parciales como totales.
 - Si no tienes un dato, responde "No tengo ese dato en el sistema".
 - Para consultar productos con bajo stock, usa `consultar_productos_stock_critico`.
+- Para créditos comerciales, morosidad o clientes con deuda vencida, usa `consultar_creditos_morosos`.
+- Si te piden solo un gráfico o visualización de lo ya conversado, responde ÚNICAMENTE con el gráfico o dato solicitado; NO repitas el informe anterior ni textos largos.
 
 Gráficos:
 - Cuando pidan un gráfico, entrega los datos estructurados con valores numéricos limpios (números enteros o decimales puros, sin puntos de miles ni signo $).
@@ -60,6 +62,20 @@ Gráficos:
 GEMINI_TOOLS_DECLARATION = [
     {
         "functionDeclarations": [
+
+            {
+                "name": "consultar_creditos_morosos",
+                "description": "Consulta el estado de créditos comerciales, cuentas por cobrar, montos vencidos y clientes con deuda pendiente de pago.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "dias_vencido_min": {
+                            "type": "INTEGER",
+                            "description": "Filtro opcional para considerar solo créditos con al menos N días vencidos. Por defecto 0.",
+                        }
+                    },
+                },
+            },
             {
                 "name": "consultar_ventas_periodo",
                 "description": "Calcula los totales exactos de ventas, facturación y pedidos en un rango de fechas sobre TODOS los pedidos de la base de datos (sin límites ni recortes). Coincide al 100% con el Dashboard comercial.",
@@ -268,6 +284,14 @@ class AgenteIAService:
             self.ultimo_resultado_verificado = res.get("verificado", False)
             self.ultimo_periodo = res.get("periodo")
             self.ultima_fuente = "Base de datos Tridente (todos los pedidos)"
+            return res
+        elif nombre == "consultar_creditos_morosos":
+            res = self.postgrest.consultar_creditos_morosos(
+                dias_vencido_min=int(args.get("dias_vencido_min", 0)) if args.get("dias_vencido_min") is not None else 0
+            )
+            self.ultimo_resultado_verificado = res.get("verificado", False)
+            self.ultimo_periodo = "Créditos pendientes y vencidos"
+            self.ultima_fuente = "Módulo de Créditos Tridente"
             return res
         elif nombre == "consultar_productos_stock_critico":
             res = self.postgrest.consultar_productos_stock_critico(
@@ -556,7 +580,8 @@ class AgenteIAService:
                             "tools": GEMINI_TOOLS_DECLARATION,
                             "generationConfig": {
                                 "temperature": 0.2,
-                                "maxOutputTokens": 4096,
+                                "maxOutputTokens": 8192,
+                                "thinkingConfig": {"thinkingBudget": 0},
                             },
                         }
 
