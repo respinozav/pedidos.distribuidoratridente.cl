@@ -5,7 +5,7 @@ import "./faqTutorials.css";
 const VIDEO_TUTORIAL = {
   id: "como-realizar-un-pedido",
   title: "Cómo realizar un pedido",
-  src: "/videos/gemini_generated_video_df0ab31e.mp4",
+  src: "/videos/tutorial_portal_pedidos_v8.mp4",
   description:
     "Aprende paso a paso cómo buscar productos en el catálogo, seleccionar cantidades por unidad o por caja cerrada, revisar tu resumen y enviar tu pedido.",
 };

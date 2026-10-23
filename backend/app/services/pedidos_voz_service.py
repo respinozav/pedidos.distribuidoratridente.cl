@@ -13,18 +13,19 @@ Flujo:
 7. Métricas y estadísticas para el Dashboard de Operación.
 """
 
+import base64
 import json
 import logging
 import os
 import re
+import time
 import uuid
 from datetime import UTC, datetime, date, timedelta
 from decimal import Decimal
 from typing import Any
 
+import httpx
 from fastapi import HTTPException, UploadFile, status
-from google import genai
-from google.genai import types
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -49,20 +50,21 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-def _get_gemini_client() -> genai.Client:
+def _get_gemini_api_key() -> str:
     api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="GEMINI_API_KEY no está configurada para el servicio de pedidos por voz",
         )
-    return genai.Client(api_key=api_key)
+    return api_key
 
 
 def transcribir_audio_archivo(file_bytes: bytes, mime_type: str) -> str:
-    """Transcribe un archivo de audio (WhatsApp, nota de voz, micrófono) usando Gemini."""
-    client = _get_gemini_client()
-    model_name = settings.gemini_model or "gemini-2.5-flash"
+    """Transcribe un archivo de audio (WhatsApp, nota de voz, micrófono) usando Gemini vía REST."""
+    api_key = _get_gemini_api_key()
+    candidate_models = [settings.gemini_model, "gemini-2.5-flash", "gemini-1.5-flash"]
+    models_to_try = [m for i, m in enumerate(candidate_models) if m and m not in candidate_models[:i]]
 
     prompt = (
         "Eres el transcriptor del sistema de pedidos de Distribuidora Tridente en Coquimbo, Chile. "
@@ -71,34 +73,63 @@ def transcribir_audio_archivo(file_bytes: bytes, mime_type: str) -> str:
         "Devuelve ÚNICAMENTE el texto transcrito sin explicaciones ni saludos."
     )
 
-    try:
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[
-                types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
-                prompt,
-            ],
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-            ),
-        )
-        return (response.text or "").strip()
-    except Exception as e:
-        logger.error(f"Error al transcribir audio con Gemini: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"No se pudo transcribir el audio: {str(e)}",
-        )
+    audio_b64 = base64.b64encode(file_bytes).decode("utf-8")
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": audio_b64,
+                        }
+                    },
+                    {"text": prompt},
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+        },
+    }
 
+    last_error = None
+    with httpx.Client(timeout=60.0) as client:
+        for model_name in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            for attempt in range(2):
+                try:
+                    res = client.post(url, json=payload)
+                    if res.status_code == 200:
+                        res_json = res.json()
+                        candidates = res_json.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            texto = "".join(part.get("text", "") for part in parts).strip()
+                            return texto
+                    else:
+                        logger.warning(
+                            f"Gemini transcripción HTTP {res.status_code} modelo {model_name}: {res.text[:150]}"
+                        )
+                        last_error = f"HTTP {res.status_code}: {res.text[:120]}"
+                        if res.status_code in (429, 500, 502, 503, 504):
+                            time.sleep(1.0 * (attempt + 1))
+                except Exception as e:
+                    logger.warning(f"Error al transcribir audio con {model_name} (intento {attempt+1}): {e}")
+                    last_error = str(e)
+                    time.sleep(1.0 * (attempt + 1))
 
-import time
+    logger.error(f"Error al transcribir audio con Gemini REST: {last_error}")
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"No se pudo transcribir el audio: {last_error}",
+    )
 
 
 def _interpretar_texto_con_gemini(transcripcion: str) -> dict[str, Any]:
-    """Extrae entidades estructuradas (cliente, dirección, productos) del texto transcrito con reintento y fallback."""
-    client = _get_gemini_client()
+    """Extrae entidades estructuradas (cliente, dirección, productos) del texto transcrito con reintento y fallback vía REST."""
+    api_key = _get_gemini_api_key()
     candidate_models = [settings.gemini_model, "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
-    # Eliminar duplicados preservando orden
     models_to_try = [m for i, m in enumerate(candidate_models) if m and m not in candidate_models[:i]]
 
     system_prompt = (
@@ -137,29 +168,52 @@ def _interpretar_texto_con_gemini(transcripcion: str) -> dict[str, Any]:
         "}"
     )
 
+    payload = {
+        "contents": [
+            {
+                "parts": [{"text": prompt}]
+            }
+        ],
+        "systemInstruction": {
+            "parts": [{"text": system_prompt}]
+        },
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.1,
+        },
+    }
+
     last_error = None
-    for model_name in models_to_try:
-        for attempt in range(2):
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[prompt],
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        response_mime_type="application/json",
-                        temperature=0.1,
-                    ),
-                )
-                data = json.loads(response.text or "{}")
-                return data
-            except Exception as e:
-                last_error = e
-                err_str = str(e).lower()
-                logger.warning(f"Error interpretando pedido con modelo {model_name} (intento {attempt+1}): {e}")
-                if "503" in err_str or "429" in err_str or "unavailable" in err_str or "resource_exhausted" in err_str:
+    with httpx.Client(timeout=45.0) as client:
+        for model_name in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            for attempt in range(2):
+                try:
+                    res = client.post(url, json=payload)
+                    if res.status_code == 200:
+                        res_json = res.json()
+                        candidates = res_json.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            texto = "".join(part.get("text", "") for part in parts).strip()
+                            if texto.startswith("```"):
+                                texto = re.sub(r"^```(?:json)?\s*", "", texto)
+                                texto = re.sub(r"\s*```$", "", texto)
+                            data = json.loads(texto or "{}")
+                            return data
+                    else:
+                        logger.warning(
+                            f"Gemini interpretación HTTP {res.status_code} modelo {model_name}: {res.text[:150]}"
+                        )
+                        last_error = f"HTTP {res.status_code}: {res.text[:120]}"
+                        if res.status_code in (429, 500, 502, 503, 504):
+                            time.sleep(1.2 * (attempt + 1))
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"Error interpretando pedido con modelo {model_name} (intento {attempt+1}): {e}"
+                    )
                     time.sleep(1.2 * (attempt + 1))
-                    continue
-                break  # Si es otro error, probar siguiente modelo
 
     logger.error(f"Falla total al interpretar pedido con Gemini tras reintentos: {last_error}")
     return {
