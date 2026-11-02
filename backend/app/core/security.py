@@ -25,7 +25,9 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_access_token(user_id: UUID, role: str, expires_minutes: int | None = None) -> str:
-    minutes = expires_minutes if expires_minutes is not None and expires_minutes > 0 else settings.jwt_access_token_expire_minutes
+    configured_minutes = expires_minutes if expires_minutes is not None and expires_minutes > 0 else settings.jwt_access_token_expire_minutes
+    # Protección: la sesión no debe ser menor a 5 minutos para evitar caducidad inmediata
+    minutes = configured_minutes if configured_minutes and configured_minutes >= 5 else 60
     now = datetime.now(UTC)
     expires_at = now + timedelta(minutes=minutes)
     return jwt.encode(
@@ -51,7 +53,8 @@ def create_vendor_customer_token(
     vendedor_nombre: str,
     expires_minutes: int | None = None,
 ) -> str:
-    minutes = expires_minutes if expires_minutes is not None and expires_minutes > 0 else settings.jwt_access_token_expire_minutes
+    configured_minutes = expires_minutes if expires_minutes is not None and expires_minutes > 0 else settings.jwt_access_token_expire_minutes
+    minutes = configured_minutes if configured_minutes and configured_minutes >= 5 else 60
     now = datetime.now(UTC)
     expires_at = now + timedelta(minutes=minutes)
     return jwt.encode(
@@ -66,4 +69,4 @@ def create_vendor_customer_token(
         },
         get_jwt_secret(),
         algorithm=settings.jwt_algorithm,
-    )
+    )

@@ -485,7 +485,11 @@ def _order_pdf(order: Pedido) -> bytes:
     customer_id = order.cliente.rut or order.cliente.celular or "Sin identificador"
     customer_email = order.cliente.correo or "Sin correo"
     customer_phone = order.cliente.celular or "Sin teléfono"
-    address = ", ".join(part for part in (order.direccion.direccion, order.direccion.comuna) if part)
+    address = (
+        ", ".join(part for part in (order.direccion.direccion, order.direccion.comuna) if part)
+        if getattr(order, "direccion", None)
+        else "Sin dirección registrada"
+    )
     order_code = str(order.id).split("-")[0].upper()
     system_tz = _get_system_timezone()
     created_at = order.created_at.astimezone(system_tz).strftime("%d-%m-%Y %H:%M") if order.created_at else "-"

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Swal from "sweetalert2";
-import { api, getActiveToken, getStoredSession, saveSessionStorage, setAdminToken, setOnAuthExpired } from "../services/api";
+import { api, getActiveToken, getStoredSession, getStoredTimeOffset, saveSessionStorage, setAdminToken, setOnAuthExpired } from "../services/api";
 
 function decodeToken(token) {
   if (!token) return null;
@@ -17,6 +17,7 @@ function decodeToken(token) {
 export function useSessionInactivity({ active, onLogout }) {
   const lastActivityRef = useRef(Date.now());
   const modalOpenRef = useRef(false);
+  const hookMountedAtRef = useRef(Date.now());
 
   useEffect(() => {
     // Registrar listener para interceptor 401
@@ -36,6 +37,7 @@ export function useSessionInactivity({ active, onLogout }) {
     }
 
     lastActivityRef.current = Date.now();
+    hookMountedAtRef.current = Date.now();
     modalOpenRef.current = false;
 
     const handleUserActivity = () => {
@@ -79,7 +81,21 @@ export function useSessionInactivity({ active, onLogout }) {
       // Si el modal ya está abierto, dejamos que el modal maneje la cuenta regresiva
       if (modalOpenRef.current) return;
 
-      const tokenSecondsLeft = tokenExpSec ? Math.max(0, Math.ceil(tokenExpSec - nowSec)) : null;
+      // Compensar el desfase entre el reloj local del cliente y el servidor
+      let offsetSec = getStoredTimeOffset();
+      if (!offsetSec && payload?.iat) {
+        offsetSec = Math.round(nowSec - payload.iat);
+      }
+      const nowServerSec = nowSec - offsetSec;
+
+      const tokenSecondsLeft = tokenExpSec ? Math.max(0, Math.ceil(tokenExpSec - nowServerSec)) : null;
+
+      // Período de gracia inicial: si el hook lleva menos de 20 segundos activo,
+      // no cerrar la sesión intempestivamente por discrepancias transitorias de reloj
+      const secondsSinceMount = (Date.now() - hookMountedAtRef.current) / 1000;
+      if (secondsSinceMount < 20 && tokenSecondsLeft !== null && tokenSecondsLeft <= 0) {
+        return;
+      }
 
       // 1. Si el token ya expiró y el modal no estaba abierto
       if (tokenSecondsLeft !== null && tokenSecondsLeft <= 0) {

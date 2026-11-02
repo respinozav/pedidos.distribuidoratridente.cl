@@ -43,11 +43,8 @@ export default function StockAlertBell({ initialProducts = null }) {
     const subscriber = (items) => setAlertProducts(items);
     alertSubscribers.add(subscriber);
 
-    if (!hasFetchedAlerts) {
-      refreshStockAlerts();
-    } else {
-      setAlertProducts(cachedAlertProducts);
-    }
+    setAlertProducts(cachedAlertProducts);
+    refreshStockAlerts();
 
     // Actualizar periódicamente cada 60 segundos o cuando la ventana recupere foco
     const interval = setInterval(refreshStockAlerts, 60000);
@@ -136,7 +133,7 @@ export default function StockAlertBell({ initialProducts = null }) {
                 <strong className="stock-alert-item-title">Alerta de Productos en Stock</strong>
                 <small className="stock-alert-item-subtitle">
                   {alertCount > 0
-                    ? `${alertCount} producto${alertCount === 1 ? "" : "s"} con stock crítico`
+                    ? `${alertCount} producto${alertCount === 1 ? "" : "s"} sin stock o con stock crítico`
                     : "Inventario al día (sin alertas)"}
                 </small>
               </div>
@@ -191,7 +188,7 @@ export default function StockAlertBell({ initialProducts = null }) {
                   <div className="stock-alert-banner">
                     <AlertCircle size={18} />
                     <span>
-                      Se detectaron <strong>{alertCount}</strong> producto{alertCount === 1 ? "" : "s"} con stock disponible menor o igual a su umbral de aviso.
+                      Se detectaron <strong>{alertCount}</strong> producto{alertCount === 1 ? "" : "s"} sin stock disponible o bajo su umbral de aviso.
                     </span>
                   </div>
 
@@ -232,12 +229,14 @@ export default function StockAlertBell({ initialProducts = null }) {
                               </td>
                               <td className="text-center">
                                 <span className={`stock-status-pill ${isCritical ? "critical" : "warning"}`}>
-                                  {stockNum} {stockNum === 1 || stockNum === -1 ? "unidad" : "unidades"}
+                                  {stockNum <= 0 ? "Agotado (0 uds.)" : `${stockNum} ${stockNum === 1 || stockNum === -1 ? "unidad" : "unidades"}`}
                                 </span>
                               </td>
                               <td className="text-center">
                                 <span className="stock-threshold-pill">
-                                  &le; {prod.stock_notificacion} uds.
+                                  {prod.stock_notificacion != null
+                                    ? `≤ ${prod.stock_notificacion} uds.`
+                                    : "Sin stock (≤ 0)"}
                                 </span>
                               </td>
                             </tr>

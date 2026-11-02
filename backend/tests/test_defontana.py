@@ -1,3 +1,6 @@
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -99,6 +102,7 @@ def test_defontana_item_packaging_rules():
 
     with patch("app.core.database.SessionLocal", return_value=FakeSession(fake_order)), \
          patch.object(service, "resolve_client", return_value={"fileID": "Ficha1", "sellerID": "V1", "localID": "L1", "paymentID": "Contado"}), \
+         patch.object(service, "update_client", return_value={"success": True}), \
          patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
          patch.object(service, "save_order", side_effect=mock_save):
         
@@ -183,6 +187,7 @@ def test_defontana_order_exclusively_afecto():
 
     with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
          patch.object(service, "resolve_client", return_value={"fileID": "F1", "sellerID": "V1", "localID": "L1", "paymentID": "Contado"}), \
+         patch.object(service, "update_client", return_value={"success": True}), \
          patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
          patch.object(service, "save_order", side_effect=mock_save):
 
@@ -271,6 +276,7 @@ def test_defontana_order_exclusively_exento():
 
     with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
          patch.object(service, "resolve_client", return_value={"fileID": "F1", "sellerID": "V1", "localID": "L1", "paymentID": "Contado"}), \
+         patch.object(service, "update_client", return_value={"success": True}), \
          patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
          patch.object(service, "save_order", side_effect=mock_save):
 
@@ -381,6 +387,7 @@ def test_defontana_order_mixed_afecto_and_exento():
 
     with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
          patch.object(service, "resolve_client", return_value={"fileID": "F1", "sellerID": "V1", "localID": "L1", "paymentID": "Contado"}), \
+         patch.object(service, "update_client", return_value={"success": True}), \
          patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
          patch.object(service, "save_order", side_effect=mock_save):
 
@@ -629,6 +636,164 @@ def test_defontana_sync_product_new():
     print("test_defontana_sync_product_new: OK")
 
 
+def test_defontana_update_client_mocked():
+    service = DefontanaService()
+
+    cliente = SimpleNamespace(
+        rut="77.673.176-5",
+        nombre="Cliente Tridente SpA",
+        correo="contacto@tridente.cl",
+        celular="+56911223344",
+    )
+    direccion = SimpleNamespace(
+        direccion="Av. Providencia 1234, Of 501",
+        comuna="Providencia",
+    )
+    existing_client_data = {
+        "fileID": "77.673.176-5",
+        "name": "Cliente Tridente SpA",
+        "business": "Comercializadora",
+        "giro": "Venta al por mayor",
+        "rubroId": "1",
+    }
+
+    captured_req = {}
+
+    class MockResponse:
+        status_code = 200
+
+        def json(self):
+            return {"success": True, "message": "Cliente Actualizado Exitosamente"}
+
+        def raise_for_status(self):
+            pass
+
+    def mock_post(url, json=None, headers=None):
+        nonlocal captured_req
+        captured_req = {"url": url, "json": json, "headers": headers}
+        return MockResponse()
+
+    with patch("httpx.Client.post", side_effect=mock_post), \
+         patch.object(service, "get_token", return_value="fake-token"):
+        result = service.update_client(cliente, direccion, client_data=existing_client_data)
+
+    assert result is not None
+    assert result["success"] is True
+
+    payload = captured_req["json"]
+    assert "/api/Sale/UpdateClient" in captured_req["url"]
+    assert payload["legalCode"] == "77.673.176-5"
+    assert payload["fileid"] == "77.673.176-5"
+    assert payload["name"] == "Cliente Tridente SpA"
+    assert payload["address"] == "Av. Providencia 1234, Of 501"
+    assert payload["district"] == "Providencia"
+    assert payload["city"] == "Providencia"
+    assert payload["email"] == "contacto@tridente.cl"
+    assert payload["phone"] == "+56911223344"
+    assert payload["business"] == "Comercializadora"
+    assert payload["giro"] == "Venta al por mayor"
+    assert payload["rubroId"] == "1"
+
+    print("test_defontana_update_client_mocked: OK")
+
+
+def test_defontana_sync_order_propagates_selected_address_to_payload_and_client():
+    service = DefontanaService()
+
+    customer = SimpleNamespace(
+        rut="77.673.176-5",
+        nombre="Distribuidora Cliente",
+        correo="pedidos@cliente.cl",
+        celular="+56999887766",
+    )
+    selected_address = SimpleNamespace(
+        direccion="Camino La Montaña 100, Bodega 4",
+        comuna="Lampa",
+    )
+    item = SimpleNamespace(
+        codigo_producto="20",
+        nombre_producto="LUCKY STRIKE",
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+        precio_unitario=Decimal("5000"),
+        cantidad=1,
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
+    )
+    fake_order = SimpleNamespace(
+        id=uuid4(),
+        cliente=customer,
+        direccion=selected_address,
+        detalles=[item],
+        folio_defontana=None,
+        folio_defontana_afecto=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def scalar(self, stmt):
+            return fake_order
+
+        def commit(self):
+            pass
+
+    client_data_in_defontana = {
+        "fileID": "77.673.176-5",
+        "legalCode": "77.673.176-5",
+        "name": "Distribuidora Cliente",
+        "sellerID": "V01",
+        "localID": "CasaMatriz",
+        "paymentID": "30Dias",
+    }
+
+    captured_payload = {}
+    def mock_save(payload):
+        nonlocal captured_payload
+        captured_payload = payload
+        return {"success": True, "folio": 5555}
+
+    update_client_called = {}
+    def mock_update_client(cliente, direccion, client_data=None):
+        update_client_called["cliente"] = cliente
+        update_client_called["direccion"] = direccion
+        update_client_called["client_data"] = client_data
+        return {"success": True}
+
+    with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
+         patch.object(service, "resolve_client", return_value=client_data_in_defontana), \
+         patch.object(service, "update_client", side_effect=mock_update_client), \
+         patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
+         patch.object(service, "save_order", side_effect=mock_save):
+
+        folio, err = service.sync_order(fake_order.id)
+        assert folio == 5555
+        assert err is None
+        assert fake_order.defontana_sincronizado is True
+
+        # 1. Verifica que update_client fue invocado con la dirección seleccionada
+        assert update_client_called["cliente"] == customer
+        assert update_client_called["direccion"] == selected_address
+        assert update_client_called["direccion"].direccion == "Camino La Montaña 100, Bodega 4"
+        assert update_client_called["direccion"].comuna == "Lampa"
+
+        # 2. Verifica que el payload de la orden en Defontana incluye todos los campos de despacho
+        assert captured_payload["district"] == "Lampa"
+        assert captured_payload["address"] == "Camino La Montaña 100, Bodega 4"
+        assert captured_payload["deliveryAddress"] == "Camino La Montaña 100, Bodega 4"
+        assert captured_payload["city"] == "Lampa"
+        assert captured_payload["glossDispatch"] == "Despacho: Camino La Montaña 100, Bodega 4, Lampa"
+        assert "Despacho: Camino La Montaña 100, Bodega 4, Lampa" in captured_payload["glossGeneral"]
+        assert "Despacho: Camino La Montaña 100, Bodega 4, Lampa" in captured_payload["glossBill"]
+
+    print("test_defontana_sync_order_propagates_selected_address_to_payload_and_client: OK")
+
+
 if __name__ == "__main__":
     test_defontana_save_order_mocked()
     test_defontana_item_packaging_rules()
@@ -640,5 +805,7 @@ if __name__ == "__main__":
     test_defontana_sync_order_creates_client_when_not_exists()
     test_defontana_sync_product_existing()
     test_defontana_sync_product_new()
+    test_defontana_update_client_mocked()
+    test_defontana_sync_order_propagates_selected_address_to_payload_and_client()
     print("TODOS LOS TESTS DE DEFONTANA PASARON EXITOSAMENTE!")
 

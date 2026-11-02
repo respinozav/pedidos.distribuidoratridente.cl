@@ -22,7 +22,12 @@ def get_current_admin(
     database: DatabaseSession,
 ) -> Usuario:
     try:
-        payload = jwt.decode(credentials.credentials, get_jwt_secret(), algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(
+            credentials.credentials,
+            get_jwt_secret(),
+            algorithms=[settings.jwt_algorithm],
+            leeway=60,
+        )
         user_id = UUID(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError) as error:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token invalido") from error
@@ -81,7 +86,12 @@ def get_current_customer(
     database: DatabaseSession,
 ) -> Cliente:
     try:
-        payload = jwt.decode(credentials.credentials, get_jwt_secret(), algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(
+            credentials.credentials,
+            get_jwt_secret(),
+            algorithms=[settings.jwt_algorithm],
+            leeway=60,
+        )
         customer_id = UUID(payload["sub"])
         if payload.get("role") != "CLIENTE":
             raise ValueError("Rol de cliente requerido")
@@ -109,7 +119,12 @@ def get_current_user_or_customer(
     database: DatabaseSession,
 ) -> tuple[UUID, str]:
     try:
-        payload = jwt.decode(credentials.credentials, get_jwt_secret(), algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(
+            credentials.credentials,
+            get_jwt_secret(),
+            algorithms=[settings.jwt_algorithm],
+            leeway=60,
+        )
         subject_id = UUID(payload["sub"])
         role = payload.get("role", "ADMIN")
     except (jwt.PyJWTError, KeyError, ValueError) as error:

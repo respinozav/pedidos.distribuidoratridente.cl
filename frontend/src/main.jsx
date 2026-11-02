@@ -1188,6 +1188,7 @@ const [loading, setLoading] = useState(true);
       };
       const { data } = await api.put(`/pedidos/${orderToEdit.id}`, payload);
       setOrders(current => current.map(o => o.id === data.id ? data : o));
+      window.dispatchEvent(new CustomEvent("stock-alert-refresh"));
       setOrderToEdit(null);
       Swal.fire({ icon: "success", title: "Actualizado", text: "Pedido actualizado y sincronizado con Defontana.", timer: 2500, showConfirmButton: false });
     } catch (err) {
@@ -4123,6 +4124,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       setCart([]);
       setError("");
       setSection("history");
+      window.dispatchEvent(new CustomEvent("stock-alert-refresh"));
       await Promise.all([loadHistory(), loadProducts()]);
       Swal.close();
       if (vendorSession) {

@@ -10,7 +10,7 @@ from uuid import UUID
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import (
@@ -700,9 +700,15 @@ def list_stock_alert_products(
         .options(selectinload(Producto.categoria))
         .where(
             Producto.eliminado_at.is_(None),
-            Producto.notificar_stock.is_(True),
-            Producto.stock_notificacion.is_not(None),
-            Producto.cantidad <= Producto.stock_notificacion,
+            Producto.activo.is_(True),
+            or_(
+                Producto.cantidad <= 0,
+                and_(
+                    Producto.notificar_stock.is_(True),
+                    Producto.stock_notificacion.is_not(None),
+                    Producto.cantidad <= Producto.stock_notificacion,
+                ),
+            ),
         )
         .order_by(
             Producto.cantidad.asc(),

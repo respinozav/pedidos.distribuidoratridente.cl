@@ -283,6 +283,7 @@ class OrderService:
         order.total = subtotal
         if payload.direccion_id:
             order.direccion_id = payload.direccion_id
+            order.direccion = self.database.get(Direccion, payload.direccion_id)
         
         # Guardar nuevos detalles
         self.database.add_all(details)

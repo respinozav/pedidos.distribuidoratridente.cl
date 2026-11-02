@@ -75,7 +75,9 @@ def main():
     td.test_defontana_order_exclusively_exento()
     td.test_defontana_order_mixed_afecto_and_exento()
     td.test_defontana_create_client_mocked()
+    td.test_defontana_update_client_mocked()
     td.test_defontana_sync_order_creates_client_when_not_exists()
+    td.test_defontana_sync_order_propagates_selected_address_to_payload_and_client()
     td.test_defontana_sync_product_existing()
     td.test_defontana_sync_product_new()
     tap.test_admin_profile_workflow()
@@ -95,7 +97,7 @@ def main():
     tcot.test_cotizador_validations()
     tcot.test_cotizador_pdf_generation()
     tcot.test_cotizador_role_permissions()
-    print(">>> ALL 34 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    print(">>> ALL 36 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

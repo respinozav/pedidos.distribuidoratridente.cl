@@ -1,3 +1,6 @@
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import uuid
 from decimal import Decimal
 from pydantic import ValidationError
@@ -154,31 +157,61 @@ def test_stock_alert_query():
         )
         db.add(p2)
 
-        # Producto 3: notificar_stock=False, cantidad=0 (No debe alertar porque notificar_stock=False)
+        # Producto 3: notificar_stock=False, cantidad=50 (No debe alertar porque tiene stock suficiente)
         p3 = Producto(
             categoria_id=categoria.id,
             codigo=f"ALERTA_3_{uuid.uuid4().hex[:4].upper()}",
-            nombre="PRODUCTO TEST NO NOTIFICAR",
+            nombre="PRODUCTO TEST CON STOCK",
             precio=Decimal("1500"),
-            cantidad=0,
+            cantidad=50,
             notificar_stock=False,
             stock_notificacion=None,
             activo=True,
         )
         db.add(p3)
 
+        # Producto 4: notificar_stock=False, cantidad=0 (Debe alertar porque no tiene stock disponible)
+        p4 = Producto(
+            categoria_id=categoria.id,
+            codigo=f"ALERTA_4_{uuid.uuid4().hex[:4].upper()}",
+            nombre="PRODUCTO TEST SIN STOCK",
+            precio=Decimal("1500"),
+            cantidad=0,
+            notificar_stock=False,
+            stock_notificacion=None,
+            activo=True,
+        )
+        db.add(p4)
+
+        # Producto 5: notificar_stock=False, cantidad=0, activo=False (No debe alertar porque está inactivo)
+        p5 = Producto(
+            categoria_id=categoria.id,
+            codigo=f"ALERTA_5_{uuid.uuid4().hex[:4].upper()}",
+            nombre="PRODUCTO TEST INACTIVO",
+            precio=Decimal("1500"),
+            cantidad=0,
+            notificar_stock=False,
+            stock_notificacion=None,
+            activo=False,
+        )
+        db.add(p5)
+
         db.commit()
         db.refresh(p1)
         db.refresh(p2)
         db.refresh(p3)
-        created_products = [p1, p2, p3]
+        db.refresh(p4)
+        db.refresh(p5)
+        created_products = [p1, p2, p3, p4, p5]
 
         alerts = list_stock_alert_products(db, admin_mock)
         alert_ids = [str(a.id) for a in alerts]
 
         assert str(p1.id) in alert_ids, "El producto p1 (cantidad=0, notif=10) debe estar en la lista de alertas"
         assert str(p2.id) not in alert_ids, "El producto p2 (cantidad=50, notif=10) NO debe estar en la lista de alertas"
-        assert str(p3.id) not in alert_ids, "El producto p3 (notificar_stock=False) NO debe estar en la lista de alertas"
+        assert str(p3.id) not in alert_ids, "El producto p3 (cantidad=50, notificar_stock=False) NO debe estar en la lista de alertas"
+        assert str(p4.id) in alert_ids, "El producto p4 (cantidad=0) DEBE estar en la lista de alertas por falta de stock"
+        assert str(p5.id) not in alert_ids, "El producto p5 (inactivo) NO debe estar en la lista de alertas"
 
     finally:
         for prod in created_products:
