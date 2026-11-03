@@ -2811,12 +2811,17 @@ useEffect(() => {
 
 
 
-function CustomerProfile({ customer, onProfileUpdated, onBack, onOrders, onLogout }) {
+function CustomerProfile({ customer, onProfileUpdated }) {
   const [profile, setProfile] = useState(customer);
   const [form, setForm] = useState({ nombre: customer.nombre ?? "", celular: customer.celular ?? "" });
   const [address, setAddress] = useState({ direccion: "", comuna: "", principal: false, activo: true });
   const [password, setPassword] = useState({ current_password: "", new_password: "" });
-const [error, setError] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setProfile(customer);
+    setForm({ nombre: customer.nombre ?? "", celular: customer.celular ?? "" });
+  }, [customer]);
 
   async function refreshProfile() {
     const { data } = await api.get("/cliente/perfil");
@@ -2873,23 +2878,134 @@ const [error, setError] = useState("");
     }
   }
 
-
-  useEffect(() => {
-    const portal = document.querySelector(".customer-portal");
-    if (!portal || portal.querySelector("[data-customer-profile-nav]")) return undefined;
-    const sidebar = document.createElement("aside");
-    sidebar.className = "customer-sidebar";
-    sidebar.dataset.customerProfileNav = "true";
-    sidebar.innerHTML = '<div class="customer-brand"><strong>Distribuidora Tridente</strong></div><p class="sidebar-label">MENU PRINCIPAL</p><nav class="customer-nav"><button type="button" class="profile-nav-order"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Realizar pedido</button><button type="button" class="profile-nav-history"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M8 12h8M8 16h8"/></svg>Pedidos</button><button type="button" class="active customer-account-button">Mis datos</button></nav><div class="customer-profile"><span></span><div><strong></strong><small>Sesión activa</small></div></div><button type="button" class="logout-button profile-nav-logout"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M21 19v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2"/></svg>Cerrar sesión</button>';
-    sidebar.querySelector(".customer-profile > span").textContent = (customer.nombre || customer.rut || customer.celular || "CL").slice(0, 2).toUpperCase();
-    sidebar.querySelector(".customer-profile strong").textContent = customer.nombre || "Cliente";
-    sidebar.querySelector(".profile-nav-order")?.addEventListener("click", onBack);
-    sidebar.querySelector(".profile-nav-history")?.addEventListener("click", onOrders);
-    sidebar.querySelector(".profile-nav-logout")?.addEventListener("click", onLogout);
-    portal.prepend(sidebar);
-    return () => sidebar.remove();
-  }, [customer, onBack, onOrders, onLogout]);
-  return <main className="customer-portal"><section className="customer-workspace"><header className="customer-portal-header"><div><p className="eyebrow">CUENTA</p><h1>Mis datos</h1></div><button className="btn btn-light" type="button" onClick={onBack}>Volver a pedidos</button></header><div className="customer-content">{error && <div className="alert alert-danger">{error}</div>}<div className="row g-4"><section className="col-xl-7"><form className="content-panel" onSubmit={saveProfile}><div className="panel-heading"><div><h2>Datos personales</h2><p>El RUT y correo no se pueden modificar.</p></div></div><div className="row g-3"><label className="col-md-6">RUT<input className="form-control" value={profile.rut ?? ""} disabled /></label><label className="col-md-6">Correo electrónico<input className="form-control" value={profile.correo ?? ""} disabled /></label><label className="col-md-6">Nombre<input className="form-control" value={form.nombre} onChange={(event) => setForm({ ...form, nombre: event.target.value })} /></label><label className="col-md-6">Celular<input className="form-control" value={form.celular} onChange={(event) => setForm({ ...form, celular: event.target.value })} /></label></div><button className="btn btn-primary mt-4">Guardar datos</button></form><form className="content-panel mt-4" onSubmit={changePassword}><div className="panel-heading"><div><h2>Cambiar contraseña</h2><p>Usa al menos 8 caracteres.</p></div></div><label className="form-label">Contraseña actual</label><input className="form-control" type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} required /><label className="form-label mt-3">Nueva contraseña</label><input className="form-control" type="password" minLength="8" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} required /><button className="btn btn-primary mt-4">Cambiar contraseña</button></form></section><section className="col-xl-5"><div className="content-panel"><div className="panel-heading"><div><h2>Direcciones</h2><p>Debe existir una dirección principal activa.</p></div></div>{profile.direcciones?.map((item) => <div className="border rounded p-3 mb-2" key={item.id}><strong>{item.direccion}</strong><small className="d-block text-secondary">{item.comuna || "Sin comuna"}</small><button className="btn btn-outline-primary btn-sm mt-2 me-2" type="button" disabled={item.principal} onClick={() => updateAddress(item, { principal: true })}>{item.principal ? "Principal" : "Marcar principal"}</button><button className="btn btn-outline-secondary btn-sm mt-2" type="button" disabled={item.principal && item.activo} onClick={() => updateAddress(item, { activo: !item.activo })}>{item.activo ? "Desactivar" : "Activar"}</button></div>)}<hr /><form onSubmit={saveAddress}><label className="form-label">Nueva dirección</label><input className="form-control" value={address.direccion} onChange={(event) => setAddress({ ...address, direccion: event.target.value })} required /><label className="form-label mt-3">Comuna</label><input className="form-control" value={address.comuna} onChange={(event) => setAddress({ ...address, comuna: event.target.value })} /><label className="form-check mt-3"><input className="form-check-input" type="checkbox" checked={address.principal} onChange={(event) => setAddress({ ...address, principal: event.target.checked })} /><span className="ms-2">Usar como principal</span></label><button className="btn btn-primary mt-3">Agregar dirección</button></form></div></section></div></div></section></main>;
+  return (
+    <>
+      {error && <div className="alert alert-danger">{error}</div>}
+      <div className="row g-4">
+        <section className="col-xl-7">
+          <form className="content-panel" onSubmit={saveProfile}>
+            <div className="panel-heading">
+              <div>
+                <h2>Datos personales</h2>
+                <p>El RUT y correo no se pueden modificar.</p>
+              </div>
+            </div>
+            <div className="row g-3">
+              <label className="col-md-6">
+                RUT
+                <input className="form-control" value={profile.rut ?? ""} disabled />
+              </label>
+              <label className="col-md-6">
+                Correo electrónico
+                <input className="form-control" value={profile.correo ?? ""} disabled />
+              </label>
+              <label className="col-md-6">
+                Nombre
+                <input
+                  className="form-control"
+                  value={form.nombre}
+                  onChange={(event) => setForm({ ...form, nombre: event.target.value })}
+                />
+              </label>
+              <label className="col-md-6">
+                Celular
+                <input
+                  className="form-control"
+                  value={form.celular}
+                  onChange={(event) => setForm({ ...form, celular: event.target.value })}
+                />
+              </label>
+            </div>
+            <button className="btn btn-primary mt-4">Guardar datos</button>
+          </form>
+          <form className="content-panel mt-4" onSubmit={changePassword}>
+            <div className="panel-heading">
+              <div>
+                <h2>Cambiar contraseña</h2>
+                <p>Usa al menos 8 caracteres.</p>
+              </div>
+            </div>
+            <label className="form-label">Contraseña actual</label>
+            <input
+              className="form-control"
+              type="password"
+              value={password.current_password}
+              onChange={(event) => setPassword({ ...password, current_password: event.target.value })}
+              required
+            />
+            <label className="form-label mt-3">Nueva contraseña</label>
+            <input
+              className="form-control"
+              type="password"
+              minLength="8"
+              value={password.new_password}
+              onChange={(event) => setPassword({ ...password, new_password: event.target.value })}
+              required
+            />
+            <button className="btn btn-primary mt-4">Cambiar contraseña</button>
+          </form>
+        </section>
+        <section className="col-xl-5">
+          <div className="content-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Direcciones</h2>
+                <p>Debe existir una dirección principal activa.</p>
+              </div>
+            </div>
+            {profile.direcciones?.map((item) => (
+              <div className="border rounded p-3 mb-2" key={item.id}>
+                <strong>{item.direccion}</strong>
+                <small className="d-block text-secondary">{item.comuna || "Sin comuna"}</small>
+                <button
+                  className="btn btn-outline-primary btn-sm mt-2 me-2"
+                  type="button"
+                  disabled={item.principal}
+                  onClick={() => updateAddress(item, { principal: true })}
+                >
+                  {item.principal ? "Principal" : "Marcar principal"}
+                </button>
+                <button
+                  className="btn btn-outline-secondary btn-sm mt-2"
+                  type="button"
+                  disabled={item.principal && item.activo}
+                  onClick={() => updateAddress(item, { activo: !item.activo })}
+                >
+                  {item.activo ? "Desactivar" : "Activar"}
+                </button>
+              </div>
+            ))}
+            <hr />
+            <form onSubmit={saveAddress}>
+              <label className="form-label">Nueva dirección</label>
+              <input
+                className="form-control"
+                value={address.direccion}
+                onChange={(event) => setAddress({ ...address, direccion: event.target.value })}
+                required
+              />
+              <label className="form-label mt-3">Comuna</label>
+              <input
+                className="form-control"
+                value={address.comuna}
+                onChange={(event) => setAddress({ ...address, comuna: event.target.value })}
+              />
+              <label className="form-check mt-3">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={address.principal}
+                  onChange={(event) => setAddress({ ...address, principal: event.target.checked })}
+                />
+                <span className="ms-2">Usar como principal</span>
+              </label>
+              <button className="btn btn-primary mt-3">Agregar dirección</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </>
+  );
 }
 
 function CustomerAccount({ customer, tab, onTabChange, onProfileUpdated, onLogout }) {
@@ -4165,37 +4281,6 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
     }
   }
 
-  useEffect(() => {
-    const navigation = document.querySelector(".customer-sidebar .customer-nav");
-    if (!navigation || navigation.querySelector("[data-customer-account]")) return undefined;
-    const ordersTitle = navigation.querySelector(".customer-nav-title");
-    ordersTitle?.remove();
-    const orderButtons = navigation.querySelectorAll(":scope > button");
-    if (orderButtons[1]) orderButtons[1].lastChild.textContent = "Pedidos";
-    const profileButton = document.createElement("button");
-    profileButton.type = "button";
-    profileButton.className = "customer-account-button";
-    profileButton.dataset.customerAccount = "true";
-    profileButton.textContent = "Mis datos";
-    profileButton.addEventListener("click", () => setSection("profile"));
-    navigation.append(profileButton);
-    return () => {
-      if (ordersTitle) navigation.prepend(ordersTitle);
-      profileButton.remove();
-    };
-  }, [section]);
-
-  if (section === "profile") {
-    return (
-      <CustomerProfile
-        customer={customer}
-        onProfileUpdated={onProfileUpdated}
-        onBack={() => setSection("create")}
-        onOrders={() => setSection("history")}
-        onLogout={vendorSession ? () => onExitVendorMode && onExitVendorMode() : onLogout}
-      />
-    );
-  }
 
   const total = cart.reduce((sum, item) => sum + Number(item.unit_price ?? item.precio_cliente ?? item.precio) * item.quantity, 0);
   const activeAddresses = customer.direcciones?.filter((address) => address.activo) ?? [];
@@ -4232,10 +4317,6 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
           </div>
           <p className="sidebar-label">MENU PRINCIPAL</p>
           <nav className="customer-nav">
-            <span className="customer-nav-title">
-              <ClipboardList size={19} />
-              Pedidos
-            </span>
             <button
               className={section === "create" ? "active" : ""}
               onClick={() => {
@@ -4246,9 +4327,21 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
               <ShoppingBag size={17} />
               Realizar pedido
             </button>
-            <button className={section === "history" ? "active" : ""} onClick={openHistory}>
+            <button
+              className={section === "history" ? "active" : ""}
+              onClick={openHistory}
+            >
               <ClipboardList size={17} />
-              Pedidos históricos
+              Pedidos
+            </button>
+            <button
+              className={`customer-account-button ${section === "profile" ? "active" : ""}`}
+              onClick={() => {
+                setSection("profile");
+                setError("");
+              }}
+            >
+              Mis datos
             </button>
             <button
               className={section === "faq" ? "active" : ""}
@@ -4279,23 +4372,42 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       <section className="customer-workspace">
         <header className="customer-portal-header">
           <div>
-            <p className="eyebrow">PEDIDOS</p>
+            <p className="eyebrow">{section === "profile" ? "CUENTA" : "PEDIDOS"}</p>
             <h1>
               {section === "create"
                 ? "Realizar pedido"
                 : section === "history"
-                ? "Pedidos históricos"
+                ? "Pedidos"
+                : section === "profile"
+                ? "Mis datos"
                 : "Tutoriales y FAQ"}
             </h1>
           </div>
           <div className="customer-header-right">
+            {section === "profile" && (
+              <button
+                className="btn btn-light me-2"
+                type="button"
+                onClick={() => {
+                  setSection("create");
+                  setError("");
+                }}
+              >
+                Volver a pedidos
+              </button>
+            )}
             <FocusGroupButton onClick={() => setSuggestionModalOpen(true)} />
             <span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span>
           </div>
         </header>
         <div className="customer-content">
           {error && <div className="alert alert-danger">{error}</div>}
-          {section === "faq" ? (
+          {section === "profile" ? (
+            <CustomerProfile
+              customer={customer}
+              onProfileUpdated={onProfileUpdated}
+            />
+          ) : section === "faq" ? (
             <FaqTutorials onGoToShop={() => setSection("create")} />
           ) : section === "create" ? (
             <>
