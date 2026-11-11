@@ -433,6 +433,119 @@ def notify_customer_password_changed(customer: Cliente, database: Session | None
         logger.exception("No fue posible enviar el acuse de cambio de contraseña al cliente %s", customer.id)
 
 
+def send_customer_password_reset_email(
+    customer: Cliente,
+    reset_token: str,
+    base_url: str = "https://pedidos.distribuidoratridente.cl",
+    database: Session | None = None,
+) -> bool:
+    if database is None:
+        try:
+            from app.core.database import SessionLocal
+
+            with SessionLocal() as db_session:
+                smtp_config = _get_smtp_settings(db_session)
+        except Exception:
+            smtp_config = _get_smtp_settings(None)
+    else:
+        smtp_config = _get_smtp_settings(database)
+
+    recipient = (customer.correo or "").strip()
+    if not smtp_config.get("configured") or not recipient:
+        logger.warning("SMTP no configurado o destinatario vacío al intentar enviar recuperación de clave.")
+        return False
+
+    clean_base = base_url.rstrip("/")
+    reset_url = f"{clean_base}/?reset_token={reset_token}"
+    nombre = customer.nombre or "Estimado/a cliente"
+
+    message = EmailMessage()
+    message["Subject"] = "Recuperación de contraseña | Distribuidora Tridente"
+    message["From"] = f"{smtp_config['from_name']} <{smtp_config['from_email']}>"
+    message["To"] = recipient
+    message.set_content(
+        f"Hola {nombre},\n\n"
+        f"Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en Distribuidora Tridente.\n\n"
+        f"Para crear una nueva contraseña, ingresa al siguiente enlace (válido por 15 minutos):\n{reset_url}\n\n"
+        f"Si no solicitaste este cambio, puedes ignorar este mensaje; tu cuenta permanecerá segura.\n\n"
+        f"Saludos,\nDistribuidora Tridente"
+    )
+    message.add_alternative(
+        f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Segoe UI,Arial,sans-serif;color:#172b4d;">
+  <div style="max-width:600px;margin:30px auto;background:#ffffff;border:1px solid #d9e2ec;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(16,42,67,0.08);">
+    <div style="padding:24px 32px;background:#102a43;color:#ffffff;">
+      <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+          <td width="48" style="vertical-align:middle;padding-right:14px;">
+            <img src="https://pedidos.distribuidoratridente.cl/logo_tridente.png" alt="Logo Tridente" width="42" height="42" style="display:block;border:0;outline:none;" />
+          </td>
+          <td style="vertical-align:middle;">
+            <div style="font-size:20px;font-weight:700;color:#ffffff;line-height:1.2;">Distribuidora Tridente</div>
+            <div style="margin-top:4px;color:#9bceff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">RECUPERACIÓN DE CONTRASEÑA</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+    <div style="padding:32px;">
+      <h2 style="font-size:20px;margin-top:0;color:#102a43;font-weight:700;">Hola, {html.escape(nombre)}:</h2>
+      <p style="font-size:15px;line-height:1.6;color:#334e68;margin-bottom:20px;">
+        Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en el <strong>Portal de Clientes</strong> de Distribuidora Tridente.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="{reset_url}" style="background:#0284c7;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:700;font-size:15px;display:inline-block;box-shadow:0 2px 6px rgba(2,132,199,0.35);">
+          Restablecer mi contraseña
+        </a>
+      </div>
+      <div style="background:#f0f7ff;border-left:4px solid #0284c7;padding:14px 16px;border-radius:0 6px 6px 0;margin:24px 0;">
+        <p style="margin:0;font-size:13px;color:#0369a1;line-height:1.5;">
+          ⏱ <strong>Este enlace es válido únicamente por 15 minutos.</strong> Por motivos de seguridad, expirará automáticamente pasado ese tiempo.
+        </p>
+      </div>
+      <p style="font-size:13px;color:#627d98;line-height:1.5;">
+        Si no realizaste esta solicitud, puedes ignorar este mensaje; tu contraseña actual continuará siendo segura.
+      </p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
+      <p style="font-size:12px;color:#829ab1;word-break:break-all;line-height:1.4;">
+        Si el botón no funciona, copia y pega el siguiente enlace en tu navegador:<br />
+        <a href="{reset_url}" style="color:#0284c7;">{reset_url}</a>
+      </p>
+    </div>
+    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center;">
+      <small style="color:#829ab1;font-size:11px;">
+        Distribuidora Tridente · Mensaje generado automáticamente por el sistema.
+      </small>
+    </div>
+  </div>
+</body>
+</html>""",
+        subtype="html",
+    )
+    try:
+        host = smtp_config["host"]
+        port = int(smtp_config.get("port") or 465)
+        user = smtp_config["username"]
+        pwd = smtp_config["password"]
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=20) as smtp:
+                smtp.login(user, pwd)
+                smtp.send_message(message)
+        else:
+            with smtplib.SMTP(host, port, timeout=20) as smtp:
+                smtp.ehlo()
+                if smtp.has_extn("starttls"):
+                    smtp.starttls()
+                    smtp.ehlo()
+                smtp.login(user, pwd)
+                smtp.send_message(message)
+        return True
+    except Exception:
+        logger.exception("No fue posible enviar el correo de recuperación de contraseña al cliente %s (%s)", customer.id, recipient)
+        return False
+
+
 def notify_user_password_changed(user: Usuario, database: Session | None = None) -> None:
     if database is None:
         try:

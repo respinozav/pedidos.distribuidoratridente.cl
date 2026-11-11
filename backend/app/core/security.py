@@ -70,3 +70,40 @@ def create_vendor_customer_token(
         get_jwt_secret(),
         algorithm=settings.jwt_algorithm,
     )
+
+
+def create_customer_password_reset_token(customer_id: UUID, expires_minutes: int = 15) -> str:
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(minutes=expires_minutes)
+    return jwt.encode(
+        {
+            "sub": str(customer_id),
+            "role": "CLIENTE",
+            "purpose": "password_reset",
+            "iat": int(now.timestamp()),
+            "exp": expires_at,
+        },
+        get_jwt_secret(),
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+def decode_customer_password_reset_token(token: str) -> UUID:
+    try:
+        payload = jwt.decode(
+            token,
+            get_jwt_secret(),
+            algorithms=[settings.jwt_algorithm],
+        )
+        if payload.get("role") != "CLIENTE":
+            raise ValueError("El enlace no corresponde al portal de clientes.")
+        if payload.get("purpose") != "password_reset":
+            raise ValueError("El enlace no es válido para recuperación de contraseña.")
+        sub = payload.get("sub")
+        if not sub:
+            raise ValueError("El identificador del cliente es inválido.")
+        return UUID(sub)
+    except jwt.ExpiredSignatureError:
+        raise ValueError("El enlace de recuperación ha caducado (duración máxima 15 minutos). Por favor solicita uno nuevo.")
+    except (jwt.PyJWTError, Exception) as exc:
+        raise ValueError(f"El enlace de recuperación es inválido o ha sido alterado: {exc}")

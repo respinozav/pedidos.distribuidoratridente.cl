@@ -27,6 +27,8 @@ from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     create_customer_access_token,
+    create_customer_password_reset_token,
+    decode_customer_password_reset_token,
     create_vendor_customer_token,
     hash_password,
     verify_password,
@@ -83,8 +85,11 @@ from app.schemas.dto import (
     CustomerInput,
     CustomerLogin,
     CustomerOutput,
+    CustomerPasswordResetConfirm,
+    CustomerPasswordResetRequest,
     CustomerPasswordUpdate,
     CustomerProfileUpdate,
+    MessageResponse,
     CustomerSelectItemOutput,
     CustomerUpdate,
     DetalleVentaVendedorOutput,
@@ -135,6 +140,7 @@ from app.services.notifications import (
     _order_pdf_filename,
     dispatch_order_notifications_in_background,
     notify_customer_password_changed,
+    send_customer_password_reset_email,
     notify_user_password_changed,
     send_product_suggestion_notification,
     send_publicidad_campaign,
@@ -412,6 +418,118 @@ def customer_login(payload: CustomerLogin, request: Request, database: DatabaseS
     )
     expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
     return TokenOutput(access_token=create_customer_access_token(customer.id, expires_minutes=expire_minutes))
+
+
+@router.options("/clientes/recuperar-clave/solicitar", tags=["Acceso cliente"])
+@router.options("/clientes/recuperar-clave/restablecer", tags=["Acceso cliente"])
+def customer_password_reset_options() -> None:
+    return None
+
+
+@router.post(
+    "/clientes/recuperar-clave/solicitar",
+    response_model=MessageResponse,
+    tags=["Acceso cliente"],
+)
+def request_customer_password_reset(
+    payload: CustomerPasswordResetRequest,
+    request: Request,
+    database: DatabaseSession,
+) -> MessageResponse:
+    ip, user_agent = extract_client_info(request)
+    correo_clean = payload.correo.strip().lower()
+    generic_msg = (
+        "Si el correo electrónico se encuentra registrado, recibirás un enlace "
+        "para restablecer tu contraseña en unos momentos."
+    )
+
+    customer = database.scalar(select(Cliente).where(func.lower(Cliente.correo) == correo_clean))
+    if not customer or not customer.activo:
+        record_session_log(
+            database=database,
+            tipo_usuario="CLIENTE",
+            correo=correo_clean,
+            estado="FALLIDO",
+            mensaje="Solicitud de recuperación para cuenta inexistente o inactiva",
+            ip_address=ip,
+            user_agent=user_agent,
+        )
+        return MessageResponse(message=generic_msg)
+
+    # Token con 15 minutos de expiración
+    reset_token = create_customer_password_reset_token(customer.id, expires_minutes=15)
+
+    origin = request.headers.get("origin") or request.headers.get("referer")
+    if origin:
+        base_url = origin.split("?")[0].rstrip("/")
+    else:
+        base_url = "https://pedidos.distribuidoratridente.cl"
+
+    sent = send_customer_password_reset_email(
+        customer=customer,
+        reset_token=reset_token,
+        base_url=base_url,
+        database=database,
+    )
+
+    record_session_log(
+        database=database,
+        tipo_usuario="CLIENTE",
+        cliente_id=customer.id,
+        nombre=customer.nombre,
+        correo=customer.correo,
+        estado="EXITOSO" if sent else "ADVERTENCIA",
+        mensaje="Solicitud de recuperación enviada por correo" if sent else "Token generado pero falló el envío SMTP",
+        ip_address=ip,
+        user_agent=user_agent,
+    )
+
+    return MessageResponse(message=generic_msg)
+
+
+@router.post(
+    "/clientes/recuperar-clave/restablecer",
+    response_model=MessageResponse,
+    tags=["Acceso cliente"],
+)
+def reset_customer_password(
+    payload: CustomerPasswordResetConfirm,
+    request: Request,
+    database: DatabaseSession,
+) -> MessageResponse:
+    ip, user_agent = extract_client_info(request)
+    try:
+        customer_id = decode_customer_password_reset_token(payload.token)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+
+    customer = database.scalar(select(Cliente).where(Cliente.id == customer_id))
+    if not customer or not customer.activo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente no encontrado o inactivo.")
+
+    customer.password_hash = hash_password(payload.nueva_contrasena)
+    database.commit()
+
+    try:
+        notify_customer_password_changed(customer, database=database)
+    except Exception:
+        pass
+
+    record_session_log(
+        database=database,
+        tipo_usuario="CLIENTE",
+        cliente_id=customer.id,
+        nombre=customer.nombre,
+        correo=customer.correo,
+        estado="EXITOSO",
+        mensaje="Contraseña restablecida exitosamente mediante token de correo",
+        ip_address=ip,
+        user_agent=user_agent,
+    )
+
+    return MessageResponse(
+        message="Tu contraseña ha sido restablecida exitosamente. Ya puedes iniciar sesión con tu nueva contraseña."
+    )
 
 
 @router.get("/cliente/perfil", response_model=CustomerOutput, tags=["Perfil cliente"])

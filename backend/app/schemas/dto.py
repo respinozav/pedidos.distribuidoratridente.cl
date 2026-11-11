@@ -190,6 +190,18 @@ class CustomerPasswordUpdate(BaseModel):
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
 
+class CustomerPasswordResetRequest(BaseModel):
+    correo: EmailStr
+
+
+class CustomerPasswordResetConfirm(BaseModel):
+    token: str
+    nueva_contrasena: str = Field(min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
 
 class UserLogin(BaseModel):
     correo: str

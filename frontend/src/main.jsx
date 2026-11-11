@@ -65,12 +65,167 @@ function BrandMark() {
   );
 }
 
+function ResetPasswordView({ token, onCompleted, onCancel }) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (password.length < 8) {
+      setError("La nueva contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await api.post("/clientes/recuperar-clave/restablecer", {
+        token,
+        nueva_contrasena: password,
+      });
+      await Swal.fire({
+        icon: "success",
+        title: "¡Contraseña actualizada!",
+        text: data.message || "Tu contraseña fue actualizada correctamente. Ya puedes iniciar sesión con tu nueva contraseña.",
+        confirmButtonText: "Iniciar sesión",
+        confirmButtonColor: "#146cce",
+      });
+      onCompleted();
+    } catch (reqError) {
+      setError(reqError.response?.data?.detail ?? "No fue posible restablecer la contraseña. El enlace puede haber caducado.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="access-shell">
+      <section className="access-brand">
+        <div className="access-brand-content">
+          <h1>Pedidos simples.<br />Despachos claros.</h1>
+          <p>Haz tu pedido y revisa su estado desde un solo lugar.</p>
+        </div>
+        <div className="access-brand-footer">
+          <small>
+            Aplicación desarrollada por{" "}
+            <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+              <strong>RAEV Soluciones Informática SpA</strong>
+            </a>{" "}
+            | Roderick Espinoza
+          </small>
+        </div>
+      </section>
+
+      <div className="access-form-container">
+        <form className="access-form" onSubmit={handleSubmit}>
+          <div className="access-form-heading">
+            <BrandMark />
+            <p className="eyebrow">PORTAL DE CLIENTES</p>
+            <h2>Nueva contraseña</h2>
+            <p className="access-subheading">
+              Ingresa tu nueva contraseña para acceder a tu cuenta.
+            </p>
+          </div>
+
+          <div className="access-fields">
+            <label htmlFor="reset-new-password" className="form-label">Nueva contraseña</label>
+            <input
+              id="reset-new-password"
+              className="form-control"
+              type="password"
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+              required
+              autoFocus
+            />
+
+            <label htmlFor="reset-confirm-password" className="form-label mt-3">Confirmar nueva contraseña</label>
+            <input
+              id="reset-confirm-password"
+              className="form-control"
+              type="password"
+              minLength={8}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Repite la nueva contraseña"
+              required
+            />
+          </div>
+
+          <div className="access-error-slot">
+            {error && <p className="text-danger m-0">{error}</p>}
+          </div>
+
+          <button className="btn btn-primary btn-lg w-100 mt-2" disabled={loading}>
+            {loading ? "Guardando contraseña..." : "Restablecer contraseña"}
+          </button>
+
+          <div className="text-center mt-3">
+            <button
+              type="button"
+              className="btn btn-link text-decoration-none text-secondary"
+              style={{ fontSize: "0.85rem" }}
+              onClick={onCancel}
+            >
+              ← Cancelar y volver al inicio
+            </button>
+          </div>
+        </form>
+
+        <footer className="access-mobile-footer">
+          <small>
+            Aplicación desarrollada por{" "}
+            <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+              <strong>RAEV Soluciones Informática SpA</strong>
+            </a>{" "}
+            | Roderick Espinoza
+          </small>
+        </footer>
+      </div>
+    </main>
+  );
+}
+
 function Access({ onCustomerLogin, onAdminLogin }) {
   const [customerAccess, setCustomerAccess] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [forgotPasswordView, setForgotPasswordView] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+
+  async function handleRequestPasswordReset(event) {
+    event.preventDefault();
+    setForgotLoading(true);
+    setForgotError("");
+    try {
+      const { data } = await api.post("/clientes/recuperar-clave/solicitar", { correo: forgotEmail });
+      setForgotSent(true);
+      Swal.fire({
+        icon: "info",
+        title: "Correo enviado",
+        text: data.message || "Si tu correo se encuentra registrado, recibirás un enlace válido por 15 minutos. Revisa también tu carpeta de spam.",
+        confirmButtonText: "Entendido",
+        confirmButtonColor: "#146cce",
+      });
+    } catch (reqError) {
+      setForgotError(reqError.response?.data?.detail ?? "No fue posible procesar la solicitud.");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -100,6 +255,111 @@ function Access({ onCustomerLogin, onAdminLogin }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (forgotPasswordView) {
+    return (
+      <main className="access-shell">
+        <section className="access-brand">
+          <div className="access-brand-content">
+            <h1>Pedidos simples.<br />Despachos claros.</h1>
+            <p>Haz tu pedido y revisa su estado desde un solo lugar.</p>
+          </div>
+          <div className="access-brand-footer">
+            <small>
+              Aplicación desarrollada por{" "}
+              <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+                <strong>RAEV Soluciones Informática SpA</strong>
+              </a>{" "}
+              | Roderick Espinoza
+            </small>
+          </div>
+        </section>
+
+        <div className="access-form-container">
+          <form className="access-form" onSubmit={handleRequestPasswordReset}>
+            <div className="access-form-heading">
+              <BrandMark />
+
+              <p className="eyebrow">PORTAL DE CLIENTES</p>
+              <h2>Recuperar contraseña</h2>
+              <p className="access-subheading">
+                Ingresa tu correo y te enviaremos un enlace seguro para restablecerla.
+              </p>
+            </div>
+
+            {forgotSent ? (
+              <div className="text-center py-2">
+                <div className="alert alert-info text-start mb-3" style={{ fontSize: "0.86rem", lineHeight: 1.5 }}>
+                  <strong>¡Enlace solicitado!</strong> Si tu correo está registrado en el portal de clientes, recibirás un mensaje con las instrucciones. El enlace será válido por <strong>15 minutos</strong>.
+                  <br /><br />
+                  <small className="text-muted d-block">Revisa también tu carpeta de spam o correo no deseado.</small>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary w-100"
+                  onClick={() => {
+                    setForgotPasswordView(false);
+                    setForgotSent(false);
+                    setEmail(forgotEmail);
+                  }}
+                >
+                  Volver a iniciar sesión
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="access-fields">
+                  <label htmlFor="forgot-email" className="form-label">Correo electrónico</label>
+                  <input
+                    id="forgot-email"
+                    className="form-control"
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(event) => setForgotEmail(event.target.value)}
+                    placeholder="ejemplo@cliente.cl"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="access-error-slot">
+                  {forgotError && <p className="text-danger m-0">{forgotError}</p>}
+                </div>
+
+                <button className="btn btn-primary btn-lg w-100 mt-2" disabled={forgotLoading}>
+                  {forgotLoading ? "Enviando enlace..." : "Enviar enlace de recuperación"}
+                </button>
+
+                <div className="text-center mt-3">
+                  <button
+                    type="button"
+                    className="btn btn-link text-decoration-none text-secondary"
+                    style={{ fontSize: "0.85rem" }}
+                    onClick={() => {
+                      setForgotPasswordView(false);
+                      setForgotError("");
+                    }}
+                  >
+                    ← Volver a iniciar sesión
+                  </button>
+                </div>
+              </>
+            )}
+          </form>
+
+          <footer className="access-mobile-footer">
+            <small>
+              Aplicación desarrollada por{" "}
+              <a href="https://raevsi.cl/" target="_blank" rel="noopener noreferrer">
+                <strong>RAEV Soluciones Informática SpA</strong>
+              </a>{" "}
+              | Roderick Espinoza
+            </small>
+          </footer>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -178,6 +438,24 @@ function Access({ onCustomerLogin, onAdminLogin }) {
               onChange={(event) => setPassword(event.target.value)}
               required
             />
+
+            {customerAccess && (
+              <div className="d-flex justify-content-end mt-1">
+                <button
+                  type="button"
+                  className="btn btn-link p-0 text-decoration-none"
+                  style={{ fontSize: "0.82rem", color: "var(--blue)" }}
+                  onClick={() => {
+                    setForgotPasswordView(true);
+                    setForgotEmail(email);
+                    setForgotError("");
+                    setForgotSent(false);
+                  }}
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="access-error-slot">
@@ -4811,6 +5089,9 @@ function PublicCatalog() {
 
 function App() {
   const initialSession = getStoredSession();
+  const [resetToken, setResetToken] = useState(() => {
+    return new URLSearchParams(window.location.search).get("reset_token");
+  });
   const [customer, setCustomer] = useState(
     initialSession?.role === "customer" ? initialSession.customer : null
   );
@@ -4905,6 +5186,21 @@ function App() {
       />
     );
   }
+  const handleClearResetToken = () => {
+    window.history.replaceState({}, document.title, window.location.pathname);
+    setResetToken(null);
+  };
+
+  if (resetToken) {
+    return (
+      <ResetPasswordView
+        token={resetToken}
+        onCompleted={handleClearResetToken}
+        onCancel={handleClearResetToken}
+      />
+    );
+  }
+
   if (view === "admin-access") {
     return (
       <AdminAccess
