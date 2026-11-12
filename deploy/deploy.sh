@@ -236,7 +236,7 @@ if [ "$IS_BACKEND" = true ]; then
 
     if [ -f "alembic.ini" ]; then
         echo "Ejecutando Alembic..."
-        alembic upgrade head || echo "Alembic completado o sin cambios pendientes"
+        "$ACTIVE_VENV/bin/alembic" upgrade head || alembic upgrade head || echo "Alembic completado o sin cambios pendientes"
     fi
 
     echo "Validando importación de FastAPI app.main..."

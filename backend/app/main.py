@@ -13,6 +13,18 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Asegurar que las columnas nuevas existan en la base de datos sin depender de migraciones manuales
+    try:
+        from app.core.database import engine
+        from sqlalchemy import text
+        schema = settings.database_schema
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_whatsapp BOOLEAN NOT NULL DEFAULT false;"))
+            conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_email BOOLEAN NOT NULL DEFAULT false;"))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("No se pudo auto-aplicar columnas en usuarios: %s", exc)
+
     # Iniciar background task de cobranzas
     scheduler_task = asyncio.create_task(cobranzas_scheduler_loop())
     yield

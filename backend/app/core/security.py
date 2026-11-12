@@ -20,8 +20,13 @@ def hash_password(password: str) -> str:
     return password_context.hash(password)
 
 
-def verify_password(password: str, password_hash: str) -> bool:
-    return password_context.verify(password, password_hash)
+def verify_password(password: str, password_hash: str | None) -> bool:
+    if not password_hash or not isinstance(password_hash, str):
+        return False
+    try:
+        return password_context.verify(password, password_hash)
+    except Exception:
+        return False
 
 
 def create_access_token(user_id: UUID, role: str, expires_minutes: int | None = None) -> str:
