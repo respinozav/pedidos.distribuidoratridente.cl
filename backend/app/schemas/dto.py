@@ -219,6 +219,8 @@ class UserInput(BaseModel):
     correo: EmailStr
     celular: str | None = Field(default=None, max_length=30)
     recibe_pedido: bool = False
+    recibe_camila_whatsapp: bool = False
+    recibe_camila_email: bool = False
     rol_id: UUID
     activo: bool = True
 

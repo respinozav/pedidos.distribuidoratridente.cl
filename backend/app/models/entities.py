@@ -49,6 +49,8 @@ class Usuario(AuditMixin, Base):
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     celular: Mapped[str | None] = mapped_column(String(30), nullable=True)
     recibe_pedido: Mapped[bool] = mapped_column(Boolean, default=False)
+    recibe_camila_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
+    recibe_camila_email: Mapped[bool] = mapped_column(Boolean, default=False)
     rol: Mapped[Rol] = relationship(back_populates="usuarios")
 
 
