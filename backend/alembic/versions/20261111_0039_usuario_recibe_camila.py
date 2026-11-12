@@ -44,3 +44,4 @@ def downgrade() -> None:
         DROP COLUMN IF EXISTS recibe_camila_email;
         """
     )
+
