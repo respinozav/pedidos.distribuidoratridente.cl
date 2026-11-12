@@ -230,7 +230,11 @@ button, input { font: inherit; }
 .image-preview { align-items: center; display: flex; gap: .75rem; margin-top: 1rem; }
 .image-preview img { border: 1px solid var(--line); border-radius: 5px; height: 58px; object-fit: cover; width: 58px; }
 .user-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.user-table-head, .user-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(170px, 1.4fr) minmax(140px, 1fr) minmax(120px, .9fr) 105px 76px 80px; min-width: 690px; }
+.user-table-head, .user-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(170px, 1.3fr) minmax(130px, 1fr) minmax(110px, .9fr) 105px minmax(160px, 1.2fr) 76px 80px; min-width: 860px; }
+.camila-channels { align-items: center; display: flex; flex-wrap: wrap; gap: .35rem; }
+.camila-badge { border-radius: 99px; display: inline-flex; font-size: .72rem !important; font-weight: 750; line-height: 1; padding: .3rem .55rem; white-space: nowrap; }
+.camila-badge-wsp { background: #dcfce7; border: 1px solid #bbf7d0; color: #15803d; }
+.camila-badge-mail { background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; }
 .product-table-head span:last-child, .user-table-head span:last-child, .category-table-head span:last-child { text-align: center; }
 .product-row > .icon-button, .user-row > .icon-button, .category-row > .icon-button { justify-self: center; }
 .customer-row { cursor: pointer; }
