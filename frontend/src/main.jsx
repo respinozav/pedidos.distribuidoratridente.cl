@@ -262,8 +262,16 @@ function Access({ onCustomerLogin, onAdminLogin }) {
         delete window.__openVendedorGenerarVentaModal;
         onAdminLogin();
       }
-    } catch {
-      setError("Correo o contraseña incorrectos.");
+    } catch (err) {
+      const serverDetail = err?.response?.data?.detail;
+      const status = err?.response?.status;
+      if (status === 500) {
+        setError("Error en el servidor al autenticar (500).");
+      } else if (serverDetail && serverDetail !== "Credenciales invalidas") {
+        setError(serverDetail);
+      } else {
+        setError("Correo o contraseña incorrectos.");
+      }
     } finally {
       setLoading(false);
     }

