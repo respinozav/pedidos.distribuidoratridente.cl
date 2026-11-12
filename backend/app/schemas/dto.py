@@ -1,6 +1,7 @@
 import base64
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -468,6 +469,57 @@ class SesionLogStats(BaseModel):
     fallidos: int
     admin_total: int
     cliente_total: int
+
+
+class CamilaLogCreate(BaseModel):
+    razon_social: str = Field(min_length=1, max_length=255)
+    whatsapp: str | None = Field(default=None, max_length=50)
+    correo: str | None = Field(default=None, max_length=255)
+    conversacion: str | None = None
+    resumen: str | None = None
+    total_estimado: Decimal | None = None
+    enviado_whatsapp: bool = False
+    enviado_email: bool = False
+    destinatarios_whatsapp: str | None = None
+    destinatarios_email: str | None = None
+    estado: str = Field(default="COMPLETADA", max_length=50)
+    origen: str = Field(default="WEB_CAMILA", max_length=100)
+    metadata_extra: dict[str, Any] | None = None
+
+
+class CamilaLogOutput(ORMModel):
+    id: UUID
+    razon_social: str
+    whatsapp: str | None = None
+    correo: str | None = None
+    conversacion: str | None = None
+    resumen: str | None = None
+    total_estimado: Decimal | None = None
+    enviado_whatsapp: bool
+    enviado_email: bool
+    destinatarios_whatsapp: str | None = None
+    destinatarios_email: str | None = None
+    estado: str
+    origen: str
+    metadata_extra: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class CamilaLogPage(BaseModel):
+    items: list[CamilaLogOutput]
+    total: int
+    page: int
+    page_size: int
+
+
+class CamilaLogStats(BaseModel):
+    total: int
+    con_whatsapp: int
+    con_correo: int
+    ambos_canales: int
+    total_estimado_suma: Decimal | float = 0
+
 
 
 class SendPublicidadEmailInput(BaseModel):

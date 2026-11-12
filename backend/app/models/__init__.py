@@ -1,5 +1,6 @@
 from app.models.entities import (
     AvisoStockCliente,
+    CamilaLog,
     Categoria,
     Cliente,
     CotizacionCliente,
@@ -23,6 +24,7 @@ from app.models.system_settings import SystemSettings
 
 __all__ = [
     "AvisoStockCliente",
+    "CamilaLog",
     "Categoria",
     "Cliente",
     "CotizacionCliente",

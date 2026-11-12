@@ -44,6 +44,7 @@ from app.services.cotizador_service import (
     obtener_historial_cotizante,
 )
 from app.models.entities import (
+    CamilaLog,
     Categoria,
     Cliente,
     Credito,
@@ -72,6 +73,10 @@ from app.schemas.dto import (
     AdminProfileUpdate,
     AvisoStockInput,
     AvisoStockOutput,
+    CamilaLogCreate,
+    CamilaLogOutput,
+    CamilaLogPage,
+    CamilaLogStats,
     CategoryInput,
     CategoryOutput,
     CreditOutput,
@@ -1697,6 +1702,135 @@ def session_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> SesionLo
         admin_total=admin_total,
         cliente_total=cliente_total,
     )
+
+
+# =========================================================================
+# RUTAS DE CAMILA (LOGS DE CONVERSACIONES, PROSPECTOS Y VENTAS)
+# =========================================================================
+@router.get("/admin/camila/logs", response_model=CamilaLogPage, tags=["Log Camila"])
+def list_camila_logs(
+    database: DatabaseSession,
+    _: AdminUser,
+    canal: str | None = None,
+    estado: str | None = None,
+    search: str | None = Query(default=None, max_length=150),
+    desde: str | None = None,
+    hasta: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> CamilaLogPage:
+    """Lista las conversaciones y ventas capturadas por Camila con filtros y paginación."""
+    statement = select(CamilaLog)
+    if canal and canal.upper() != "TODOS":
+        c_upper = canal.upper()
+        if c_upper == "WHATSAPP":
+            statement = statement.where(
+                (CamilaLog.enviado_whatsapp.is_(True)) | ((CamilaLog.whatsapp.isnot(None)) & (CamilaLog.whatsapp != ""))
+            )
+        elif c_upper == "CORREO" or c_upper == "EMAIL":
+            statement = statement.where(
+                (CamilaLog.enviado_email.is_(True)) | ((CamilaLog.correo.isnot(None)) & (CamilaLog.correo != ""))
+            )
+        elif c_upper == "AMBOS":
+            statement = statement.where(
+                ((CamilaLog.whatsapp.isnot(None)) & (CamilaLog.whatsapp != ""))
+                & ((CamilaLog.correo.isnot(None)) & (CamilaLog.correo != ""))
+            )
+    if estado and estado.upper() != "TODOS":
+        statement = statement.where(func.upper(CamilaLog.estado) == estado.upper())
+    if search:
+        pattern = f"%{search.strip()}%"
+        statement = statement.where(
+            (CamilaLog.razon_social.ilike(pattern))
+            | (CamilaLog.whatsapp.ilike(pattern))
+            | (CamilaLog.correo.ilike(pattern))
+            | (CamilaLog.resumen.ilike(pattern))
+            | (CamilaLog.conversacion.ilike(pattern))
+        )
+    CHILE_TZ = ZoneInfo("America/Santiago")
+    if desde:
+        try:
+            from_dt = datetime.strptime(f"{desde} 00:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(CamilaLog.created_at >= from_dt)
+        except ValueError:
+            pass
+    if hasta:
+        try:
+            to_dt = datetime.strptime(f"{hasta} 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=CHILE_TZ)
+            statement = statement.where(CamilaLog.created_at <= to_dt)
+        except ValueError:
+            pass
+
+    total = database.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    logs = list(
+        database.scalars(
+            statement.order_by(CamilaLog.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    )
+    return CamilaLogPage(
+        items=[CamilaLogOutput.model_validate(log, from_attributes=True) for log in logs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/admin/camila/logs/stats", response_model=CamilaLogStats, tags=["Log Camila"])
+def camila_logs_stats(database: DatabaseSession, _: AdminUser) -> CamilaLogStats:
+    """Obtiene métricas resumidas para el panel de Log Camila."""
+    total = database.scalar(select(func.count(CamilaLog.id))) or 0
+    con_wsp = database.scalar(
+        select(func.count(CamilaLog.id)).where((CamilaLog.whatsapp.isnot(None)) & (CamilaLog.whatsapp != ""))
+    ) or 0
+    con_mail = database.scalar(
+        select(func.count(CamilaLog.id)).where((CamilaLog.correo.isnot(None)) & (CamilaLog.correo != ""))
+    ) or 0
+    ambos = database.scalar(
+        select(func.count(CamilaLog.id)).where(
+            (CamilaLog.whatsapp.isnot(None))
+            & (CamilaLog.whatsapp != "")
+            & (CamilaLog.correo.isnot(None))
+            & (CamilaLog.correo != "")
+        )
+    ) or 0
+    total_suma = database.scalar(
+        select(func.coalesce(func.sum(CamilaLog.total_estimado), 0))
+    ) or Decimal(0)
+
+    return CamilaLogStats(
+        total=total,
+        con_whatsapp=con_wsp,
+        con_correo=con_mail,
+        ambos_canales=ambos,
+        total_estimado_suma=total_suma,
+    )
+
+
+@router.post("/camila/logs", response_model=CamilaLogOutput, status_code=201, tags=["Log Camila"])
+def create_camila_log(payload: CamilaLogCreate, database: DatabaseSession) -> CamilaLogOutput:
+    """Endpoint público/integración para registrar conversaciones o ventas generadas por Camila desde www.distribuidoratridente.cl."""
+    log = CamilaLog(
+        razon_social=payload.razon_social.strip(),
+        whatsapp=payload.whatsapp.strip() if payload.whatsapp else None,
+        correo=payload.correo.strip().lower() if payload.correo else None,
+        conversacion=payload.conversacion,
+        resumen=payload.resumen,
+        total_estimado=payload.total_estimado,
+        enviado_whatsapp=payload.enviado_whatsapp,
+        enviado_email=payload.enviado_email,
+        destinatarios_whatsapp=payload.destinatarios_whatsapp,
+        destinatarios_email=payload.destinatarios_email,
+        estado=payload.estado or "COMPLETADA",
+        origen=payload.origen or "WEB_CAMILA",
+        metadata_extra=payload.metadata_extra,
+    )
+    database.add(log)
+    database.commit()
+    database.refresh(log)
+    return CamilaLogOutput.model_validate(log, from_attributes=True)
+
 
 
 # =========================================================================

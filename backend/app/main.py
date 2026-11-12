@@ -21,6 +21,31 @@ async def lifespan(app: FastAPI):
         with engine.begin() as conn:
             conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_whatsapp BOOLEAN NOT NULL DEFAULT false;"))
             conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_email BOOLEAN NOT NULL DEFAULT false;"))
+            conn.execute(text(f"""
+                CREATE TABLE IF NOT EXISTS {schema}.camila_logs (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    razon_social VARCHAR(255) NOT NULL,
+                    whatsapp VARCHAR(50),
+                    correo VARCHAR(255),
+                    conversacion TEXT,
+                    resumen TEXT,
+                    total_estimado NUMERIC(12, 2),
+                    enviado_whatsapp BOOLEAN NOT NULL DEFAULT false,
+                    enviado_email BOOLEAN NOT NULL DEFAULT false,
+                    destinatarios_whatsapp TEXT,
+                    destinatarios_email TEXT,
+                    estado VARCHAR(50) NOT NULL DEFAULT 'COMPLETADA',
+                    origen VARCHAR(100) NOT NULL DEFAULT 'WEB_CAMILA',
+                    metadata_extra JSONB,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                );
+            """))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_created_at ON {schema}.camila_logs (created_at DESC);"))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_razon_social ON {schema}.camila_logs (razon_social);"))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_whatsapp ON {schema}.camila_logs (whatsapp);"))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_correo ON {schema}.camila_logs (correo);"))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_estado ON {schema}.camila_logs (estado);"))
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning("No se pudo auto-aplicar columnas en usuarios: %s", exc)

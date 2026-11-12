@@ -547,4 +547,35 @@ class CotizacionProducto(Base):
     cotizacion: Mapped[CotizacionCliente] = relationship(back_populates="items")
 
 
+class CamilaLog(Base):
+    __tablename__ = "camila_logs"
+    __table_args__ = (
+        Index("ix_camila_logs_created_at", "created_at"),
+        Index("ix_camila_logs_razon_social", "razon_social"),
+        Index("ix_camila_logs_whatsapp", "whatsapp"),
+        Index("ix_camila_logs_correo", "correo"),
+        Index("ix_camila_logs_estado", "estado"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    razon_social: Mapped[str] = mapped_column(String(255), nullable=False)
+    whatsapp: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    correo: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    conversacion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resumen: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_estimado: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    enviado_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
+    enviado_email: Mapped[bool] = mapped_column(Boolean, default=False)
+    destinatarios_whatsapp: Mapped[str | None] = mapped_column(Text, nullable=True)
+    destinatarios_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    estado: Mapped[str] = mapped_column(String(50), default="COMPLETADA")
+    origen: Mapped[str] = mapped_column(String(100), default="WEB_CAMILA")
+    metadata_extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+
 

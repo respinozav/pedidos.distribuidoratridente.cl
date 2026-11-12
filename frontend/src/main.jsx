@@ -9,6 +9,7 @@ import SystemSettings from "./pages/admin/SystemSettings";
 import CommercialSettings from "./pages/admin/CommercialSettings";
 import NotificationLogs from "./pages/admin/NotificationLogs";
 import SessionLogs from "./pages/admin/SessionLogs";
+import CamilaLogs from "./pages/admin/CamilaLogs";
 import PublicidadManager from "./pages/admin/PublicidadManager";
 import CotizadorManager from "./pages/admin/CotizadorManager";
 import AdminAccount from "./pages/admin/AdminAccount";
@@ -2417,7 +2418,8 @@ const [loading, setLoading] = useState(true);
                   activeSection === "settings" ||
                   activeSection === "commercial_settings" ||
                   activeSection === "notification_logs" ||
-                  activeSection === "session_logs"
+                  activeSection === "session_logs" ||
+                  activeSection === "camila_logs"
                     ? "active"
                     : ""
                 }
@@ -2491,6 +2493,16 @@ const [loading, setLoading] = useState(true);
                       >
                         <KeyRound size={17} />
                         <span>Logs Sesiones</span>
+                      </button>
+                      <button
+                        className={activeSection === "camila_logs" ? "active" : ""}
+                        onClick={() => {
+                          setSection("camila_logs");
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <Bot size={17} />
+                        <span>Log Camila</span>
                       </button>
                     </>
                   )}
@@ -2588,6 +2600,10 @@ const [loading, setLoading] = useState(true);
       ) : activeSection === "session_logs" ? (
         <section className="admin-workspace">
           <SessionLogs />
+        </section>
+      ) : activeSection === "camila_logs" ? (
+        <section className="admin-workspace">
+          <CamilaLogs />
         </section>
       ) : activeSection === "users" ? (
         <section className="admin-workspace">
