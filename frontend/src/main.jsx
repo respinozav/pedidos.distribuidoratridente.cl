@@ -97,7 +97,13 @@ function ResetPasswordView({ token, onCompleted, onCancel }) {
       });
       onCompleted();
     } catch (reqError) {
-      setError(reqError.response?.data?.detail ?? "No fue posible restablecer la contraseña. El enlace puede haber caducado.");
+      const detail = reqError.response?.data?.detail;
+      const status = reqError.response?.status;
+      if (status === 404 || detail === "Not Found") {
+        setError("El servicio no se encuentra disponible momentáneamente. Por favor, reintenta en unos instantes.");
+      } else {
+        setError(detail ?? "No fue posible restablecer la contraseña. El enlace puede haber caducado.");
+      }
     } finally {
       setLoading(false);
     }
@@ -221,7 +227,13 @@ function Access({ onCustomerLogin, onAdminLogin }) {
         confirmButtonColor: "#146cce",
       });
     } catch (reqError) {
-      setForgotError(reqError.response?.data?.detail ?? "No fue posible procesar la solicitud.");
+      const detail = reqError.response?.data?.detail;
+      const status = reqError.response?.status;
+      if (status === 404 || detail === "Not Found") {
+        setForgotError("El servicio de recuperación se está actualizando en el servidor. Por favor, reintenta en unos instantes.");
+      } else {
+        setForgotError(detail ?? "No fue posible procesar la solicitud.");
+      }
     } finally {
       setForgotLoading(false);
     }
