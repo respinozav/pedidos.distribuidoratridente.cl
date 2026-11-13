@@ -46,6 +46,47 @@ async def lifespan(app: FastAPI):
             conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_whatsapp ON {schema}.camila_logs (whatsapp);"))
             conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_correo ON {schema}.camila_logs (correo);"))
             conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_camila_logs_estado ON {schema}.camila_logs (estado);"))
+
+            # Actualizar imágenes en alta definición para la categoría DESECHABLES
+            from pathlib import Path
+            import base64
+
+            static_desechables = Path(__file__).resolve().parent / "static" / "images" / "desechables"
+            if static_desechables.exists():
+                product_map = {
+                    "760": "bolsa_camiseta_blanca.jpg",
+                    "761": "bolsa_camiseta_blanca.jpg",
+                    "762": "bolsa_camiseta_blanca.jpg",
+                    "763": "bolsa_camiseta_blanca.jpg",
+                    "764": "bolsa_taco_transparente.jpg",
+                    "765": "vaso_transparente_300cc.jpg",
+                    "766": "vaso_transparente_500cc.jpg",
+                    "767": "vaso_polipapel_blanco.jpg",
+                    "768": "vaso_polipapel_diseno.jpg",
+                    "769": "vaso_polipapel_kraft.jpg",
+                    "770": "pinchos_bambu.jpg",
+                    "771": "pinchos_bambu.jpg",
+                    "772": "pinchos_bambu.jpg",
+                    "773": "revolvedor_madera.jpg",
+                    "774": "portacomidas_sin_division.jpg",
+                    "775": "portacomidas_con_division.jpg",
+                    "776": "contenedor_marmita.jpg",
+                    "777": "contenedor_marmita.jpg",
+                    "778": "contenedor_sandwich.jpg",
+                }
+                cache_imgs = {}
+                for fn in set(product_map.values()):
+                    img_file = static_desechables / fn
+                    if img_file.exists():
+                        cache_imgs[fn] = base64.b64encode(img_file.read_bytes()).decode("utf-8")
+
+                for cod, fn in product_map.items():
+                    b64_val = cache_imgs.get(fn)
+                    if b64_val:
+                        conn.execute(
+                            text(f"UPDATE {schema}.productos SET imagen_url = :b64 WHERE codigo = :codigo"),
+                            {"b64": b64_val, "codigo": cod}
+                        )
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning("No se pudo auto-aplicar columnas en usuarios: %s", exc)
