@@ -1064,60 +1064,18 @@ def notify_administrators_of_order(
             duracion_ms=0,
         )
 
-    # Envío al cliente
-    if customer_email:
-        cust_mail_start = time.perf_counter()
-        try:
-            cust_msg = _build_order_message(
-                order,
-                customer_email,
-                f"Confirmación de pedido #{str(order.id).split('-')[0].upper()} | Distribuidora Tridente",
-                "PEDIDO CONFIRMADO",
-                "Recibimos tu pedido. Te avisaremos cuando su estado cambie.",
-                False,
-                from_name=smtp_config["from_name"],
-                from_email=smtp_config["from_email"],
-            )
-            with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
-                smtp.login(smtp_config["username"], smtp_config["password"])
-                smtp.send_message(cust_msg)
-            dur_ms = int((time.perf_counter() - cust_mail_start) * 1000)
-            _create_notification_log(
-                database=database,
-                pedido_id=order.id,
-                canal="EMAIL_CLIENTE",
-                tipo=tipo,
-                destinatario=customer_email,
-                estado="ENVIADO",
-                mensaje=f"Correo de confirmación de pedido enviado al cliente ({customer_email}).",
-                duracion_ms=dur_ms,
-            )
-        except Exception as e:
-            dur_ms = int((time.perf_counter() - cust_mail_start) * 1000)
-            logger.exception("Error al enviar correo al cliente %s para el pedido %s", customer_email, order.id)
-            _create_notification_log(
-                database=database,
-                pedido_id=order.id,
-                canal="EMAIL_CLIENTE",
-                tipo=tipo,
-                destinatario=customer_email,
-                estado="FALLIDO",
-                mensaje=f"Fallo al enviar correo al cliente: {str(e)}",
-                error=traceback.format_exc(),
-                duracion_ms=dur_ms,
-            )
-    else:
-        cust_name = order.cliente.nombre or "Cliente"
-        _create_notification_log(
-            database=database,
-            pedido_id=order.id,
-            canal="EMAIL_CLIENTE",
-            tipo=tipo,
-            destinatario=cust_name,
-            estado="OMITIDO",
-            mensaje="El cliente no tiene correo electrónico registrado.",
-            duracion_ms=0,
-        )
+    # REGLA CRÍTICA DE NEGOCIO: Los pedidos NUNCA deben enviarse al cliente por correo electrónico.
+    # Las notificaciones de pedidos son de uso interno exclusivo para administradores y vendedores.
+    _create_notification_log(
+        database=database,
+        pedido_id=order.id,
+        canal="EMAIL_CLIENTE",
+        tipo=tipo,
+        destinatario=customer_email or (order.cliente.nombre if order.cliente else "Cliente"),
+        estado="OMITIDO",
+        mensaje="Envío de pedidos a clientes por correo desactivado por política de privacidad y control interno.",
+        duracion_ms=0,
+    )
 
 
 def _background_notification_runner(order_id: UUID, tipo: str = "NUEVO_PEDIDO") -> None:

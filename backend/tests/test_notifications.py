@@ -1,3 +1,6 @@
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
@@ -190,10 +193,11 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
     db = FakeDatabase(["admin_pedidos@example.com"])
     notify_administrators_of_order(db, order)
 
-    assert len(sent_messages) == 2
+    # Solo debe enviarse a los administradores, NUNCA al cliente
+    assert len(sent_messages) == 1
     recipients = [msg["To"] for msg in sent_messages]
     assert "admin_pedidos@example.com" in recipients
-    assert "cliente@example.com" in recipients
+    assert "cliente@example.com" not in recipients
     assert len(db.added) > 0  # Se registraron logs
 
     # Caso 2: No hay usuarios con recibe_pedido = True (recibe_pedido = False para todos)
@@ -201,7 +205,45 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
     db_empty = FakeDatabase([])
     notify_administrators_of_order(db_empty, order)
 
-    assert len(sent_messages) == 1
-    assert sent_messages[0]["To"] == "cliente@example.com"
+    # NO debe enviarse ningún correo (tampoco al cliente)
+    assert len(sent_messages) == 0
+
+
+if __name__ == "__main__":
+    class MonkeyPatch:
+        def __init__(self):
+            self._setattrs = []
+        def setattr(self, target, name_or_value, value=None):
+            if value is None:
+                mod_name, attr_name = target.rsplit(".", 1)
+                import importlib
+                mod = importlib.import_module(mod_name)
+                val = name_or_value
+                existed = hasattr(mod, attr_name)
+                old_val = getattr(mod, attr_name) if existed else None
+                setattr(mod, attr_name, val)
+                self._setattrs.append((mod, attr_name, existed, old_val))
+            else:
+                existed = hasattr(target, name_or_value)
+                old_val = getattr(target, name_or_value) if existed else None
+                setattr(target, name_or_value, value)
+                self._setattrs.append((target, name_or_value, existed, old_val))
+        def undo(self):
+            for target, name, existed, old_val in reversed(self._setattrs):
+                if existed:
+                    setattr(target, name, old_val)
+                elif hasattr(target, name):
+                    delattr(target, name)
+
+    test_order_pdf_filename_generation()
+    test_product_detail_label_compacts_code_on_same_line()
+    test_order_pdf_contains_valid_header()
+    test_order_pdf_with_mixed_afecto_and_exento()
+    mp = MonkeyPatch()
+    try:
+        test_notify_administrators_only_sends_to_recibe_pedido_users(mp)
+    finally:
+        mp.undo()
+    print("TODOS LOS TESTS DE NOTIFICATIONS PASARON EXITOSAMENTE!")
 
 
