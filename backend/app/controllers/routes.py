@@ -71,6 +71,7 @@ from app.schemas.dto import (
     AddressOutput,
     AdminPasswordUpdate,
     AdminProfileUpdate,
+    AdminOrderCreateInput,
     AvisoStockInput,
     AvisoStockOutput,
     CamilaLogCreate,
@@ -97,6 +98,8 @@ from app.schemas.dto import (
     MessageResponse,
     CustomerSelectItemOutput,
     CustomerUpdate,
+    DictadoInterpretadoInput,
+    DictadoInterpretadoOutput,
     DetalleVentaVendedorOutput,
     IniciarVentaInput,
     IniciarVentaOutput,
@@ -168,6 +171,7 @@ from app.schemas.cart import (
     CartOutput,
 )
 from app.services.cart_service import CartService
+from app.services.asistente_pedido_service import AsistentePedidoService
 
 
 router = APIRouter(prefix="/api")
@@ -1147,6 +1151,38 @@ def list_orders(database: DatabaseSession, _: AdminUser) -> list[object]:
 @router.put("/pedidos/{order_id}", response_model=OrderOutput, tags=["Pedidos"])
 def update_order_admin(order_id: UUID, payload: OrderUpdateAdmin, database: DatabaseSession, _: AdminUser) -> object:
     return OrderService(database).update_admin(order_id, payload)
+
+
+@router.post("/pedidos/asistente-ia/interpretar-dictado", response_model=DictadoInterpretadoOutput, tags=["Pedidos"])
+def interpretar_dictado_pedido(
+    payload: DictadoInterpretadoInput,
+    database: DatabaseSession,
+    _: NotVendedorUser,
+) -> DictadoInterpretadoOutput:
+    """Interpreta el dictado de voz o texto del administrador para encontrar productos y clientes."""
+    return AsistentePedidoService.interpretar_dictado(
+        texto=payload.texto,
+        cliente_id=payload.cliente_id,
+        db=database,
+    )
+
+
+@router.post("/pedidos/admin/crear-pedido", response_model=OrderOutput, status_code=status.HTTP_201_CREATED, tags=["Pedidos"])
+def create_order_admin(
+    payload: AdminOrderCreateInput,
+    database: DatabaseSession,
+    current_user: NotVendedorUser,
+) -> object:
+    """Permite a un administrador o colaborador crear un pedido a nombre de un cliente, idéntico al flujo del cliente."""
+    order_create = OrderCreate(
+        direccion_id=payload.direccion_id,
+        productos=payload.productos,
+    )
+    return OrderService(database).create(
+        customer_id=payload.cliente_id,
+        payload=order_create,
+        vendedor_id=current_user.id,
+    )
 
 
 

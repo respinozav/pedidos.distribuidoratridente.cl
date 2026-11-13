@@ -17,6 +17,7 @@ import tests.test_publicidad_email as tpe
 import tests.test_product_suggestion as tps
 import tests.test_cotizador as tcot
 import tests.test_agente_ia_rotator as tia
+import tests.test_asistente_pedido as taped
 
 
 class MonkeyPatch:
@@ -110,7 +111,12 @@ def main():
     tia.test_settings_gemini_api_keys_parsing()
     tia.test_gemini_key_rotator_fallback_and_summary()
     tia.test_agente_ia_procesar_mensaje_failover()
-    print(">>> ALL 42 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    taped.test_normalizar_texto_y_cantidades()
+    taped.test_segmentar_clausulas_compuestas()
+    taped.test_buscar_producto_exacto_y_multiple()
+    taped.test_interpretar_dictado_completo()
+    taped.test_asistente_detectar_cliente_y_productos_compuestos()
+    print(">>> ALL 47 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

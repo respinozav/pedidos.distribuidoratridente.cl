@@ -22,6 +22,7 @@ import AdminVentasManager from "./pages/admin/AdminVentasManager";
 import AdminCarteraManager from "./pages/admin/AdminCarteraManager";
 import AgenteTridenteIA from "./pages/admin/AgenteTridenteIA";
 import FaqTutorials from "./components/FaqTutorials";
+import ModalCrearPedidoVoz from "./components/admin/ModalCrearPedidoVoz";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
 
 
@@ -1343,7 +1344,7 @@ function CustomerManager() {
   return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CONFIGURACION</p><h1>Clientes</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de clientes</span><button className="btn btn-primary" onClick={() => openCustomer()}><Plus size={18} />Nuevo cliente</button><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">CLIENTES</p><h2>Administra tus clientes</h2><p>Gestiona sus datos, alias comercial, descuento y direcciones de despacho.</p></div><div className="summary-metric"><span>{customers.length}</span><small>Clientes registrados</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de clientes</h2><p>Clientes activos e inactivos registrados en la plataforma.</p></div><span className="panel-count">{filteredCustomers.length} {filteredCustomers.length === 1 ? "registro" : "registros"}{search.trim() ? ` (de ${customers.length})` : ""}</span></div><div className="admin-order-filters customer-filters"><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Buscar por alias (fantasía), razón social, RUT o celular..." value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>{error && !customerFormOpen && !addressCustomer && <div className="alert alert-danger mt-3">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando clientes...</p> : <div className="customer-table mt-4"><div className="customer-table-head"><span>RUT</span><span>Razón Social / Nombre</span><span>Alias (Fantasía)</span><span>Celular</span><span className="customer-email">Correo</span><span>%</span><span>Crédito</span><span>Activo</span><span>Acciones</span></div>{filteredCustomers.length ? filteredCustomers.map((customer) => <div className="customer-row" key={customer.id}><span>{customer.rut || "-"}</span><strong>{customer.nombre || "-"}</strong><span>{customer.alias ? <span className="customer-alias-tag">{customer.alias}</span> : <span className="text-muted">-</span>}</span><span>{customer.celular || "-"}</span><span className="customer-email">{customer.correo || "-"}</span><span>{Number(customer.porcentaje)}%</span><span>{customer.dias_credito ? `${customer.dias_credito} d` : "0 d"}</span><span className={customer.activo ? "status-active" : "status-inactive"}>{customer.activo ? "Activo" : "Inactivo"}</span><div className="customer-actions"><button className="icon-button category-edit" type="button" onClick={() => openAddresses(customer)} aria-label="Gestionar direcciones" title="Direcciones"><MapPin size={16} /></button><button className="icon-button category-edit" type="button" onClick={() => openCustomer(customer)} aria-label="Editar cliente" title="Editar cliente"><Pencil size={16} /></button></div></div>) : <p className="text-secondary p-4 mb-0">{search.trim() ? "No se encontraron clientes que coincidan con la búsqueda." : "Aún no hay clientes registrados."}</p>}</div>}</section></div>{customerFormOpen && <div className="modal-backdrop-custom"><form className="category-modal product-modal" onSubmit={saveCustomer}><header><div><p className="eyebrow">CONFIGURACION</p><h2>{selectedCustomer ? "Editar cliente" : "Nuevo cliente"}</h2></div><button type="button" className="icon-button" onClick={() => { setCustomerFormOpen(false); setSelectedCustomer(null); setForm(blankCustomer); }} aria-label="Cerrar formulario"><X size={19} /></button></header><div className="modal-body-custom">{error && <div className="alert alert-danger mb-3">{error}</div>}<p className="form-text mt-0">Completa al menos uno: RUT, razón social, alias o celular.</p><div className="product-form-grid"><div><label className="form-label" htmlFor="customer-rut-new">RUT</label><input id="customer-rut-new" className="form-control" value={form.rut} onChange={(event) => setField("rut", event.target.value)} /></div><div><label className="form-label" htmlFor="customer-name-new">Razón Social / Nombre</label><input id="customer-name-new" className="form-control" value={form.nombre} onChange={(event) => setField("nombre", event.target.value)} /></div><div><label className="form-label" htmlFor="customer-alias-new">Alias / Nombre de Fantasía</label><input id="customer-alias-new" className="form-control" placeholder="Ej: Minimarket Don Pepe" maxLength="180" value={form.alias} onChange={(event) => setField("alias", event.target.value)} /></div><div><label className="form-label" htmlFor="customer-phone-new">Celular</label><input id="customer-phone-new" className="form-control" value={form.celular} onChange={(event) => setField("celular", event.target.value)} /></div><div><label className="form-label" htmlFor="customer-email-new">Correo</label><input id="customer-email-new" className="form-control" type="email" value={form.correo} onChange={(event) => setField("correo", event.target.value)} /></div><div><label className="form-label" htmlFor="customer-percentage-new">Porcentaje</label><input id="customer-percentage-new" className="form-control" type="number" min="0" max="100" step="0.01" value={form.porcentaje} onChange={(event) => setField("porcentaje", event.target.value)} required /></div><div><label className="form-label" htmlFor="customer-credit-days-new">Días de crédito</label><input id="customer-credit-days-new" className="form-control" type="number" min="0" max="365" step="1" value={form.dias_credito} onChange={(event) => setField("dias_credito", event.target.value)} required /></div></div><div className="status-toggle"><div><strong>Cliente activo</strong><small>Los clientes inactivos no pueden acceder al portal.</small></div><label className="switch"><input type="checkbox" checked={form.activo} onChange={(event) => setField("activo", event.target.checked)} /><span /></label></div></div><footer><button className="btn btn-light" type="button" onClick={() => { setCustomerFormOpen(false); setSelectedCustomer(null); setForm(blankCustomer); }}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar cliente</>}</button></footer></form></div>}{addressCustomer && <div className="modal-backdrop-custom"><form className="category-modal product-modal" onSubmit={saveAddress}><header><div><p className="eyebrow">DIRECCIONES</p><h2>{addressCustomer.nombre || addressCustomer.alias || addressCustomer.rut || "Cliente"}</h2></div><button type="button" className="icon-button" onClick={() => setAddressCustomer(null)} aria-label="Cerrar direcciones"><X size={19} /></button></header><div className="modal-body-custom">{error && <div className="alert alert-danger mb-3">{error}</div>}<div className="address-table"><div className="address-table-head"><span>Dirección</span><span>Comuna</span><span>Principal</span><span>Activo</span></div>{addressCustomer.direcciones?.map((address) => <div className="address-row" key={address.id}><span>{address.direccion}</span><span>{address.comuna || "-"}</span><label className="switch"><input type="checkbox" checked={address.principal} disabled={saving} onChange={(event) => updateAddress(address, { principal: event.target.checked })} /><span /></label><label className="switch"><input type="checkbox" checked={address.activo} disabled={saving || address.principal} onChange={(event) => updateAddress(address, { activo: event.target.checked })} /><span /></label></div>)}{!addressCustomer.direcciones?.length && <p className="text-secondary py-3 mb-0">Aún no hay direcciones.</p>}</div><div className="address-form"><div><label className="form-label" htmlFor="new-address">Dirección</label><input id="new-address" className="form-control" value={addressForm.direccion} onChange={(event) => setAddressForm((current) => ({ ...current, direccion: event.target.value }))} required /></div><div><label className="form-label" htmlFor="new-district">Comuna</label><input id="new-district" className="form-control" value={addressForm.comuna} onChange={(event) => setAddressForm((current) => ({ ...current, comuna: event.target.value }))} /></div><label className="switch address-principal"><input type="checkbox" checked={addressForm.principal} onChange={(event) => setAddressForm((current) => ({ ...current, principal: event.target.checked }))} /><span /></label><label className="switch address-active"><input type="checkbox" checked={addressForm.activo} onChange={(event) => setAddressForm((current) => ({ ...current, activo: event.target.checked }))} /><span /></label></div></div><footer><button className="btn btn-light" type="button" onClick={() => setAddressCustomer(null)}>Cerrar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Plus size={17} />Agregar dirección</>}</button></footer></form></div>}</>;
 }
 
-function AdminOrderManager() {
+function AdminOrderManager({ initialOpenCrearPedidoVoz = false, onResetInitialOpenCrearPedidoVoz } = {}) {
   const [orders, setOrders] = useState([]);
   const [states, setStates] = useState([]);
   const [filters, setFilters] = useState({ estado: "Pedido", cliente: "", codigo: "", desde: "", hasta: "" });
@@ -1356,10 +1357,19 @@ function AdminOrderManager() {
   const [retryingLogs, setRetryingLogs] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [error, setError] = useState("");
-const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [updatingState, setUpdatingState] = useState(false);
   const [deliveryPayment, setDeliveryPayment] = useState(null);
   const [creditDays, setCreditDays] = useState("");
+
+  const [isCreateVoiceModalOpen, setIsCreateVoiceModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (initialOpenCrearPedidoVoz) {
+      setIsCreateVoiceModalOpen(true);
+      if (onResetInitialOpenCrearPedidoVoz) onResetInitialOpenCrearPedidoVoz();
+    }
+  }, [initialOpenCrearPedidoVoz]);
 
   const [orderToEdit, setOrderToEdit] = useState(null);
   const [editingLines, setEditingLines] = useState([]);
@@ -1733,7 +1743,7 @@ const [loading, setLoading] = useState(true);
     }));
   }
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, cliente, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="admin-order-filters"><label className="filter-estado">Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Alias, nombre, RUT o celular..." value={filters.cliente} onChange={(event) => setFilters((current) => ({ ...current, cliente: event.target.value }))} /></label><label className="filter-pedido">Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label className="filter-desde">Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label className="filter-hasta">Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><button type="button" className="btn btn-primary d-flex align-items-center gap-2 shadow-sm" onClick={() => setIsCreateVoiceModalOpen(true)}><Mic size={17} /><span>Crear Pedido con Voz / IA</span></button><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, cliente, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="admin-order-filters"><label className="filter-estado">Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Alias, nombre, RUT o celular..." value={filters.cliente} onChange={(event) => setFilters((current) => ({ ...current, cliente: event.target.value }))} /></label><label className="filter-pedido">Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label className="filter-desde">Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label className="filter-hasta">Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
     const stateName = getOrderStateName(order);
     const customerName = order.cliente?.alias || order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     const customerSub = order.cliente?.alias
@@ -1981,7 +1991,15 @@ const [loading, setLoading] = useState(true);
       </footer>
     </section>
   </div>
-)}{confirmation && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">CONFIRMAR ACCION</p><h2>{confirmation.nextState === "Entregado" ? "¿Cliente pagó su pedido?" : "¿Cambiar estado del pedido?"}</h2></div><button className="icon-button" type="button" onClick={() => setConfirmation(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El pedido <strong>{confirmation.order?.id?.slice(0, 8).toUpperCase()}</strong> cambiará de <strong>{getOrderStateName(confirmation.order)}</strong> a <strong>{confirmation.nextState}</strong>.</p>{confirmation.nextState === "Entregado" ? <><div className="payment-choice"><button type="button" className={deliveryPayment === true ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(true); setCreditDays(""); }}>Sí, pagó</button><button type="button" className={deliveryPayment === false ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(false); const defaultDays = confirmation.order?.cliente?.dias_credito; if (!creditDays && defaultDays && defaultDays > 0) setCreditDays(String(defaultDays)); }}>No, queda a crédito</button></div>{deliveryPayment === false && <div className="mt-3"><label className="form-label" htmlFor="credit-days">Días de crédito</label><input id="credit-days" className="form-control" type="number" min="1" step="1" placeholder="Ej. 15, 30" value={creditDays} onChange={(event) => setCreditDays(event.target.value)} required autoFocus /><small className="form-text">El vencimiento se calcula desde la fecha de entrega.</small></div>}</> : <p className="mb-0">Esta acción actualizará el estado visible para el cliente.</p>}</div><footer><button className="btn btn-light" type="button" disabled={updatingState} onClick={() => setConfirmation(null)}>Volver</button><button className={confirmation.nextState === "Cancelado" ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={updatingState} onClick={changeOrderStatus}>{updatingState ? "Actualizando..." : confirmation.nextState === "Entregado" ? "Finalizar entrega" : "Confirmar cambio"}</button></footer></section></div>}</>;
+)}
+<ModalCrearPedidoVoz
+  isOpen={isCreateVoiceModalOpen}
+  onClose={() => setIsCreateVoiceModalOpen(false)}
+  onOrderCreated={() => {
+    loadOrders();
+  }}
+/>
+{confirmation && <div className="modal-backdrop-custom"><section className="category-modal confirmation-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">CONFIRMAR ACCION</p><h2>{confirmation.nextState === "Entregado" ? "¿Cliente pagó su pedido?" : "¿Cambiar estado del pedido?"}</h2></div><button className="icon-button" type="button" onClick={() => setConfirmation(null)} aria-label="Cerrar confirmación"><X size={19} /></button></header><div className="modal-body-custom"><p>El pedido <strong>{confirmation.order?.id?.slice(0, 8).toUpperCase()}</strong> cambiará de <strong>{getOrderStateName(confirmation.order)}</strong> a <strong>{confirmation.nextState}</strong>.</p>{confirmation.nextState === "Entregado" ? <><div className="payment-choice"><button type="button" className={deliveryPayment === true ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(true); setCreditDays(""); }}>Sí, pagó</button><button type="button" className={deliveryPayment === false ? "btn btn-primary" : "btn btn-outline-primary"} onClick={() => { setDeliveryPayment(false); const defaultDays = confirmation.order?.cliente?.dias_credito; if (!creditDays && defaultDays && defaultDays > 0) setCreditDays(String(defaultDays)); }}>No, queda a crédito</button></div>{deliveryPayment === false && <div className="mt-3"><label className="form-label" htmlFor="credit-days">Días de crédito</label><input id="credit-days" className="form-control" type="number" min="1" step="1" placeholder="Ej. 15, 30" value={creditDays} onChange={(event) => setCreditDays(event.target.value)} required autoFocus /><small className="form-text">El vencimiento se calcula desde la fecha de entrega.</small></div>}</> : <p className="mb-0">Esta acción actualizará el estado visible para el cliente.</p>}</div><footer><button className="btn btn-light" type="button" disabled={updatingState} onClick={() => setConfirmation(null)}>Volver</button><button className={confirmation.nextState === "Cancelado" ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={updatingState} onClick={changeOrderStatus}>{updatingState ? "Actualizando..." : confirmation.nextState === "Entregado" ? "Finalizar entrega" : "Confirmar cambio"}</button></footer></section></div>}</>;
 }
 
 function CreditManager() {
@@ -2158,6 +2176,8 @@ const [loading, setLoading] = useState(true);
 
   const [section, setSection] = useState(initialDefaultSection);
   const [configurationOpen, setConfigurationOpen] = useState(false);
+  const [ordersSubmenuOpen, setOrdersSubmenuOpen] = useState(false);
+  const [initialOpenCrearPedidoVoz, setInitialOpenCrearPedidoVoz] = useState(false);
 
   useEffect(() => {
     if (initialSection) {
@@ -2391,22 +2411,81 @@ const [loading, setLoading] = useState(true);
         <p className="sidebar-label">OPERACION</p>
         <nav className="sidebar-nav">
 
-          {navigation.map(([Icon, label, key, enabled]) => (
-            <button
-              key={label}
-              className={activeSection === key ? "active" : ""}
-              disabled={!enabled}
-              onClick={() => {
-                setSection(key);
-                setConfigurationOpen(false);
-                setMenuOpen(false);
-              }}
-            >
-              <Icon size={19} />
-              <span>{label}</span>
-              {!enabled && <small>Pronto</small>}
-            </button>
-          ))}
+          {navigation.map(([Icon, label, key, enabled]) => {
+            if (key === "orders" && !isVendedor) {
+              const isOrdersActive = activeSection === "orders";
+              const isSubmenuOpen = ordersSubmenuOpen || isOrdersActive;
+              return (
+                <div key={label} className="sidebar-configuration">
+                  <button
+                    className={isOrdersActive ? "active" : ""}
+                    onClick={() => {
+                      setOrdersSubmenuOpen((current) => !current);
+                      if (activeSection !== "orders") {
+                        setSection("orders");
+                      }
+                      setConfigurationOpen(false);
+                    }}
+                  >
+                    <Icon size={19} />
+                    <span>Pedidos</span>
+                    <ChevronDown
+                      size={15}
+                      className="ms-auto"
+                      style={{
+                        transform: isSubmenuOpen ? "rotate(180deg)" : "none",
+                        transition: "transform 0.2s ease",
+                      }}
+                    />
+                  </button>
+                  {isSubmenuOpen && (
+                    <div className="sidebar-submenu">
+                      <button
+                        className={activeSection === "orders" && !initialOpenCrearPedidoVoz ? "active" : ""}
+                        onClick={() => {
+                          setSection("orders");
+                          setInitialOpenCrearPedidoVoz(false);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <ClipboardList size={16} />
+                        <span>Listado de pedidos</span>
+                      </button>
+                      <button
+                        className="d-flex align-items-center gap-2"
+                        onClick={() => {
+                          setSection("orders");
+                          setInitialOpenCrearPedidoVoz(true);
+                          setMenuOpen(false);
+                        }}
+                        style={{ color: "#2563eb", fontWeight: 600 }}
+                      >
+                        <Mic size={16} />
+                        <span>➕ Crear con Voz / IA</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <button
+                key={label}
+                className={activeSection === key ? "active" : ""}
+                disabled={!enabled}
+                onClick={() => {
+                  setSection(key);
+                  setConfigurationOpen(false);
+                  setOrdersSubmenuOpen(false);
+                  setMenuOpen(false);
+                }}
+              >
+                <Icon size={19} />
+                <span>{label}</span>
+                {!enabled && <small>Pronto</small>}
+              </button>
+            );
+          })}
 
           {!isColaborador && (
             <div className="sidebar-configuration">
@@ -2567,7 +2646,10 @@ const [loading, setLoading] = useState(true);
         </section>
       ) : activeSection === "orders" ? (
         <section className="admin-workspace">
-          <AdminOrderManager />
+          <AdminOrderManager
+            initialOpenCrearPedidoVoz={initialOpenCrearPedidoVoz}
+            onResetInitialOpenCrearPedidoVoz={() => setInitialOpenCrearPedidoVoz(false)}
+          />
         </section>
       ) : activeSection === "credits" ? (
         <section className="admin-workspace">

@@ -291,6 +291,46 @@ class OrderCreate(BaseModel):
     productos: list[OrderLineInput] = Field(min_length=1)
 
 
+class AdminOrderCreateInput(BaseModel):
+    cliente_id: UUID
+    direccion_id: UUID
+    productos: list[OrderLineInput] = Field(min_length=1)
+
+
+class DictadoProductoMatch(BaseModel):
+    id: UUID
+    codigo: str
+    nombre: str
+    precio: Decimal
+    afecto: bool = False
+    tiene_caja: bool = False
+    cantidad_caja: int | None = None
+    precio_caja: Decimal | None = None
+    stock: int = 0
+    score: float = 0.0
+
+
+class DictadoItemInterpretado(BaseModel):
+    termino_original: str
+    cantidad: int = 1
+    tipo_empaque: str = "unidad"  # "unidad" o "caja"
+    estado: str  # "exacto", "multiple", "no_encontrado"
+    producto: DictadoProductoMatch | None = None
+    opciones: list[DictadoProductoMatch] = []
+
+
+class DictadoInterpretadoInput(BaseModel):
+    texto: str = Field(min_length=1)
+    cliente_id: UUID | None = None
+
+
+class DictadoInterpretadoOutput(BaseModel):
+    cliente_detectado_id: UUID | None = None
+    cliente_detectado_nombre: str | None = None
+    items: list[DictadoItemInterpretado] = []
+    mensaje_asistente: str = ""
+
+
 class OrderUpdateAdmin(BaseModel):
     direccion_id: UUID | None = None
     productos: list[OrderLineInput] = Field(min_length=1)
