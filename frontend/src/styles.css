@@ -505,9 +505,9 @@ button, input { font: inherit; }
 .camila-log-head, .camila-log-row {
   align-items: center;
   display: grid;
-  gap: .8rem;
-  grid-template-columns: minmax(120px, 0.9fr) minmax(180px, 1.4fr) minmax(135px, 1fr) minmax(160px, 1.2fr) minmax(200px, 1.6fr) minmax(130px, 1fr) 95px 60px;
-  min-width: 1080px;
+  gap: .75rem;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(125px, 1fr) minmax(150px, 1.2fr) minmax(160px, 1.3fr) minmax(130px, 1fr) 85px 75px;
+  min-width: 860px;
 }
 .camila-log-head span:last-child { text-align: center; }
 .camila-log-row > .icon-button { justify-self: center; }

@@ -2,11 +2,8 @@ import { useEffect, useState } from "react";
 import {
   AlertCircle,
   Bot,
-  Building,
   Calendar,
   Check,
-  CheckCircle2,
-  Clock,
   Copy,
   DollarSign,
   Eye,
@@ -17,7 +14,6 @@ import {
   Search,
   Sparkles,
   X,
-  XCircle,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { api } from "../../services/api";
@@ -147,34 +143,28 @@ export default function CamilaLogs() {
   function renderStatusBadge(estado) {
     const st = (estado || "COMPLETADA").toUpperCase();
     if (st === "COMPLETADA" || st === "EXITOSO") {
-      return (
-        <span className="status-active d-inline-flex align-items-center gap-1">
-          <CheckCircle2 size={12} /> Completada
-        </span>
-      );
+      return <span className="status-active">Completada</span>;
     }
     if (st === "EN_PROCESO" || st === "PENDIENTE") {
       return (
         <span
-          className="d-inline-flex align-items-center gap-1"
+          className="status-warning"
           style={{
             background: "#fef3c7",
-            color: "#92400e",
             borderRadius: "99px",
-            fontSize: "0.72rem",
+            color: "#92400e",
+            fontSize: ".72rem",
             fontWeight: 750,
-            padding: "0.3rem 0.55rem",
+            justifySelf: "start",
+            lineHeight: 1,
+            padding: ".3rem .55rem",
           }}
         >
-          <Clock size={12} /> {st}
+          {st === "EN_PROCESO" ? "En proceso" : "Pendiente"}
         </span>
       );
     }
-    return (
-      <span className="status-inactive d-inline-flex align-items-center gap-1">
-        <XCircle size={12} /> {st}
-      </span>
-    );
+    return <span className="status-inactive">{st === "ERROR" ? "Error" : st}</span>;
   }
 
   const totalPages = Math.ceil(total / pageSize) || 1;
@@ -348,98 +338,69 @@ export default function CamilaLogs() {
           ) : (
             <div className="camila-log-table mt-3">
               <div className="camila-log-head">
-                <span>Fecha / Hora</span>
-                <span>Razón Social</span>
+                <span>Razón Social / Cliente</span>
                 <span>WhatsApp</span>
                 <span>Correo</span>
                 <span>Resumen Venta</span>
-                <span>Notificado Admins</span>
+                <span>Envío de Camila</span>
                 <span>Estado</span>
-                <span>Detalle</span>
+                <span>Acciones</span>
               </div>
-              {logs.map((item) => (
-                <div className="camila-log-row" key={item.id}>
-                  <div>
-                    <strong>{dateFormatter.format(new Date(item.created_at))}</strong>
-                    <small className="text-muted">{item.origen || "WEB"}</small>
-                  </div>
-                  <div>
-                    <strong className="d-flex align-items-center gap-1">
-                      <Building size={14} className="text-secondary flex-shrink-0" />
-                      <span className="text-truncate">{item.razon_social}</span>
-                    </strong>
-                    {item.total_estimado && (
-                      <small className="text-success fw-bold">
-                        Total: {money.format(item.total_estimado)}
-                      </small>
-                    )}
-                  </div>
-                  <div>
-                    {item.whatsapp ? (
-                      <a
-                        href={`https://wa.me/${item.whatsapp.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-decoration-none d-inline-flex align-items-center gap-1 text-success fw-bold"
-                        title="Abrir WhatsApp"
-                      >
-                        <MessageCircle size={14} />
-                        <span>{item.whatsapp}</span>
-                      </a>
-                    ) : (
-                      <span className="text-muted">-</span>
-                    )}
-                  </div>
-                  <div>
-                    {item.correo ? (
-                      <a
-                        href={`mailto:${item.correo}`}
-                        className="text-decoration-none d-inline-flex align-items-center gap-1 text-primary text-truncate"
-                        style={{ maxWidth: "160px" }}
-                        title={item.correo}
-                      >
-                        <Mail size={14} className="flex-shrink-0" />
-                        <span className="text-truncate">{item.correo}</span>
-                      </a>
-                    ) : (
-                      <span className="text-muted">-</span>
-                    )}
-                  </div>
-                  <div>
-                    <span
-                      className="d-block text-truncate"
-                      style={{ maxWidth: "220px" }}
-                      title={item.resumen || "Sin resumen"}
-                    >
-                      {item.resumen || "-"}
+              {logs.map((item) => {
+                const initials = item.razon_social ? item.razon_social.trim().slice(0, 2).toUpperCase() : "CA";
+                return (
+                  <div className="camila-log-row" key={item.id}>
+                    <div className="user-name">
+                      <span className="user-avatar">{initials}</span>
+                      <div>
+                        <strong>{item.razon_social}</strong>
+                        <small>{dateFormatter.format(new Date(item.created_at))}</small>
+                      </div>
+                    </div>
+                    <span className="user-phone">{item.whatsapp || "-"}</span>
+                    <span className="user-role text-truncate" title={item.correo || ""}>
+                      {item.correo || "-"}
                     </span>
-                  </div>
-                  <div className="camila-channels">
-                    {item.enviado_whatsapp && (
-                      <span className="camila-badge camila-badge-wsp" title={item.destinatarios_whatsapp || "Enviado por WhatsApp"}>
-                        WhatsApp
+                    <div>
+                      <span
+                        className="d-block text-truncate"
+                        title={item.resumen || "Sin resumen"}
+                      >
+                        {item.resumen || "-"}
                       </span>
-                    )}
-                    {item.enviado_email && (
-                      <span className="camila-badge camila-badge-mail" title={item.destinatarios_email || "Enviado por Correo"}>
-                        Correo
-                      </span>
-                    )}
-                    {!item.enviado_whatsapp && !item.enviado_email && (
-                      <span className="status-inactive">No</span>
-                    )}
+                      {item.total_estimado && (
+                        <small className="text-success fw-bold d-block" style={{ fontSize: "0.74rem" }}>
+                          Total: {money.format(item.total_estimado)}
+                        </small>
+                      )}
+                    </div>
+                    <div className="camila-channels">
+                      {item.enviado_whatsapp && (
+                        <span className="camila-badge camila-badge-wsp" title={item.destinatarios_whatsapp || "Enviado por WhatsApp"}>
+                          WhatsApp
+                        </span>
+                      )}
+                      {item.enviado_email && (
+                        <span className="camila-badge camila-badge-mail" title={item.destinatarios_email || "Enviado por Correo"}>
+                          Correo
+                        </span>
+                      )}
+                      {!item.enviado_whatsapp && !item.enviado_email && (
+                        <span className="status-inactive">No</span>
+                      )}
+                    </div>
+                    {renderStatusBadge(item.estado)}
+                    <button
+                      className="icon-button category-edit"
+                      onClick={() => setSelectedLog(item)}
+                      aria-label={`Ver detalle de ${item.razon_social}`}
+                      title="Ver conversación completa"
+                    >
+                      <Eye size={16} />
+                    </button>
                   </div>
-                  <div>{renderStatusBadge(item.estado)}</div>
-                  <button
-                    className="icon-button"
-                    onClick={() => setSelectedLog(item)}
-                    aria-label="Ver conversación completa"
-                    title="Ver conversación completa"
-                  >
-                    <Eye size={16} />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
