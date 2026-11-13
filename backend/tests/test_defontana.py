@@ -991,6 +991,173 @@ def test_defontana_sync_order_reactive_retry_on_address_error():
     print("test_defontana_sync_order_reactive_retry_on_address_error: OK")
 
 
+def test_defontana_update_order_syncs_new_quantity_and_total():
+    """
+    Verifica que al editar un pedido existente (ej. Pedido #5856 de 1 a 2 unidades, $5.313 a $10.626),
+    sync_order con is_update=True:
+    1. Dirige la llamada a update_order (UpdateOrder) y NO a save_order.
+    2. Envía 'number': 5856 sin documentTypeId.
+    3. Envía el detalle actualizado con count=2, price=5313.0 y el IVA recalculado ($2.019).
+    4. Sincroniza exitosamente el pedido en Defontana.
+    """
+    service = DefontanaService()
+
+    customer = SimpleNamespace(rut="1-9", nombre="Cliente Pruebas")
+    # Nuevo detalle con cantidad: 2 y precio 5313 (total $10.626)
+    item_editado = SimpleNamespace(
+        codigo_producto="PROD-5856",
+        nombre_producto="Producto Modificado",
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+        precio_unitario=Decimal("5313"),
+        cantidad=2,
+        subtotal=Decimal("10626"),
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
+    )
+    fake_order = SimpleNamespace(
+        id=uuid4(),
+        cliente=customer,
+        direccion=SimpleNamespace(direccion="Calle Comercio 123", comuna="Santiago", ciudad="Santiago"),
+        detalles=[item_editado],
+        folio_defontana=None,
+        folio_defontana_afecto=5856,
+        defontana_sincronizado=True,
+        defontana_error=None,
+    )
+
+    captured_payload = {}
+
+    def mock_update(payload):
+        nonlocal captured_payload
+        captured_payload = payload
+        return {"success": True, "number": 5856}
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def scalar(self, stmt):
+            return fake_order
+
+        def commit(self):
+            pass
+
+    client_data = {
+        "fileID": "1-9",
+        "legalCode": "1-9",
+        "name": "Cliente Pruebas",
+        "address": "Calle Comercio 123",
+        "district": "Santiago",
+        "city": "Santiago",
+        "sellerID": "V01",
+        "localID": "Local",
+        "paymentID": "Contado",
+    }
+
+    with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
+         patch.object(service, "resolve_client", return_value=client_data), \
+         patch.object(service, "update_client", return_value={"success": True}), \
+         patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
+         patch.object(service, "update_order", side_effect=mock_update) as mock_update_fn, \
+         patch.object(service, "save_order") as mock_save_fn:
+
+        folio, err = service.sync_order(fake_order.id, is_update=True)
+        assert folio == 5856
+        assert err is None
+        assert fake_order.folio_defontana_afecto == 5856
+        assert fake_order.defontana_sincronizado is True
+
+        # Verificar que se llamó UpdateOrder y NO SaveOrder
+        mock_update_fn.assert_called_once()
+        mock_save_fn.assert_not_called()
+
+        # Validar payload de UpdateOrder
+        assert captured_payload.get("number") == 5856
+        assert "documentTypeId" not in captured_payload
+        assert len(captured_payload["orderDetails"]) == 1
+
+        linea = captured_payload["orderDetails"][0]
+        assert linea["count"] == 2
+        assert linea["price"] == 5313.0
+        assert linea["code"] == "PROD-5856"
+
+        # Verificar IVA recalculado para $10.626: 10626 * 0.19 = 2018.94 -> 2019.0
+        taxes = captured_payload.get("taxes", [])
+        assert len(taxes) == 1
+        assert taxes[0]["code"] == "IVA"
+        assert taxes[0]["value"] == 2019.0
+
+    print("test_defontana_update_order_syncs_new_quantity_and_total: OK")
+
+
+def test_defontana_update_order_rejection_handled_properly():
+    """
+    Verifica que si Defontana rechaza la actualización de una orden existente,
+    sync_order retorna el error y no marca sincronizado.
+    """
+    service = DefontanaService()
+    customer = SimpleNamespace(rut="1-9", nombre="Cliente Pruebas")
+    item = SimpleNamespace(
+        codigo_producto="PROD-5856",
+        nombre_producto="Producto",
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+        precio_unitario=Decimal("5313"),
+        cantidad=2,
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
+    )
+    fake_order = SimpleNamespace(
+        id=uuid4(),
+        cliente=customer,
+        direccion=SimpleNamespace(direccion="Calle 1", comuna="Santiago", ciudad="Santiago"),
+        detalles=[item],
+        folio_defontana=None,
+        folio_defontana_afecto=5856,
+        defontana_sincronizado=True,
+        defontana_error=None,
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def scalar(self, stmt):
+            return fake_order
+
+        def commit(self):
+            pass
+
+    client_data = {
+        "fileID": "1-9",
+        "legalCode": "1-9",
+        "name": "Cliente Pruebas",
+        "address": "Calle 1",
+        "district": "Santiago",
+        "city": "Santiago",
+        "sellerID": "V01",
+        "localID": "Local",
+        "paymentID": "Contado",
+    }
+
+    with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
+         patch.object(service, "resolve_client", return_value=client_data), \
+         patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
+         patch.object(service, "update_order", return_value={"success": False, "message": "Orden bloqueada para edicion"}):
+
+        folio, err = service.sync_order(fake_order.id, is_update=True)
+        assert err is not None
+        assert "Orden bloqueada para edicion" in err
+        assert fake_order.defontana_sincronizado is False
+
+    print("test_defontana_update_order_rejection_handled_properly: OK")
+
+
 if __name__ == "__main__":
     test_defontana_save_order_mocked()
     test_defontana_item_packaging_rules()
@@ -1006,5 +1173,7 @@ if __name__ == "__main__":
     test_defontana_sync_order_propagates_selected_address_to_payload_and_client()
     test_defontana_sync_order_updates_when_address_differs_from_defontana()
     test_defontana_sync_order_reactive_retry_on_address_error()
+    test_defontana_update_order_syncs_new_quantity_and_total()
+    test_defontana_update_order_rejection_handled_properly()
     print("TODOS LOS TESTS DE DEFONTANA PASARON EXITOSAMENTE!")
 

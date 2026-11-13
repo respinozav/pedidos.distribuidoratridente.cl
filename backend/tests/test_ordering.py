@@ -1,3 +1,6 @@
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -54,6 +57,9 @@ class FakeSession:
 
     def rollback(self):
         self.rolled_back = True
+
+    def expire(self, instance, attribute_names=None):
+        pass
 
 
 def test_create_creates_default_state_when_none_exists(monkeypatch):
@@ -237,4 +243,118 @@ def test_update_admin_commits_when_defontana_accepts(monkeypatch):
     assert session.committed is True
     assert session.rolled_back is False
     assert order.total == Decimal("6000")
+
+
+def test_update_admin_passes_updated_details_and_is_update_flag(monkeypatch):
+    """
+    Simula el caso real: Pedido #5856 con 1 unidad a $5.313 se edita a 2 unidades ($10.626).
+    Verifica que:
+    1. order.detalles se actualiza en memoria con cantidad 2 y subtotal $10.626.
+    2. defontana_service.sync_order se llama con is_update=True.
+    3. sync_order ve la lista order.detalles con la nueva cantidad.
+    """
+    from app.schemas.dto import OrderUpdateAdmin
+    from app.services.defontana_service import DefontanaService
+
+    customer = SimpleNamespace(id=uuid4(), activo=True, vendedor_id=None)
+    product = SimpleNamespace(
+        id=uuid4(),
+        activo=True,
+        codigo="PROD-5856",
+        nombre="Producto Caso Real",
+        precio=Decimal("5313"),
+        cantidad=10,
+        categoria=SimpleNamespace(id=uuid4(), nombre="General", comision_porcentaje=Decimal("0")),
+    )
+    old_detail = SimpleNamespace(
+        producto_id=product.id,
+        cantidad=1,
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+    )
+    order = SimpleNamespace(
+        id=uuid4(),
+        cliente_id=customer.id,
+        vendedor_id=None,
+        estado=SimpleNamespace(nombre="Pendiente"),
+        detalles=[old_detail],
+        venta_vendedor=None,
+        subtotal=Decimal("5313"),
+        total=Decimal("5313"),
+        direccion_id=None,
+        folio_defontana_afecto=5856,
+        folio_defontana=None,
+    )
+    session = FakeSession(customer, None, product, order=order)
+
+    sync_calls = []
+
+    def mock_sync_order(self_svc, order_id, session=None, auto_commit=True, is_update=False):
+        # Verificar qué ve sync_order en order.detalles en el momento de la llamada
+        detalles_visibles = list(order.detalles)
+        sync_calls.append({
+            "order_id": order_id,
+            "is_update": is_update,
+            "detalles_count": len(detalles_visibles),
+            "cantidad_primer_item": detalles_visibles[0].cantidad if detalles_visibles else None,
+            "subtotal_primer_item": detalles_visibles[0].subtotal if detalles_visibles else None,
+        })
+        return (5856, None)
+
+    monkeypatch.setattr("app.services.ordering.customer_product_price", lambda p, c: Decimal("5313"))
+    monkeypatch.setattr("app.services.ordering.customer_product_box_price", lambda p, c: None)
+    monkeypatch.setattr(DefontanaService, "is_configured", lambda self: True)
+    monkeypatch.setattr(DefontanaService, "sync_order", mock_sync_order)
+    monkeypatch.setattr(OrderService, "get", lambda self, order_id: order)
+
+    service = OrderService(session)
+    payload = OrderUpdateAdmin(
+        productos=[OrderLineInput(producto_id=product.id, cantidad=2)],
+    )
+
+    result = service.update_admin(order.id, payload)
+    assert result is not None
+    assert session.committed is True
+    assert order.total == Decimal("10626")
+
+    # Validar que sync_order recibió is_update=True y los detalles actualizados con cantidad 2
+    assert len(sync_calls) == 1
+    call = sync_calls[0]
+    assert call["is_update"] is True
+    assert call["detalles_count"] == 1
+    assert call["cantidad_primer_item"] == 2
+    assert call["subtotal_primer_item"] == Decimal("10626")
+
+
+if __name__ == "__main__":
+    class MonkeyPatch:
+        def __init__(self):
+            self._setattrs = []
+        def setattr(self, target, name_or_value, value=None):
+            if value is None:
+                mod_name, attr_name = target.rsplit(".", 1)
+                import importlib
+                mod = importlib.import_module(mod_name)
+                val = name_or_value
+                old_val = getattr(mod, attr_name)
+                setattr(mod, attr_name, val)
+                self._setattrs.append((mod, attr_name, old_val))
+            else:
+                old_val = getattr(target, name_or_value)
+                setattr(target, name_or_value, value)
+                self._setattrs.append((target, name_or_value, old_val))
+        def undo(self):
+            for target, name, old_val in reversed(self._setattrs):
+                setattr(target, name, old_val)
+
+    mp = MonkeyPatch()
+    try:
+        test_create_creates_default_state_when_none_exists(mp)
+        test_update_admin_rejects_on_terminal_state(mp)
+        test_update_admin_rolls_back_when_defontana_rejects(mp)
+        test_update_admin_commits_when_defontana_accepts(mp)
+        test_update_admin_passes_updated_details_and_is_update_flag(mp)
+        print("TODOS LOS TESTS DE ORDERING PASARON EXITOSAMENTE!")
+    finally:
+        mp.undo()
 

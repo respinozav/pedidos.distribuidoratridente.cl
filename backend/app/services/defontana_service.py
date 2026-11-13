@@ -661,6 +661,11 @@ class DefontanaService:
         params = {}
         if "number" in payload and payload["number"] is not None:
             params["number"] = payload["number"]
+        logger.info(
+            "Enviando UpdateOrder a Defontana para folio %s (%d líneas)",
+            payload.get("number"),
+            len(payload.get("orderDetails", [])),
+        )
         with httpx.Client(timeout=25.0) as client:
             resp = client.post(url, json=payload, params=params, headers=headers)
             if resp.status_code == 401:
@@ -740,6 +745,26 @@ class DefontanaService:
         )
         if not order:
             return None, f"Pedido {order_id} no encontrado"
+
+        # Asegurar que order.detalles refleje datos frescos de la BD con productos cargados
+        if hasattr(session, "expire") and hasattr(order, "_sa_instance_state"):
+            try:
+                session.expire(order, ["detalles"])
+            except Exception:
+                pass
+        if hasattr(session, "scalars"):
+            try:
+                reloaded_detalles = list(
+                    session.scalars(
+                        select(DetallePedido)
+                        .options(selectinload(DetallePedido.producto))
+                        .where(DetallePedido.pedido_id == order_id)
+                    )
+                )
+                if reloaded_detalles:
+                    order.detalles = reloaded_detalles
+            except Exception:
+                pass
 
         def _is_afecto(item: Any) -> bool:
             # 1. Si producto está cargado en el item
@@ -926,6 +951,7 @@ class DefontanaService:
                 "billingCoinId": "PESO",
                 "billingRate": 1.0,
                 "creationDate": creation_date,
+                "dateOrder": creation_date,
                 "expirationDate": expiration_date,
                 "district": str(dispatch_district)[:50],
                 "address": str(dispatch_address)[:100],
@@ -944,15 +970,27 @@ class DefontanaService:
             }
             
             has_afecto_folio = bool(order.folio_defontana_afecto)
-            if has_afecto_folio:
+            is_afecto_update = bool(is_update and has_afecto_folio)
+            if is_afecto_update:
+                folio_num = int(order.folio_defontana_afecto)
+                body_afecto["number"] = folio_num
+                body_afecto.pop("documentTypeId", None)
+                body_afecto.pop("firstNumber", None)
+                body_afecto.pop("folio", None)
+            elif has_afecto_folio:
                 folio_num = int(order.folio_defontana_afecto)
                 body_afecto["number"] = folio_num
                 body_afecto["firstNumber"] = folio_num
                 body_afecto["folio"] = str(folio_num)
 
             try:
-                res_afecto = self.save_or_update_order(body_afecto, is_update=(is_update and has_afecto_folio))
-                if res_afecto.get("success", False):
+                res_afecto = self.save_or_update_order(body_afecto, is_update=is_afecto_update)
+                success_afecto = bool(
+                    res_afecto.get("success", False)
+                    or res_afecto.get("isSuccess", False)
+                    or res_afecto.get("status") in (200, 201)
+                )
+                if success_afecto:
                     new_folio = res_afecto.get("folio") or res_afecto.get("number")
                     if new_folio:
                         order.folio_defontana_afecto = int(new_folio)
@@ -976,15 +1014,20 @@ class DefontanaService:
                             err_msg,
                         )
                         self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_afecto, is_update=(is_update and has_afecto_folio))
-                        if retry_res.get("success", False):
+                        retry_res = self.save_or_update_order(body_afecto, is_update=is_afecto_update)
+                        retry_success = bool(
+                            retry_res.get("success", False)
+                            or retry_res.get("isSuccess", False)
+                            or retry_res.get("status") in (200, 201)
+                        )
+                        if retry_success:
                             new_folio = retry_res.get("folio") or retry_res.get("number")
                             if new_folio:
                                 order.folio_defontana_afecto = int(new_folio)
                             logger.info(
                                 "Pedido %s: Reintento de Factura 33 tras sincronizar dirección exitoso (Folio %s)",
                                 order_id,
-                                new_folio,
+                                new_folio or order.folio_defontana_afecto,
                             )
                             err_msg = None
                     if err_msg:
@@ -1000,15 +1043,20 @@ class DefontanaService:
                             err_msg,
                         )
                         self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_afecto, is_update=(is_update and has_afecto_folio))
-                        if retry_res.get("success", False):
+                        retry_res = self.save_or_update_order(body_afecto, is_update=is_afecto_update)
+                        retry_success = bool(
+                            retry_res.get("success", False)
+                            or retry_res.get("isSuccess", False)
+                            or retry_res.get("status") in (200, 201)
+                        )
+                        if retry_success:
                             new_folio = retry_res.get("folio") or retry_res.get("number")
                             if new_folio:
                                 order.folio_defontana_afecto = int(new_folio)
                             logger.info(
                                 "Pedido %s: Reintento tras excepción de dirección exitoso (Folio %s)",
                                 order_id,
-                                new_folio,
+                                new_folio or order.folio_defontana_afecto,
                             )
                             err_msg = None
                     except Exception as retry_exc:
@@ -1033,6 +1081,7 @@ class DefontanaService:
                 "billingCoinId": "PESO",
                 "billingRate": 1.0,
                 "creationDate": creation_date,
+                "dateOrder": creation_date,
                 "expirationDate": expiration_date,
                 "district": str(dispatch_district)[:50],
                 "address": str(dispatch_address)[:100],
@@ -1046,15 +1095,27 @@ class DefontanaService:
             }
             
             has_exento_folio = bool(order.folio_defontana)
-            if has_exento_folio:
+            is_exento_update = bool(is_update and has_exento_folio)
+            if is_exento_update:
+                folio_num = int(order.folio_defontana)
+                body_exento["number"] = folio_num
+                body_exento.pop("documentTypeId", None)
+                body_exento.pop("firstNumber", None)
+                body_exento.pop("folio", None)
+            elif has_exento_folio:
                 folio_num = int(order.folio_defontana)
                 body_exento["number"] = folio_num
                 body_exento["firstNumber"] = folio_num
                 body_exento["folio"] = str(folio_num)
 
             try:
-                res_exento = self.save_or_update_order(body_exento, is_update=(is_update and has_exento_folio))
-                if res_exento.get("success", False):
+                res_exento = self.save_or_update_order(body_exento, is_update=is_exento_update)
+                success_exento = bool(
+                    res_exento.get("success", False)
+                    or res_exento.get("isSuccess", False)
+                    or res_exento.get("status") in (200, 201)
+                )
+                if success_exento:
                     new_folio = res_exento.get("folio") or res_exento.get("number")
                     if new_folio:
                         order.folio_defontana = int(new_folio)
@@ -1078,15 +1139,20 @@ class DefontanaService:
                             err_msg,
                         )
                         self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_exento, is_update=(is_update and has_exento_folio))
-                        if retry_res.get("success", False):
+                        retry_res = self.save_or_update_order(body_exento, is_update=is_exento_update)
+                        retry_success = bool(
+                            retry_res.get("success", False)
+                            or retry_res.get("isSuccess", False)
+                            or retry_res.get("status") in (200, 201)
+                        )
+                        if retry_success:
                             new_folio = retry_res.get("folio") or retry_res.get("number")
                             if new_folio:
                                 order.folio_defontana = int(new_folio)
                             logger.info(
                                 "Pedido %s: Reintento de Factura 34 tras sincronizar dirección exitoso (Folio %s)",
                                 order_id,
-                                new_folio,
+                                new_folio or order.folio_defontana,
                             )
                             err_msg = None
                     if err_msg:
@@ -1102,15 +1168,20 @@ class DefontanaService:
                             err_msg,
                         )
                         self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_exento, is_update=(is_update and has_exento_folio))
-                        if retry_res.get("success", False):
+                        retry_res = self.save_or_update_order(body_exento, is_update=is_exento_update)
+                        retry_success = bool(
+                            retry_res.get("success", False)
+                            or retry_res.get("isSuccess", False)
+                            or retry_res.get("status") in (200, 201)
+                        )
+                        if retry_success:
                             new_folio = retry_res.get("folio") or retry_res.get("number")
                             if new_folio:
                                 order.folio_defontana = int(new_folio)
                             logger.info(
                                 "Pedido %s: Reintento tras excepción de dirección en Factura 34 exitoso (Folio %s)",
                                 order_id,
-                                new_folio,
+                                new_folio or order.folio_defontana,
                             )
                             err_msg = None
                     except Exception as retry_exc:

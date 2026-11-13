@@ -60,6 +60,7 @@ def main():
         to.test_update_admin_rejects_on_terminal_state(mp)
         to.test_update_admin_rolls_back_when_defontana_rejects(mp)
         to.test_update_admin_commits_when_defontana_accepts(mp)
+        to.test_update_admin_passes_updated_details_and_is_update_flag(mp)
     finally:
         mp.undo()
     tn.test_order_pdf_filename_generation()
@@ -86,6 +87,8 @@ def main():
     td.test_defontana_sync_order_reactive_retry_on_address_error()
     td.test_defontana_sync_product_existing()
     td.test_defontana_sync_product_new()
+    td.test_defontana_update_order_syncs_new_quantity_and_total()
+    td.test_defontana_update_order_rejection_handled_properly()
     tap.test_admin_profile_workflow()
     tcol.test_colaborador_role_permissions()
     tvend.test_vendedor_role_and_category_commission()
@@ -103,7 +106,7 @@ def main():
     tcot.test_cotizador_validations()
     tcot.test_cotizador_pdf_generation()
     tcot.test_cotizador_role_permissions()
-    print(">>> ALL 36 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    print(">>> ALL 39 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

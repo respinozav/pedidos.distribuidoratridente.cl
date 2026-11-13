@@ -269,6 +269,7 @@ class OrderService:
                 DetallePedido(
                     pedido_id=order.id,
                     producto_id=product.id,
+                    producto=product,
                     codigo_producto=product.codigo,
                     nombre_producto=product.nombre,
                     precio_unitario=applied_price,
@@ -285,7 +286,8 @@ class OrderService:
             order.direccion_id = payload.direccion_id
             order.direccion = self.database.get(Direccion, payload.direccion_id)
         
-        # Guardar nuevos detalles
+        # Guardar nuevos detalles y asociar explícitamente a la relación order.detalles
+        order.detalles = details
         self.database.add_all(details)
 
         # 5. Volver a generar VentaVendedor
@@ -324,6 +326,7 @@ class OrderService:
             self.database.add(venta_vendedor)
 
         self.database.flush()
+        self.database.expire(order, ["detalles"])
 
         # 6. Sincronizar y validar con Defontana antes de confirmar cambios en este sistema
         defontana_service = DefontanaService()
