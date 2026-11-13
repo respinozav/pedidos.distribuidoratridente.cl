@@ -31,6 +31,7 @@ CATEGORY_CONFIG = {
     "CONFITES": {"fill_pct": 0.86, "fit_mode": "max_side"},
     "ABARROTES": {"fill_pct": 0.85, "fit_mode": "max_side"},
     "TABAQUERIA": {"fill_pct": 0.85, "fit_mode": "max_side"},
+    "DESECHABLES": {"fill_pct": 0.84, "fit_mode": "max_side", "skip_strip": True, "protect_whites": True},
 }
 
 
@@ -144,11 +145,16 @@ def detect_right_vertical_ribbon(img: Image.Image) -> Optional[int]:
     return None
 
 
-def clean_background_to_white(img: Image.Image) -> Image.Image:
+def clean_background_to_white(img: Image.Image, protect_whites: bool = False) -> Image.Image:
     """
     Limpia sombras suaves, fondos grisáceos y ruidos de compresión
     convirtiéndolos en blanco puro (#FFFFFF) para un acabado de estudio profesional.
+    Si protect_whites=True (ej. productos blancos o transparentes como vasos y bolsas desechables),
+    no sobreescribe los píxeles claros para no perforar ni cortar el producto.
     """
+    if protect_whites:
+        return img.convert("RGB")
+
     rgb = img.convert("RGB")
     if np is not None:
         arr = np.array(rgb)
@@ -231,20 +237,26 @@ def clean_and_square_image(
     escala de forma estandarizada por categoría y mejora radicalmente la nitidez.
     Si cartoon_mode es True, aplica la capa artística tipo dibujo animado.
     """
-    # 1. Quitar franja lateral izquierda si existe
-    crop_x_left = detect_lateral_strip_divider(img)
-    if crop_x_left and crop_x_left < img.width * 0.5:
-        img = img.crop((crop_x_left, 0, img.width, img.height))
+    cat_key = (category_name or "").upper().strip()
+    cfg = CATEGORY_CONFIG.get(cat_key, {"fill_pct": 0.86, "fit_mode": "max_side"})
+    skip_strip = cfg.get("skip_strip", False)
+    protect_whites = cfg.get("protect_whites", False)
 
-    # 2. Quitar insignia superior flotante si existe
-    crop_y_top = detect_top_floating_badge(img)
-    if crop_y_top and crop_y_top < img.height * 0.6:
-        img = img.crop((0, crop_y_top, img.width, img.height))
+    if not skip_strip:
+        # 1. Quitar franja lateral izquierda si existe
+        crop_x_left = detect_lateral_strip_divider(img)
+        if crop_x_left and crop_x_left < img.width * 0.5:
+            img = img.crop((crop_x_left, 0, img.width, img.height))
 
-    # 3. Quitar cinta lateral derecha si existe
-    crop_x_right = detect_right_vertical_ribbon(img)
-    if crop_x_right and crop_x_right > img.width * 0.5:
-        img = img.crop((0, 0, crop_x_right, img.height))
+        # 2. Quitar insignia superior flotante si existe
+        crop_y_top = detect_top_floating_badge(img)
+        if crop_y_top and crop_y_top < img.height * 0.6:
+            img = img.crop((0, crop_y_top, img.width, img.height))
+
+        # 3. Quitar cinta lateral derecha si existe
+        crop_x_right = detect_right_vertical_ribbon(img)
+        if crop_x_right and crop_x_right > img.width * 0.5:
+            img = img.crop((0, 0, crop_x_right, img.height))
 
     # Asegurar modo RGB
     if img.mode in ("RGBA", "LA", "P"):
@@ -260,13 +272,14 @@ def clean_and_square_image(
         img = img.convert("RGB")
 
     # 4. Limpieza de fondo a blanco puro
-    img = clean_background_to_white(img)
+    img = clean_background_to_white(img, protect_whites=protect_whites)
 
     # 5. Autocrop ajustado al producto real
     if np is not None:
         arr = np.array(img)
         w, h = img.size
-        non_white = np.any(arr < 240, axis=2)
+        threshold = 248 if protect_whites else 240
+        non_white = np.any(arr < threshold, axis=2)
         row_frac = np.mean(non_white, axis=1)
         col_frac = np.mean(non_white, axis=0)
         active_y = np.where(row_frac > 0.005)[0]
@@ -293,8 +306,6 @@ def clean_and_square_image(
             img = img.crop(bbox)
 
     # 6. Estandarización visual por categoría
-    cat_key = (category_name or "").upper().strip()
-    cfg = CATEGORY_CONFIG.get(cat_key, {"fill_pct": 0.86, "fit_mode": "max_side"})
     fill_pct = cfg["fill_pct"]
     fit_mode = cfg["fit_mode"]
 

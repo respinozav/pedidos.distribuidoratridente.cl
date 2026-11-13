@@ -924,7 +924,9 @@ def create_product(payload: ProductInput, database: DatabaseSession, _: AdminUse
 
     product_data = payload.model_dump()
     if product_data.get("imagen_url"):
-        product_data["imagen_url"] = optimize_product_image_base64(product_data["imagen_url"])
+        product_data["imagen_url"] = optimize_product_image_base64(
+            product_data["imagen_url"], category_name=category_name
+        )
 
     entity = Repository(Producto, database).add(Producto(**product_data))
     database.commit()
@@ -967,7 +969,9 @@ def update_product(product_id: UUID, payload: ProductInput, database: DatabaseSe
 
     update_data = payload.model_dump()
     if update_data.get("imagen_url"):
-        update_data["imagen_url"] = optimize_product_image_base64(update_data["imagen_url"])
+        update_data["imagen_url"] = optimize_product_image_base64(
+            update_data["imagen_url"], category_name=category_name
+        )
 
     Repository(Producto, database).update(entity, update_data)
     database.commit()

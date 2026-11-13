@@ -222,8 +222,8 @@ button, input { font: inherit; }
 .product-name strong { color: var(--ink); display: block; font-size: .82rem; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .product-name small { color: var(--muted); display: block; font-size: .72rem; font-weight: 600; margin-top: .15rem; }
 .product-category { color: var(--muted); font-size: .78rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.product-thumb { align-items: center; background: var(--sky); border-radius: 5px; color: var(--blue); display: inline-flex; flex: 0 0 35px; height: 35px; justify-content: center; overflow: hidden; width: 35px; }
-.product-thumb img { height: 100%; object-fit: cover; width: 100%; }
+.product-thumb { align-items: center; background: #ffffff; border: 1px solid var(--line); border-radius: 5px; color: var(--blue); display: inline-flex; flex: 0 0 35px; height: 35px; justify-content: center; overflow: hidden; padding: 2px; width: 35px; }
+.product-thumb img { height: 100%; object-fit: contain; width: 100%; }
 .product-form-grid { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; }
 .product-form-wide { grid-column: 1 / -1; }
 .form-text { color: var(--muted); display: block; font-size: .76rem; margin-top: .35rem; }
