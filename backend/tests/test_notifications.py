@@ -189,24 +189,29 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
         total=Decimal("1000"),
     )
 
-    # Caso 1: Hay usuarios con recibe_pedido = True
+    # Caso 1: Hay usuarios administrativos con recibe_pedido = True
     db = FakeDatabase(["admin_pedidos@example.com"])
     notify_administrators_of_order(db, order)
 
-    # Solo debe enviarse a los administradores, NUNCA al cliente
+    # Se envía 1 mensaje a los administradores con copia oculta (BCC) al cliente
     assert len(sent_messages) == 1
-    recipients = [msg["To"] for msg in sent_messages]
-    assert "admin_pedidos@example.com" in recipients
-    assert "cliente@example.com" not in recipients
-    assert len(db.added) > 0  # Se registraron logs
+    msg1 = sent_messages[0]
+    assert msg1["To"] == "admin_pedidos@example.com"
+    assert msg1["Bcc"] == "cliente@example.com"
+    # Verificar que se registraron los logs correspondientes
+    canales = [log.canal for log in db.added if hasattr(log, "canal")]
+    assert "EMAIL_ADMIN" in canales
+    assert "EMAIL_CLIENTE" in canales
 
     # Caso 2: No hay usuarios con recibe_pedido = True (recibe_pedido = False para todos)
     sent_messages.clear()
     db_empty = FakeDatabase([])
     notify_administrators_of_order(db_empty, order)
 
-    # NO debe enviarse ningún correo (tampoco al cliente)
-    assert len(sent_messages) == 0
+    # Se envía directamente al cliente su copia de pedido, y el admin queda omitido
+    assert len(sent_messages) == 1
+    msg2 = sent_messages[0]
+    assert msg2["To"] == "cliente@example.com"
 
 
 if __name__ == "__main__":

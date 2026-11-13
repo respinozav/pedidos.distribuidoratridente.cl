@@ -1009,7 +1009,9 @@ def notify_administrators_of_order(
     ]
     customer_email = (order.cliente.correo or "").strip()
 
-    # Envío a administradores
+    # Flujo de notificación:
+    # 1. Los usuarios administrativos se rigen por el interruptor ON/OFF en su perfil (recibe_pedido).
+    # 2. Al cliente se le envía automáticamente una copia oculta (BCC) con su pedido.
     if admin_recipients:
         admin_mail_start = time.perf_counter()
         admin_dest = ", ".join(admin_recipients)
@@ -1017,13 +1019,17 @@ def notify_administrators_of_order(
             admin_msg = _build_order_message(
                 order,
                 admin_dest,
-                f"Nuevo pedido #{str(order.id).split('-')[0].upper()} | Distribuidora Tridente",
+                f"Pedido #{str(order.id).split('-')[0].upper()} | Distribuidora Tridente",
                 "NUEVO PEDIDO",
-                "Se registró un nuevo pedido y requiere revisión.",
+                "Se registró un nuevo pedido con el siguiente detalle:",
                 True,
                 from_name=smtp_config["from_name"],
                 from_email=smtp_config["from_email"],
             )
+            # Copia oculta (BCC) automática al cliente para que reciba exclusivamente su pedido
+            if customer_email:
+                admin_msg["Bcc"] = customer_email
+
             with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
                 smtp.login(smtp_config["username"], smtp_config["password"])
                 smtp.send_message(admin_msg)
@@ -1035,12 +1041,34 @@ def notify_administrators_of_order(
                 tipo=tipo,
                 destinatario=admin_dest,
                 estado="ENVIADO",
-                mensaje=f"Correo de nuevo pedido enviado exitosamente a {len(admin_recipients)} administrador(es).",
+                mensaje=f"Correo de nuevo pedido enviado a {len(admin_recipients)} usuario(s) administrativo(s) activo(s).",
                 duracion_ms=dur_ms,
             )
+            if customer_email:
+                _create_notification_log(
+                    database=database,
+                    pedido_id=order.id,
+                    canal="EMAIL_CLIENTE",
+                    tipo=tipo,
+                    destinatario=customer_email,
+                    estado="ENVIADO",
+                    mensaje=f"Copia oculta (BCC) del pedido enviada al cliente ({customer_email}).",
+                    duracion_ms=dur_ms,
+                )
+            else:
+                _create_notification_log(
+                    database=database,
+                    pedido_id=order.id,
+                    canal="EMAIL_CLIENTE",
+                    tipo=tipo,
+                    destinatario=order.cliente.nombre or "Cliente",
+                    estado="OMITIDO",
+                    mensaje="El cliente no tiene correo electrónico registrado para copia oculta.",
+                    duracion_ms=0,
+                )
         except Exception as e:
             dur_ms = int((time.perf_counter() - admin_mail_start) * 1000)
-            logger.exception("Error al enviar correo a administradores para el pedido %s", order.id)
+            logger.exception("Error al enviar correo para el pedido %s", order.id)
             _create_notification_log(
                 database=database,
                 pedido_id=order.id,
@@ -1052,6 +1080,18 @@ def notify_administrators_of_order(
                 error=traceback.format_exc(),
                 duracion_ms=dur_ms,
             )
+            if customer_email:
+                _create_notification_log(
+                    database=database,
+                    pedido_id=order.id,
+                    canal="EMAIL_CLIENTE",
+                    tipo=tipo,
+                    destinatario=customer_email,
+                    estado="FALLIDO",
+                    mensaje=f"Fallo al enviar copia oculta al cliente: {str(e)}",
+                    error=traceback.format_exc(),
+                    duracion_ms=dur_ms,
+                )
     else:
         _create_notification_log(
             database=database,
@@ -1060,22 +1100,61 @@ def notify_administrators_of_order(
             tipo=tipo,
             destinatario="Administradores",
             estado="OMITIDO",
-            mensaje="No hay correos de administradores activos configurados para recibir pedidos.",
+            mensaje="No hay correos de administradores activos con 'Recibe pedidos' activado en su perfil.",
             duracion_ms=0,
         )
-
-    # REGLA CRÍTICA DE NEGOCIO: Los pedidos NUNCA deben enviarse al cliente por correo electrónico.
-    # Las notificaciones de pedidos son de uso interno exclusivo para administradores y vendedores.
-    _create_notification_log(
-        database=database,
-        pedido_id=order.id,
-        canal="EMAIL_CLIENTE",
-        tipo=tipo,
-        destinatario=customer_email or (order.cliente.nombre if order.cliente else "Cliente"),
-        estado="OMITIDO",
-        mensaje="Envío de pedidos a clientes por correo desactivado por política de privacidad y control interno.",
-        duracion_ms=0,
-    )
+        if customer_email:
+            cust_mail_start = time.perf_counter()
+            try:
+                cust_msg = _build_order_message(
+                    order,
+                    customer_email,
+                    f"Pedido #{str(order.id).split('-')[0].upper()} | Distribuidora Tridente",
+                    "NUEVO PEDIDO",
+                    "Se registró un nuevo pedido con el siguiente detalle:",
+                    True,
+                    from_name=smtp_config["from_name"],
+                    from_email=smtp_config["from_email"],
+                )
+                with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=20) as smtp:
+                    smtp.login(smtp_config["username"], smtp_config["password"])
+                    smtp.send_message(cust_msg)
+                dur_ms = int((time.perf_counter() - cust_mail_start) * 1000)
+                _create_notification_log(
+                    database=database,
+                    pedido_id=order.id,
+                    canal="EMAIL_CLIENTE",
+                    tipo=tipo,
+                    destinatario=customer_email,
+                    estado="ENVIADO",
+                    mensaje=f"Copia del pedido enviada al cliente ({customer_email}).",
+                    duracion_ms=dur_ms,
+                )
+            except Exception as e:
+                dur_ms = int((time.perf_counter() - cust_mail_start) * 1000)
+                logger.exception("Error al enviar correo al cliente %s para el pedido %s", customer_email, order.id)
+                _create_notification_log(
+                    database=database,
+                    pedido_id=order.id,
+                    canal="EMAIL_CLIENTE",
+                    tipo=tipo,
+                    destinatario=customer_email,
+                    estado="FALLIDO",
+                    mensaje=f"Fallo al enviar correo al cliente: {str(e)}",
+                    error=traceback.format_exc(),
+                    duracion_ms=dur_ms,
+                )
+        else:
+            _create_notification_log(
+                database=database,
+                pedido_id=order.id,
+                canal="EMAIL_CLIENTE",
+                tipo=tipo,
+                destinatario=order.cliente.nombre or "Cliente",
+                estado="OMITIDO",
+                mensaje="El cliente no tiene correo electrónico registrado.",
+                duracion_ms=0,
+            )
 
 
 def _background_notification_runner(order_id: UUID, tipo: str = "NUEVO_PEDIDO") -> None:
