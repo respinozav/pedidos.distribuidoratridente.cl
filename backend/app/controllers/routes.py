@@ -2339,36 +2339,65 @@ def send_ia_chat_message(
 
 @router.get("/ia/diagnostico", tags=["IA"])
 def diagnostico_ia() -> dict[str, Any]:
-    """Endpoint de diagnóstico para probar la conectividad directa con Gemini API."""
+    """Endpoint de diagnóstico para probar la conectividad directa con Gemini API y el pool de claves."""
     import httpx
+    from app.services.agente_ia_service import GeminiKeyRotator
+
     cfg = get_settings()
-    api_key = cfg.gemini_api_key
-    if not api_key:
-        return {"status": "error", "mensaje": "GEMINI_API_KEY no esta configurada en el servidor"}
-    
-    masked_key = api_key[:4] + "..." + api_key[-4:] if len(api_key) > 8 else "***"
-    modelo = getattr(cfg, "gemini_model", None) or "gemini-3.6-flash"
-    
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
-    payload = {"contents": [{"parts": [{"text": "Responde OK"}]}]}
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            res = client.post(url, json=payload)
-            return {
-                "status": "ok" if res.status_code == 200 else "error",
-                "modelo_usado": modelo,
-                "api_key_prefijo": masked_key,
-                "http_status": res.status_code,
-                "respuesta": res.json() if res.status_code == 200 else res.text[:300],
-            }
-    except Exception as ex:
+    keys = cfg.get_gemini_api_keys()
+    if not keys:
         return {
-            "status": "excepcion",
-            "modelo_usado": modelo,
-            "api_key_prefijo": masked_key,
-            "error_tipo": type(ex).__name__,
-            "error_detalle": str(ex),
+            "status": "error",
+            "mensaje": "No hay claves configuradas en GEMINI_API_KEY o GEMINI_API_KEYS en el archivo .env",
+            "instrucciones": "Genera una o varias claves en https://aistudio.google.com/app/apikey y configúralas en .env",
         }
+
+    modelo = getattr(cfg, "gemini_model", None) or "gemini-3.8-flash"
+    pool_status = GeminiKeyRotator.get_status_summary()
+
+    resultados_keys = []
+    with httpx.Client(timeout=10.0) as client:
+        for key in keys:
+            masked_key = key[:4] + "..." + key[-4:] if len(key) > 8 else "***"
+            es_aistudio = key.startswith("AIzaSy")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={key}"
+            payload = {"contents": [{"parts": [{"text": "Responde OK"}]}]}
+            try:
+                res = client.post(url, json=payload)
+                if res.status_code == 200:
+                    GeminiKeyRotator.mark_key_success(key)
+                    resultados_keys.append({
+                        "key_prefijo": masked_key,
+                        "tipo_formato": "Google AI Studio (Estándar)" if es_aistudio else "Cuenta de Servicio GCP / Personalizada",
+                        "status": "ok",
+                        "http_status": 200,
+                        "respuesta": res.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "OK"),
+                    })
+                else:
+                    GeminiKeyRotator.mark_key_failed(key, f"HTTP {res.status_code}")
+                    resultados_keys.append({
+                        "key_prefijo": masked_key,
+                        "tipo_formato": "Google AI Studio (Estándar)" if es_aistudio else "Cuenta de Servicio GCP / Personalizada",
+                        "status": "error",
+                        "http_status": res.status_code,
+                        "detalle": res.text[:300],
+                    })
+            except Exception as ex:
+                resultados_keys.append({
+                    "key_prefijo": masked_key,
+                    "status": "excepcion",
+                    "error_tipo": type(ex).__name__,
+                    "detalle": str(ex)[:200],
+                })
+
+    hay_al_menos_una_ok = any(r.get("status") == "ok" for r in resultados_keys)
+    return {
+        "status": "ok" if hay_al_menos_una_ok else "error",
+        "modelo_usado": modelo,
+        "pool": pool_status,
+        "total_keys_evaluadas": len(keys),
+        "keys": resultados_keys,
+    }
 
 
 # ==============================================================================

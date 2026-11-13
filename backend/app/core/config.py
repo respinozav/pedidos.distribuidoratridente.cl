@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -31,7 +32,24 @@ class Settings(BaseSettings):
     defontana_api_user: str = ""
     defontana_api_password: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.6-flash"
+    gemini_api_keys: str = ""
+    gemini_model: str = "gemini-3.8-flash"
+
+    def get_gemini_api_keys(self) -> list[str]:
+        raw_candidates: list[str] = []
+        if self.gemini_api_keys:
+            raw_candidates.extend(re.split(r"[,;\s]+", self.gemini_api_keys.strip()))
+        if self.gemini_api_key:
+            raw_candidates.extend(re.split(r"[,;\s]+", self.gemini_api_key.strip()))
+
+        seen = set()
+        clean_keys = []
+        for k in raw_candidates:
+            clean = k.strip()
+            if clean and clean not in seen:
+                seen.add(clean)
+                clean_keys.append(clean)
+        return clean_keys
     postgrest_url: str = "http://localhost:3000"
     postgrest_schema: str = "bdtridente"
     postgrest_token: str = ""

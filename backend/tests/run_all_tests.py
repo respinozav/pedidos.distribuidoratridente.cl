@@ -16,6 +16,7 @@ import tests.test_negative_stock_order as tnso
 import tests.test_publicidad_email as tpe
 import tests.test_product_suggestion as tps
 import tests.test_cotizador as tcot
+import tests.test_agente_ia_rotator as tia
 
 
 class MonkeyPatch:
@@ -106,7 +107,10 @@ def main():
     tcot.test_cotizador_validations()
     tcot.test_cotizador_pdf_generation()
     tcot.test_cotizador_role_permissions()
-    print(">>> ALL 39 UNIT TESTS PASSED SUCCESSFULLY! <<<")
+    tia.test_settings_gemini_api_keys_parsing()
+    tia.test_gemini_key_rotator_fallback_and_summary()
+    tia.test_agente_ia_procesar_mensaje_failover()
+    print(">>> ALL 42 UNIT TESTS PASSED SUCCESSFULLY! <<<")
 
 
 if __name__ == "__main__":

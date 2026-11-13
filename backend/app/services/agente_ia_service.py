@@ -1,9 +1,10 @@
 import json
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 from sqlalchemy import select
@@ -198,12 +199,96 @@ def _json_a_tabla_markdown(datos: Any) -> str:
     return ""
 
 
+class GeminiKeyRotator:
+    """
+    Gestiona un pool de API Keys / Tokens para el Agente IA de Gemini con:
+    - Rotación Round-Robin entre múltiples keys para balancear el consumo de tokens y cuotas.
+    - Fallback reactivo automático si una key arroja HTTP 401 (deshabilitada/eliminada), 403 o 429 (sin tokens/cuota).
+    - Memoria temporal de keys fallidas para priorizar las llaves operativas.
+    """
+    _current_index: int = 0
+    _failed_keys: dict[str, dict[str, Any]] = {}
+
+    @classmethod
+    def get_keys(cls) -> list[str]:
+        cfg = get_settings()
+        return cfg.get_gemini_api_keys()
+
+    @classmethod
+    def get_ordered_pool(cls) -> list[str]:
+        all_keys = cls.get_keys()
+        if not all_keys:
+            return []
+
+        now = time.time()
+        # Limpiar keys que fallaron hace más de 5 minutos (300s)
+        cls._failed_keys = {k: v for k, v in cls._failed_keys.items() if now - v.get("timestamp", 0) < 300}
+
+        healthy_keys = [k for k in all_keys if k not in cls._failed_keys]
+        failed_keys = [k for k in all_keys if k in cls._failed_keys]
+
+        if healthy_keys:
+            idx = cls._current_index % len(healthy_keys)
+            ordered_healthy = healthy_keys[idx:] + healthy_keys[:idx]
+            return ordered_healthy + failed_keys
+
+        idx = cls._current_index % len(all_keys)
+        return all_keys[idx:] + all_keys[:idx]
+
+    @classmethod
+    def advance_index(cls) -> None:
+        keys = cls.get_keys()
+        if keys:
+            cls._current_index = (cls._current_index + 1) % len(keys)
+
+    @classmethod
+    def mark_key_failed(cls, key: str, reason: str = "") -> None:
+        now = time.time()
+        cls._failed_keys[key] = {"timestamp": now, "reason": reason}
+        masked = key[:4] + "..." + key[-4:] if len(key) > 8 else "***"
+        logger.warning(
+            "Gemini API Key %s marcada con fallo temporal (%s). Rotando a siguiente key del pool...",
+            masked,
+            reason,
+        )
+        cls.advance_index()
+
+    @classmethod
+    def mark_key_success(cls, key: str) -> None:
+        cls._failed_keys.pop(key, None)
+
+    @classmethod
+    def get_status_summary(cls) -> dict[str, Any]:
+        all_keys = cls.get_keys()
+        now = time.time()
+        cls._failed_keys = {k: v for k, v in cls._failed_keys.items() if now - v.get("timestamp", 0) < 300}
+
+        detalles = []
+        for k in all_keys:
+            masked = k[:4] + "..." + k[-4:] if len(k) > 8 else "***"
+            is_failed = k in cls._failed_keys
+            info_fallo = cls._failed_keys.get(k, {})
+            detalles.append({
+                "key_prefijo": masked,
+                "estado": "fallida_temporal" if is_failed else "activa",
+                "motivo_fallo": info_fallo.get("reason"),
+                "segundos_desde_fallo": int(now - info_fallo.get("timestamp", 0)) if is_failed else None,
+            })
+        return {
+            "total_keys": len(all_keys),
+            "keys_activas": len(all_keys) - len(cls._failed_keys),
+            "keys_fallidas": len(cls._failed_keys),
+            "detalles": detalles,
+        }
+
+
 class AgenteIAService:
     def __init__(self, db: Session, usuario: Usuario):
         self.db = db
         self.usuario = usuario
         self.postgrest = PostgrestService(db)
-        self.api_key = settings.gemini_api_key
+        self.api_keys = GeminiKeyRotator.get_keys()
+        self.api_key = self.api_keys[0] if self.api_keys else ""
 
     def ejecutar_herramienta(self, nombre: str, args: dict[str, Any]) -> dict[str, Any]:
         """Ejecuta la función solicitada por Gemini vía PostgREST o fallback local."""
@@ -352,10 +437,11 @@ class AgenteIAService:
                 titulo_auto += "..."
             chat.titulo = titulo_auto
 
-        if not self.api_key:
+        active_keys = GeminiKeyRotator.get_ordered_pool()
+        if not active_keys:
             texto_respuesta = (
-                "⚠️ **Aviso del Sistema:** La clave `GEMINI_API_KEY` no está configurada en el servidor. "
-                "Por favor, define la variable en el archivo `.env` del backend para activar las respuestas de IA."
+                "⚠️ **Aviso del Sistema:** No hay claves `GEMINI_API_KEY` o `GEMINI_API_KEYS` configuradas en el servidor. "
+                "Por favor, define una o varias claves en el archivo `.env` del backend para activar las respuestas de IA."
             )
             msg_ia = IAMensaje(
                 chat_id=chat.id,
@@ -369,13 +455,13 @@ class AgenteIAService:
             self.db.commit()
             self.db.refresh(msg_ia)
             return {
-                "id": str(msg_ia.id),
+                "id": str(msg_ia.id or uuid4()),
                 "chat_id": str(chat.id),
                 "rol": "assistant",
                 "contenido": msg_ia.contenido,
                 "datos_estructurados": None,
                 "herramientas_usadas": None,
-                "created_at": msg_ia.created_at.isoformat(),
+                "created_at": (msg_ia.created_at or datetime.now()).isoformat(),
             }
 
         # Armar historial de contents para la API de Gemini (omitiendo mensajes de error del sistema)
@@ -410,15 +496,15 @@ class AgenteIAService:
 
         modelo_env = getattr(settings, "gemini_model", None)
         if modelo_env in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"):
-            modelo_env = "gemini-3.6-flash"
+            modelo_env = "gemini-3.8-flash"
 
         lista_base = [
-            modelo_env if modelo_env else "gemini-3.6-flash",
-            "gemini-3.6-flash",
-            "gemini-3.5-flash-lite",
-            "gemini-flash-lite-latest",
-            "gemini-3.1-flash-lite",
+            modelo_env if modelo_env else "gemini-3.8-flash",
             "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3.6-flash",
+            "gemini-flash-lite-latest",
         ]
         # Eliminar duplicados manteniendo orden de prioridad
         modelos_candidatos = list(dict.fromkeys(lista_base))
@@ -428,88 +514,122 @@ class AgenteIAService:
         errores_intentos: list[str] = []
 
         with httpx.Client(timeout=30.0) as client:
-            for modelo in modelos_candidatos:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={self.api_key}"
-                try:
-                    payload = {
-                        "contents": contents,
-                        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
-                        "tools": GEMINI_TOOLS_DECLARATION,
-                        "generationConfig": {
-                            "temperature": 0.3,
-                            "maxOutputTokens": 2048,
-                        },
-                    }
+            for current_key in active_keys:
+                key_masked = current_key[:4] + "..." + current_key[-4:] if len(current_key) > 8 else "***"
+                key_invalid = False
 
-                    # Bucle de Function Calling (máximo 4 iteraciones)
-                    for iteracion in range(4):
-                        res = client.post(url, json=payload)
-                        if res.status_code != 200:
-                            err_info = f"[{modelo}] HTTP {res.status_code}: {res.text[:120]}"
-                            logger.warning("Gemini error: %s", err_info)
-                            errores_intentos.append(err_info)
-                            break
+                for modelo in modelos_candidatos:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={current_key}"
+                    try:
+                        current_contents = [dict(c) for c in contents]
+                        payload = {
+                            "contents": current_contents,
+                            "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+                            "tools": GEMINI_TOOLS_DECLARATION,
+                            "generationConfig": {
+                                "temperature": 0.3,
+                                "maxOutputTokens": 2048,
+                            },
+                        }
 
-                        res_json = res.json()
-                        candidates = res_json.get("candidates", [])
-                        if not candidates:
-                            err_info = f"[{modelo}] Sin candidatos en respuesta: {str(res_json)[:100]}"
-                            logger.warning(err_info)
-                            errores_intentos.append(err_info)
-                            break
+                        # Bucle de Function Calling (máximo 4 iteraciones)
+                        for iteracion in range(4):
+                            res = client.post(url, json=payload)
+                            if res.status_code != 200:
+                                err_info = f"[Key:{key_masked}|{modelo}] HTTP {res.status_code}: {res.text[:120]}"
+                                logger.warning("Gemini error: %s", err_info)
+                                errores_intentos.append(err_info)
 
-                        content_candidate = candidates[0].get("content", {})
-                        parts = content_candidate.get("parts", [])
+                                if res.status_code in (401, 403):
+                                    GeminiKeyRotator.mark_key_failed(current_key, f"HTTP {res.status_code} Auth/Disabled")
+                                    key_invalid = True
+                                    break
+                                elif res.status_code == 429:
+                                    GeminiKeyRotator.mark_key_failed(current_key, "HTTP 429 Quota Exceeded")
+                                    key_invalid = True
+                                    break
+                                else:
+                                    break
 
-                        # Verificar si hay functionCall
-                        function_calls = [p.get("functionCall") for p in parts if "functionCall" in p]
-                        if not function_calls:
-                            # Tenemos respuesta de texto final
-                            textos = [p.get("text", "") for p in parts if "text" in p]
-                            texto_final = "\n".join(textos).strip()
-                            break
+                            res_json = res.json()
+                            candidates = res_json.get("candidates", [])
+                            if not candidates:
+                                err_info = f"[Key:{key_masked}|{modelo}] Sin candidatos en respuesta: {str(res_json)[:100]}"
+                                logger.warning(err_info)
+                                errores_intentos.append(err_info)
+                                break
 
-                        # Ejecutar llamadas a herramientas y enviar respuestas a Gemini
-                        # Agregar el mensaje del modelo con sus functionCalls a contents
-                        payload["contents"].append(content_candidate)
+                            content_candidate = candidates[0].get("content", {})
+                            parts = content_candidate.get("parts", [])
 
-                        response_parts = []
-                        for fc in function_calls:
-                            fn_name = fc.get("name")
-                            fn_args = fc.get("args", {})
-                            herramientas_ejecutadas.append(fn_name)
-                            tool_result = self.ejecutar_herramienta(fn_name, fn_args)
-                            response_parts.append(
-                                {
-                                    "functionResponse": {
-                                        "name": fn_name,
-                                        "response": {"result": tool_result},
+                            # Verificar si hay functionCall
+                            function_calls = [p.get("functionCall") for p in parts if "functionCall" in p]
+                            if not function_calls:
+                                # Tenemos respuesta de texto final
+                                textos = [p.get("text", "") for p in parts if "text" in p]
+                                texto_final = "\n".join(textos).strip()
+                                GeminiKeyRotator.mark_key_success(current_key)
+                                break
+
+                            # Ejecutar llamadas a herramientas y enviar respuestas a Gemini
+                            payload["contents"].append(content_candidate)
+
+                            response_parts = []
+                            for fc in function_calls:
+                                fn_name = fc.get("name")
+                                fn_args = fc.get("args", {})
+                                herramientas_ejecutadas.append(fn_name)
+                                tool_result = self.ejecutar_herramienta(fn_name, fn_args)
+                                response_parts.append(
+                                    {
+                                        "functionResponse": {
+                                            "name": fn_name,
+                                            "response": {"result": tool_result},
+                                        }
                                     }
+                                )
+
+                            payload["contents"].append(
+                                {
+                                    "role": "user",
+                                    "parts": response_parts,
                                 }
                             )
 
-                        # Enviar las respuestas de las funciones
-                        payload["contents"].append(
-                            {
-                                "role": "user",
-                                "parts": response_parts,
-                            }
-                        )
+                        if texto_final:
+                            GeminiKeyRotator.advance_index()
+                            break
 
-                    if texto_final:
-                        break
+                        if key_invalid:
+                            # Esta llave falló por 401/403/429. Saltar inmediatamente a la siguiente llave
+                            break
 
-                except Exception as ex:
-                    err_info = f"[{modelo}] Excepción {type(ex).__name__}: {str(ex)[:120]}"
-                    logger.warning("Fallo llamando a modelo: %s", err_info)
-                    errores_intentos.append(err_info)
-                    continue
+                    except Exception as ex:
+                        err_info = f"[Key:{key_masked}|{modelo}] Excepción {type(ex).__name__}: {str(ex)[:120]}"
+                        logger.warning("Fallo llamando a modelo: %s", err_info)
+                        errores_intentos.append(err_info)
+                        continue
+
+                if texto_final:
+                    break
 
         if not texto_final:
             detalle_fallos = " // ".join(errores_intentos) if errores_intentos else "Sin respuesta de modelos"
+            tiene_401 = any("HTTP 401" in err or "deleted or disabled" in err for err in errores_intentos)
+            consejo = ""
+            if tiene_401:
+                consejo = (
+                    "\n\n💡 **Causa detectada:** Una o más claves de API configuradas fueron rechazadas por Google "
+                    "(cuenta de servicio eliminada o deshabilitada). "
+                    "Para solucionarlo, puedes obtener una o varias claves en "
+                    "[Google AI Studio](https://aistudio.google.com/app/apikey) (comienzan con `AIzaSy...`) "
+                    "y configurarlas separadas por coma en `GEMINI_API_KEY` o `GEMINI_API_KEYS`."
+                )
+
             texto_final = (
                 f"El Agente Tridente IA no pudo completar la consulta en este momento.\n\n"
-                f"> 🔍 **Diagnóstico de conexión:** `{detalle_fallos}`\n\n"
+                f"> 🔍 **Diagnóstico de conexión:** `{detalle_fallos}`\n"
+                f"{consejo}\n\n"
                 f"Por favor verifica la conexión o intenta nuevamente en unos segundos."
             )
 
@@ -528,11 +648,11 @@ class AgenteIAService:
         self.db.refresh(msg_ia)
 
         return {
-            "id": str(msg_ia.id),
+            "id": str(msg_ia.id or uuid4()),
             "chat_id": str(chat.id),
             "rol": "assistant",
             "contenido": msg_ia.contenido,
             "datos_estructurados": msg_ia.datos_estructurados,
             "herramientas_usadas": msg_ia.herramientas_usadas,
-            "created_at": msg_ia.created_at.isoformat(),
+            "created_at": (msg_ia.created_at or datetime.now()).isoformat(),
         }
