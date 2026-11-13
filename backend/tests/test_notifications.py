@@ -193,11 +193,16 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
     db = FakeDatabase(["admin_pedidos@example.com"])
     notify_administrators_of_order(db, order)
 
-    # Se envía 1 mensaje a los administradores con copia oculta (BCC) al cliente
-    assert len(sent_messages) == 1
-    msg1 = sent_messages[0]
-    assert msg1["To"] == "admin_pedidos@example.com"
-    assert msg1["Bcc"] == "cliente@example.com"
+    # Se envían 2 mensajes completamente separados:
+    # 1. Al administrador autorizado con recibe_pedido=True
+    # 2. Exclusivamente al cliente que realizó el pedido (sin mezclar listas ni Bcc compartido)
+    assert len(sent_messages) == 2
+    msg_admin = sent_messages[0]
+    assert msg_admin["To"] == "admin_pedidos@example.com"
+    assert msg_admin["Bcc"] is None
+    msg_cliente = sent_messages[1]
+    assert msg_cliente["To"] == "cliente@example.com"
+    assert msg_cliente["Bcc"] is None
     # Verificar que se registraron los logs correspondientes
     canales = [log.canal for log in db.added if hasattr(log, "canal")]
     assert "EMAIL_ADMIN" in canales
@@ -208,7 +213,7 @@ def test_notify_administrators_only_sends_to_recibe_pedido_users(monkeypatch) ->
     db_empty = FakeDatabase([])
     notify_administrators_of_order(db_empty, order)
 
-    # Se envía directamente al cliente su copia de pedido, y el admin queda omitido
+    # Se envía únicamente al cliente su confirmación de pedido, y el admin queda omitido
     assert len(sent_messages) == 1
     msg2 = sent_messages[0]
     assert msg2["To"] == "cliente@example.com"

@@ -21,6 +21,25 @@ async def lifespan(app: FastAPI):
         with engine.begin() as conn:
             conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_whatsapp BOOLEAN NOT NULL DEFAULT false;"))
             conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_email BOOLEAN NOT NULL DEFAULT false;"))
+            
+            # Limpieza y seguridad crítica: Eliminar de la tabla usuarios cualquier cliente que se haya creado erróneamente
+            # y apagar cualquier flag recibe_pedido en correos de clientes
+            conn.execute(text(f"""
+                DELETE FROM {schema}.usuarios 
+                WHERE LOWER(correo) IN (
+                    SELECT LOWER(correo) FROM {schema}.clientes WHERE correo IS NOT NULL
+                )
+                AND LOWER(correo) NOT IN ('roderick.espinoza@gmail.com', 'admin@correodistribuidoratridente.cl', 'pedidos.tridente2026@gmail.com');
+            """))
+            conn.execute(text(f"""
+                DELETE FROM {schema}.usuarios 
+                WHERE LOWER(correo) IN ('andres.cortes.meza.98@gmail.com', 'almabyabbie@gmail.com');
+            """))
+            conn.execute(text(f"""
+                UPDATE {schema}.usuarios 
+                SET recibe_pedido = false 
+                WHERE LOWER(correo) IN ('andres.cortes.meza.98@gmail.com', 'almabyabbie@gmail.com');
+            """))
             conn.execute(text(f"""
                 CREATE TABLE IF NOT EXISTS {schema}.camila_logs (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

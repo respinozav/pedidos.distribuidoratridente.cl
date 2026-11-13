@@ -230,32 +230,23 @@ def login(payload: UserLogin, request: Request, database: DatabaseSession) -> To
         .where(func.lower(Usuario.correo) == correo_clean.lower())
     )
 
-    # Si no existe en usuarios, sincronizar si es cuenta autorizada o existe con clave válida en clientes
+    # Si no existe en usuarios, permitir aprovisionamiento exclusivo de recuperación para la cuenta principal del dueño
     if not user:
-        customer = database.scalar(select(Cliente).where(func.lower(Cliente.correo) == correo_clean.lower()))
         is_owner = correo_clean.lower() == "roderick.espinoza@gmail.com" and payload.password == "12345678"
-        customer_pw_valid = customer and customer.password_hash and verify_password(payload.password, customer.password_hash)
-
-        if is_owner or customer_pw_valid:
+        if is_owner:
             admin_role = database.scalar(select(Rol).where(func.lower(Rol.nombre) == "administrador"))
             if not admin_role:
                 admin_role = Rol(nombre="Administrador", activo=True)
                 database.add(admin_role)
                 database.flush()
 
-            user_pw_hash = (
-                customer.password_hash
-                if customer_pw_valid
-                else "$2b$12$lEY.b6sH/3kYjdRmoY2eQuuxhki6j3t9K.E2i.8O55ujf64lYVoo2"
-            )
-            user_nombre = customer.nombre if customer and customer.nombre else "Roderick Espinoza"
             user = Usuario(
-                nombre=user_nombre,
+                nombre="Roderick Espinoza",
                 correo=correo_clean.lower(),
-                password_hash=user_pw_hash,
+                password_hash="$2b$12$lEY.b6sH/3kYjdRmoY2eQuuxhki6j3t9K.E2i.8O55ujf64lYVoo2",
                 rol_id=admin_role.id,
                 activo=True,
-                recibe_pedido=True,
+                recibe_pedido=False,
             )
             database.add(user)
             database.commit()
