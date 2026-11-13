@@ -1,3 +1,7 @@
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import tests.test_catalog as tc
 import tests.test_ordering as to
 import tests.test_notifications as tn
@@ -78,6 +82,8 @@ def main():
     td.test_defontana_update_client_mocked()
     td.test_defontana_sync_order_creates_client_when_not_exists()
     td.test_defontana_sync_order_propagates_selected_address_to_payload_and_client()
+    td.test_defontana_sync_order_updates_when_address_differs_from_defontana()
+    td.test_defontana_sync_order_reactive_retry_on_address_error()
     td.test_defontana_sync_product_existing()
     td.test_defontana_sync_product_new()
     tap.test_admin_profile_workflow()

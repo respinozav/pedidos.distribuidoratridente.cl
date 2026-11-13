@@ -50,6 +50,27 @@ def _extract_defontana_error(exc: Exception) -> str:
     return str(exc)
 
 
+def _is_address_error(err_str: str | None) -> bool:
+    """Detecta si un mensaje de error o excepción de Defontana corresponde a error de dirección o sucursal."""
+    if not err_str:
+        return False
+    lower = str(err_str).lower()
+    address_keywords = [
+        "direcci",
+        "direccion",
+        "address",
+        "despacho",
+        "domicilio",
+        "sucursal",
+        "local",
+        "comuna",
+        "district",
+        "city",
+        "ciudad",
+    ]
+    return any(kw in lower for kw in address_keywords)
+
+
 class DefontanaService:
     def __init__(self) -> None:
         self.settings = get_settings()
@@ -193,13 +214,15 @@ class DefontanaService:
 
         addr_str = ""
         district_str = ""
+        city_str = ""
         if direccion:
             addr_str = getattr(direccion, "direccion", None) or (direccion.get("direccion") if isinstance(direccion, dict) else "")
             district_str = getattr(direccion, "comuna", None) or (direccion.get("comuna") if isinstance(direccion, dict) else "")
+            city_str = getattr(direccion, "ciudad", None) or (direccion.get("ciudad") if isinstance(direccion, dict) else "")
 
-        address = addr_str or "Sin Dirección"
-        district = district_str or "Santiago"
-        city = district_str or "Santiago"
+        address = (addr_str or "Sin Dirección").strip()
+        district = (district_str or "Santiago").strip()
+        city = (city_str or district_str or "Santiago").strip()
 
         payload = {
             "legalCode": rut_formatted,
@@ -299,14 +322,16 @@ class DefontanaService:
 
         addr_str = ""
         district_str = ""
+        city_str = ""
         if direccion:
             addr_str = getattr(direccion, "direccion", None) or (direccion.get("direccion") if isinstance(direccion, dict) else "")
             district_str = getattr(direccion, "comuna", None) or (direccion.get("comuna") if isinstance(direccion, dict) else "")
+            city_str = getattr(direccion, "ciudad", None) or (direccion.get("ciudad") if isinstance(direccion, dict) else "")
 
         # Si no hay dirección en el objeto direccion, usar la previa si existe
-        address = addr_str or (client_data.get("address") if client_data else None) or "Sin Dirección"
-        district = district_str or (client_data.get("district") if client_data else None) or "Santiago"
-        city = district_str or (client_data.get("city") if client_data else None) or "Santiago"
+        address = (addr_str or (client_data.get("address") if client_data else None) or "Sin Dirección").strip()
+        district = (district_str or (client_data.get("district") if client_data else None) or "Santiago").strip()
+        city = (city_str or district_str or (client_data.get("city") if client_data else None) or "Santiago").strip()
 
         business = (client_data.get("business") if client_data else None) or "Particular"
         giro = (client_data.get("giro") if client_data else None) or "Particular"
@@ -742,12 +767,15 @@ class DefontanaService:
         # Obtener datos de dirección seleccionada para el despacho
         addr_val = ""
         dist_val = ""
+        city_val = ""
         if order.direccion:
             addr_val = (getattr(order.direccion, "direccion", None) or "").strip()
             dist_val = (getattr(order.direccion, "comuna", None) or "").strip()
+            city_val = (getattr(order.direccion, "ciudad", None) or "").strip()
 
         dispatch_address = addr_val or "Sin Dirección"
         dispatch_district = dist_val or "Santiago"
+        dispatch_city = city_val or dist_val or "Santiago"
         dispatch_full = f"{dispatch_address}, {dispatch_district}" if addr_val else "Sin dirección registrada"
 
         client_data = None
@@ -763,15 +791,39 @@ class DefontanaService:
                     resolved = self.resolve_client(order.cliente.rut)
                     client_data = resolved or created_data
             elif order.direccion:
-                try:
+                def_address = (client_data.get("address") or "").strip()
+                def_district = (client_data.get("district") or "").strip()
+
+                address_differs = (
+                    addr_val and (
+                        def_address.lower() != addr_val.lower()
+                        or (dist_val and def_district.lower() != dist_val.lower())
+                    )
+                )
+
+                if address_differs or not def_address or def_address == "Sin Dirección":
                     logger.info(
-                        "Actualizando dirección de despacho en Defontana para cliente RUT %s: %s",
+                        "Dirección de despacho del pedido ('%s, %s') no coincide o no existe en Defontana ('%s, %s') para cliente %s. Actualizando cliente en Defontana...",
+                        addr_val,
+                        dist_val,
+                        def_address,
+                        def_district,
+                        order.cliente.rut,
+                    )
+                    try:
+                        update_res = self.update_client(order.cliente, order.direccion, client_data=client_data)
+                        if update_res:
+                            client_data["address"] = dispatch_address
+                            client_data["district"] = dispatch_district
+                            client_data["city"] = dispatch_city
+                    except Exception as exc:
+                        logger.warning("No se pudo actualizar la dirección del cliente %s en Defontana: %s", order.cliente.rut, exc)
+                else:
+                    logger.info(
+                        "Cliente RUT %s ya cuenta con la dirección de despacho '%s' en Defontana.",
                         order.cliente.rut,
                         dispatch_full,
                     )
-                    self.update_client(order.cliente, order.direccion, client_data=client_data)
-                except Exception as exc:
-                    logger.warning("No se pudo actualizar la dirección del cliente %s en Defontana: %s", order.cliente.rut, exc)
 
         client_file_id = (
             (client_data.get("fileID") if client_data else None)
@@ -878,7 +930,7 @@ class DefontanaService:
                 "district": str(dispatch_district)[:50],
                 "address": str(dispatch_address)[:100],
                 "deliveryAddress": str(dispatch_address)[:100],
-                "city": str(dispatch_district)[:50],
+                "city": str(dispatch_city)[:50],
                 "glossGeneral": f"Pedido web N° {str(order.id)[:8]}{gloss_suffix}{gloss_delivery}"[:200],
                 "glossDispatch": gloss_dispatch,
                 "glossBill": f"Pedido web N° {str(order.id)[:8]}{gloss_delivery}"[:200],
@@ -917,12 +969,53 @@ class DefontanaService:
                         or res_afecto.get("detail")
                         or f"Defontana rechazó la modificación: {res_afecto}"
                     )
-                    errors.append(f"Factura 33: {err_msg}")
-                    sync_ok = False
+                    if _is_address_error(err_msg) and order.direccion:
+                        logger.warning(
+                            "Pedido %s: Defontana reportó error de dirección ('%s'). Forzando sincronización de dirección y reintentando...",
+                            order_id,
+                            err_msg,
+                        )
+                        self.update_client(order.cliente, order.direccion, client_data=client_data)
+                        retry_res = self.save_or_update_order(body_afecto, is_update=(is_update and has_afecto_folio))
+                        if retry_res.get("success", False):
+                            new_folio = retry_res.get("folio") or retry_res.get("number")
+                            if new_folio:
+                                order.folio_defontana_afecto = int(new_folio)
+                            logger.info(
+                                "Pedido %s: Reintento de Factura 33 tras sincronizar dirección exitoso (Folio %s)",
+                                order_id,
+                                new_folio,
+                            )
+                            err_msg = None
+                    if err_msg:
+                        errors.append(f"Factura 33: {err_msg}")
+                        sync_ok = False
             except Exception as exc:
                 err_msg = _extract_defontana_error(exc)
-                errors.append(f"Factura 33: {err_msg}")
-                sync_ok = False
+                if _is_address_error(err_msg) and order.direccion:
+                    try:
+                        logger.warning(
+                            "Pedido %s: Excepción de dirección en Defontana ('%s'). Forzando sincronización de dirección y reintentando...",
+                            order_id,
+                            err_msg,
+                        )
+                        self.update_client(order.cliente, order.direccion, client_data=client_data)
+                        retry_res = self.save_or_update_order(body_afecto, is_update=(is_update and has_afecto_folio))
+                        if retry_res.get("success", False):
+                            new_folio = retry_res.get("folio") or retry_res.get("number")
+                            if new_folio:
+                                order.folio_defontana_afecto = int(new_folio)
+                            logger.info(
+                                "Pedido %s: Reintento tras excepción de dirección exitoso (Folio %s)",
+                                order_id,
+                                new_folio,
+                            )
+                            err_msg = None
+                    except Exception as retry_exc:
+                        err_msg = _extract_defontana_error(retry_exc)
+                if err_msg:
+                    errors.append(f"Factura 33: {err_msg}")
+                    sync_ok = False
 
         # 2. Factura No Afecta o Exenta Electrónica 34 (Exentos) -> documentTypeId = "fveelect", folio_defontana
         if items_exentos:
@@ -944,7 +1037,7 @@ class DefontanaService:
                 "district": str(dispatch_district)[:50],
                 "address": str(dispatch_address)[:100],
                 "deliveryAddress": str(dispatch_address)[:100],
-                "city": str(dispatch_district)[:50],
+                "city": str(dispatch_city)[:50],
                 "glossGeneral": f"Pedido web N° {str(order.id)[:8]}{gloss_suffix}{gloss_delivery}"[:200],
                 "glossDispatch": gloss_dispatch,
                 "glossBill": f"Pedido web N° {str(order.id)[:8]}{gloss_delivery}"[:200],
@@ -978,12 +1071,53 @@ class DefontanaService:
                         or res_exento.get("detail")
                         or f"Defontana rechazó la modificación: {res_exento}"
                     )
-                    errors.append(f"Factura 34: {err_msg}")
-                    sync_ok = False
+                    if _is_address_error(err_msg) and order.direccion:
+                        logger.warning(
+                            "Pedido %s: Defontana reportó error de dirección en Factura 34 ('%s'). Forzando sincronización y reintentando...",
+                            order_id,
+                            err_msg,
+                        )
+                        self.update_client(order.cliente, order.direccion, client_data=client_data)
+                        retry_res = self.save_or_update_order(body_exento, is_update=(is_update and has_exento_folio))
+                        if retry_res.get("success", False):
+                            new_folio = retry_res.get("folio") or retry_res.get("number")
+                            if new_folio:
+                                order.folio_defontana = int(new_folio)
+                            logger.info(
+                                "Pedido %s: Reintento de Factura 34 tras sincronizar dirección exitoso (Folio %s)",
+                                order_id,
+                                new_folio,
+                            )
+                            err_msg = None
+                    if err_msg:
+                        errors.append(f"Factura 34: {err_msg}")
+                        sync_ok = False
             except Exception as exc:
                 err_msg = _extract_defontana_error(exc)
-                errors.append(f"Factura 34: {err_msg}")
-                sync_ok = False
+                if _is_address_error(err_msg) and order.direccion:
+                    try:
+                        logger.warning(
+                            "Pedido %s: Excepción de dirección en Defontana Factura 34 ('%s'). Forzando sincronización y reintentando...",
+                            order_id,
+                            err_msg,
+                        )
+                        self.update_client(order.cliente, order.direccion, client_data=client_data)
+                        retry_res = self.save_or_update_order(body_exento, is_update=(is_update and has_exento_folio))
+                        if retry_res.get("success", False):
+                            new_folio = retry_res.get("folio") or retry_res.get("number")
+                            if new_folio:
+                                order.folio_defontana = int(new_folio)
+                            logger.info(
+                                "Pedido %s: Reintento tras excepción de dirección en Factura 34 exitoso (Folio %s)",
+                                order_id,
+                                new_folio,
+                            )
+                            err_msg = None
+                    except Exception as retry_exc:
+                        err_msg = _extract_defontana_error(retry_exc)
+                if err_msg:
+                    errors.append(f"Factura 34: {err_msg}")
+                    sync_ok = False
 
         # Actualizar estado del pedido
         primary_folio = order.folio_defontana_afecto or order.folio_defontana

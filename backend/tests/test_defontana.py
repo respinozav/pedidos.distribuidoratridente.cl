@@ -794,6 +794,203 @@ def test_defontana_sync_order_propagates_selected_address_to_payload_and_client(
     print("test_defontana_sync_order_propagates_selected_address_to_payload_and_client: OK")
 
 
+
+def test_defontana_sync_order_updates_when_address_differs_from_defontana():
+    """
+    Caso Cliente con Dirección Nueva:
+    El cliente ya existe en Defontana con 'Calle 1, Santiago'.
+    El cliente hace un pedido seleccionando 'Calle 2, Providencia'.
+    Validar que update_client es ejecutado para registrar 'Calle 2' en Defontana antes de emitir la factura.
+    """
+    service = DefontanaService()
+
+    customer = SimpleNamespace(
+        rut="77.673.176-5",
+        nombre="Cliente Prueba",
+        correo="prueba@cliente.cl",
+        celular="+56911223344",
+    )
+    # Dirección 2 seleccionada
+    selected_address = SimpleNamespace(
+        direccion="Calle 2",
+        comuna="Providencia",
+        ciudad="Santiago",
+    )
+    item = SimpleNamespace(
+        codigo_producto="100",
+        nombre_producto="BEBIDA COCA COLA",
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+        precio_unitario=Decimal("1500"),
+        cantidad=10,
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
+    )
+    fake_order = SimpleNamespace(
+        id=uuid4(),
+        cliente=customer,
+        direccion=selected_address,
+        detalles=[item],
+        folio_defontana=None,
+        folio_defontana_afecto=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def scalar(self, stmt):
+            return fake_order
+        def commit(self):
+            pass
+
+    # Cliente existe en Defontana pero solo tiene Calle 1 registrada
+    client_in_defontana = {
+        "fileID": "77.673.176-5",
+        "legalCode": "77.673.176-5",
+        "name": "Cliente Prueba",
+        "address": "Calle 1",
+        "district": "Santiago",
+        "city": "Santiago",
+        "sellerID": "V01",
+        "localID": "CasaMatriz",
+        "paymentID": "Contado",
+    }
+
+    captured_payload = {}
+    def mock_save(payload):
+        nonlocal captured_payload
+        captured_payload = payload
+        return {"success": True, "folio": 9999}
+
+    update_client_calls = []
+    def mock_update_client(cliente, direccion, client_data=None):
+        update_client_calls.append({"cliente": cliente, "direccion": direccion, "client_data": client_data})
+        return {"success": True}
+
+    with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
+         patch.object(service, "resolve_client", return_value=client_in_defontana), \
+         patch.object(service, "update_client", side_effect=mock_update_client), \
+         patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
+         patch.object(service, "save_order", side_effect=mock_save):
+
+        folio, err = service.sync_order(fake_order.id)
+        assert folio == 9999
+        assert err is None
+        assert fake_order.defontana_sincronizado is True
+
+        # Validar que update_client fue invocado porque la dirección del pedido (Calle 2)
+        # no coincidía con la que tenía Defontana (Calle 1)
+        assert len(update_client_calls) >= 1
+        last_call = update_client_calls[0]
+        assert last_call["cliente"].rut == "77.673.176-5"
+        assert last_call["direccion"].direccion == "Calle 2"
+        assert last_call["direccion"].comuna == "Providencia"
+
+        # Validar que la orden se envió con la Dirección 2
+        assert captured_payload["address"] == "Calle 2"
+        assert captured_payload["district"] == "Providencia"
+        assert captured_payload["city"] == "Santiago"
+        assert "Calle 2, Providencia" in captured_payload["glossDispatch"]
+
+    print("test_defontana_sync_order_updates_when_address_differs_from_defontana: OK")
+
+
+def test_defontana_sync_order_reactive_retry_on_address_error():
+    """
+    Caso Reintento por Error de Dirección:
+    Simula que save_order retorna un error de dirección o sucursal no encontrada en Defontana.
+    El mecanismo de reintento forzado debe ejecutar update_client y reintentar save_order con éxito.
+    """
+    service = DefontanaService()
+
+    customer = SimpleNamespace(
+        rut="77.673.176-5",
+        nombre="Cliente Reintento",
+        correo="reintento@cliente.cl",
+        celular="+56977889900",
+    )
+    selected_address = SimpleNamespace(
+        direccion="Av. Nueva Providencia 1234",
+        comuna="Providencia",
+        ciudad="Santiago",
+    )
+    item = SimpleNamespace(
+        codigo_producto="101",
+        nombre_producto="SNACK PAPAS",
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+        precio_unitario=Decimal("1200"),
+        cantidad=5,
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
+    )
+    fake_order = SimpleNamespace(
+        id=uuid4(),
+        cliente=customer,
+        direccion=selected_address,
+        detalles=[item],
+        folio_defontana=None,
+        folio_defontana_afecto=None,
+        defontana_sincronizado=False,
+        defontana_error=None,
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def scalar(self, stmt):
+            return fake_order
+        def commit(self):
+            pass
+
+    client_in_defontana = {
+        "fileID": "77.673.176-5",
+        "legalCode": "77.673.176-5",
+        "name": "Cliente Reintento",
+        "address": "Av. Nueva Providencia 1234",
+        "district": "Providencia",
+        "city": "Santiago",
+        "sellerID": "V01",
+        "localID": "CasaMatriz",
+        "paymentID": "Contado",
+    }
+
+    call_count = 0
+    def mock_save_with_address_error(payload):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            # Primer intento falla por dirección no encontrada
+            return {"success": False, "message": "La dirección de despacho no se encuentra registrada en la ficha del cliente."}
+        # Segundo intento tiene éxito
+        return {"success": True, "folio": 7777}
+
+    update_client_called = []
+    def mock_update_client(cliente, direccion, client_data=None):
+        update_client_called.append(direccion.direccion)
+        return {"success": True}
+
+    with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
+         patch.object(service, "resolve_client", return_value=client_in_defontana), \
+         patch.object(service, "update_client", side_effect=mock_update_client), \
+         patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
+         patch.object(service, "save_order", side_effect=mock_save_with_address_error):
+
+        folio, err = service.sync_order(fake_order.id)
+        assert folio == 7777, f"Se esperaba folio 7777 pero fue {folio}"
+        assert err is None
+        assert fake_order.folio_defontana_afecto == 7777
+        assert fake_order.defontana_sincronizado is True
+        assert call_count == 2, "Se debió reintentar save_order tras el error de dirección"
+        assert len(update_client_called) >= 1
+
+    print("test_defontana_sync_order_reactive_retry_on_address_error: OK")
+
+
 if __name__ == "__main__":
     test_defontana_save_order_mocked()
     test_defontana_item_packaging_rules()
@@ -807,5 +1004,7 @@ if __name__ == "__main__":
     test_defontana_sync_product_new()
     test_defontana_update_client_mocked()
     test_defontana_sync_order_propagates_selected_address_to_payload_and_client()
+    test_defontana_sync_order_updates_when_address_differs_from_defontana()
+    test_defontana_sync_order_reactive_retry_on_address_error()
     print("TODOS LOS TESTS DE DEFONTANA PASARON EXITOSAMENTE!")
 

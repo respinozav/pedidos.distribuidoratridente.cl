@@ -640,6 +640,17 @@ def add_customer_profile_address(
         values.update(principal=True, activo=True)
     entity = Repository(Direccion, database).add(Direccion(cliente_id=current_customer.id, **values))
     database.commit()
+    # Sincronización proactiva de dirección con Defontana si está configurado
+    try:
+        defontana = DefontanaService()
+        if defontana.is_configured() and current_customer.rut:
+            client_data = defontana.resolve_client(current_customer.rut)
+            if client_data:
+                defontana.update_client(current_customer, entity, client_data=client_data)
+            else:
+                defontana.create_client(current_customer, entity)
+    except Exception as exc:
+        logger.warning("No se pudo sincronizar proactivamente dirección de cliente %s en Defontana: %s", current_customer.rut, exc)
     return entity
 
 
@@ -1066,6 +1077,17 @@ def add_address(customer_id: UUID, payload: AddressInput, database: DatabaseSess
         values["activo"] = True
     entity = Repository(Direccion, database).add(Direccion(cliente_id=customer_id, **values))
     database.commit()
+    # Sincronización proactiva de dirección con Defontana si está configurado
+    try:
+        defontana = DefontanaService()
+        if defontana.is_configured() and customer.rut:
+            client_data = defontana.resolve_client(customer.rut)
+            if client_data:
+                defontana.update_client(customer, entity, client_data=client_data)
+            else:
+                defontana.create_client(customer, entity)
+    except Exception as exc:
+        logger.warning("No se pudo sincronizar proactivamente dirección agregada para cliente %s en Defontana: %s", customer.rut, exc)
     return entity
 
 
