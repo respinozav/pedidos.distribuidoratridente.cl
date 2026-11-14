@@ -5229,6 +5229,12 @@ function App() {
         .catch(() => {
           // Si el token es inválido, el interceptor 401 limpiará la sesión
         });
+    } else if (initialSession?.role === "admin" && initialSession.token) {
+      api.get("/admin/perfil")
+        .catch(() => {
+          // Si el token administrativo es inválido, pertenece a un cliente purgado o no existe en usuarios,
+          // el interceptor 401/403 limpiará automáticamente el localStorage y redirigirá al login
+        });
     }
   }, []);
 

@@ -41,6 +41,15 @@ async def lifespan(app: FastAPI):
                 WHERE LOWER(correo) IN ('andres.cortes.meza.98@gmail.com', 'almabyabbie@gmail.com');
             """))
             conn.execute(text(f"""
+                DELETE FROM {schema}.ia_chat_mensajes 
+                WHERE chat_id IN (
+                    SELECT id FROM {schema}.ia_chats 
+                    WHERE usuario_id NOT IN (SELECT id FROM {schema}.usuarios)
+                );
+                DELETE FROM {schema}.ia_chats 
+                WHERE usuario_id NOT IN (SELECT id FROM {schema}.usuarios);
+            """))
+            conn.execute(text(f"""
                 CREATE TABLE IF NOT EXISTS {schema}.camila_logs (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                     razon_social VARCHAR(255) NOT NULL,

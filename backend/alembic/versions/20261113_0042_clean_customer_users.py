@@ -40,6 +40,18 @@ def upgrade() -> None:
         WHERE LOWER(correo) IN ('andres.cortes.meza.98@gmail.com', 'almabyabbie@gmail.com');
     """)
 
+    # 4. Limpieza de conversaciones en ia_chats que no correspondan a administradores válidos
+    op.execute(f"""
+        DELETE FROM {schema}.ia_chat_mensajes 
+        WHERE chat_id IN (
+            SELECT id FROM {schema}.ia_chats 
+            WHERE usuario_id NOT IN (SELECT id FROM {schema}.usuarios)
+        );
+        DELETE FROM {schema}.ia_chats 
+        WHERE usuario_id NOT IN (SELECT id FROM {schema}.usuarios);
+    """)
+
 
 def downgrade() -> None:
     pass
+

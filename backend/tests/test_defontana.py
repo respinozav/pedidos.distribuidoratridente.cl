@@ -1158,6 +1158,110 @@ def test_defontana_update_order_rejection_handled_properly():
     print("test_defontana_update_order_rejection_handled_properly: OK")
 
 
+def test_defontana_update_order_recreates_when_lines_ignored_by_erp():
+    """
+    Simula el caso real del Pedido #5856:
+    UpdateOrder retorna éxito, pero GetOrder revela que Defontana dejó la cantidad en 1 en vez de 2.
+    Verifica que el servicio:
+    1. Detecta la discrepancia entre la cantidad remota (1) y la esperada (2).
+    2. Ejecuta delete_order(5856) para anular el pedido desfasado.
+    3. Ejecuta save_order(...) con los nuevos productos y cantidad 2.
+    4. Actualiza el folio del pedido local al nuevo folio generado (ej. 5857).
+    """
+    service = DefontanaService()
+    customer = SimpleNamespace(rut="1-9", nombre="Cliente Pruebas")
+    item = SimpleNamespace(
+        codigo_producto="PROD-5856",
+        nombre_producto="Producto Modificado",
+        tipo_empaque="unidad",
+        cantidad_caja=None,
+        precio_unitario=Decimal("5313"),
+        cantidad=2,
+        producto=SimpleNamespace(afecto=True, cantidad_caja=None),
+    )
+    fake_order = SimpleNamespace(
+        id=uuid4(),
+        cliente=customer,
+        direccion=SimpleNamespace(direccion="Calle Comercio 123", comuna="Santiago", ciudad="Santiago"),
+        detalles=[item],
+        folio_defontana=None,
+        folio_defontana_afecto=5856,
+        defontana_sincronizado=True,
+        defontana_error=None,
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def scalar(self, stmt):
+            return fake_order
+
+        def commit(self):
+            pass
+
+    client_data = {
+        "fileID": "1-9",
+        "legalCode": "1-9",
+        "name": "Cliente Pruebas",
+        "address": "Calle Comercio 123",
+        "district": "Santiago",
+        "city": "Santiago",
+        "sellerID": "V01",
+        "localID": "Local",
+        "paymentID": "Contado",
+    }
+
+    deleted_folios = []
+    saved_payloads = []
+
+    def mock_update(payload):
+        return {"success": True, "folio": 5856}
+
+    def mock_get(number):
+        # Simula que Defontana NO modificó las líneas y sigue en cantidad 1
+        return {
+            "success": True,
+            "orderData": {
+                "number": int(number),
+                "details": [
+                    {"code": "PROD-5856", "count": 1.0, "price": 5313.0}
+                ]
+            }
+        }
+
+    def mock_delete(number):
+        deleted_folios.append(number)
+        return {"success": True, "folio": str(number)}
+
+    def mock_save(payload):
+        saved_payloads.append(payload)
+        return {"success": True, "folio": 5857}
+
+    with patch("app.core.database.SessionLocal", return_value=FakeSession()), \
+         patch.object(service, "resolve_client", return_value=client_data), \
+         patch.object(service, "update_client", return_value={"success": True}), \
+         patch.object(service, "resolve_product", return_value={"type": "A", "unit": "UN"}), \
+         patch.object(service, "update_order", side_effect=mock_update), \
+         patch.object(service, "get_order", side_effect=mock_get), \
+         patch.object(service, "delete_order", side_effect=mock_delete), \
+         patch.object(service, "save_order", side_effect=mock_save):
+
+        folio, err = service.sync_order(fake_order.id, is_update=True)
+        assert err is None
+        assert folio == 5857
+        assert fake_order.folio_defontana_afecto == 5857
+        assert fake_order.defontana_sincronizado is True
+        assert deleted_folios == [5856]
+        assert len(saved_payloads) == 1
+        assert saved_payloads[0]["orderDetails"][0]["count"] == 2
+
+    print("test_defontana_update_order_recreates_when_lines_ignored_by_erp: OK")
+
+
 if __name__ == "__main__":
     test_defontana_save_order_mocked()
     test_defontana_item_packaging_rules()
@@ -1175,5 +1279,6 @@ if __name__ == "__main__":
     test_defontana_sync_order_reactive_retry_on_address_error()
     test_defontana_update_order_syncs_new_quantity_and_total()
     test_defontana_update_order_rejection_handled_properly()
+    test_defontana_update_order_recreates_when_lines_ignored_by_erp()
     print("TODOS LOS TESTS DE DEFONTANA PASARON EXITOSAMENTE!")
 

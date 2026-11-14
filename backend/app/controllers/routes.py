@@ -2365,7 +2365,7 @@ def send_ia_chat_message(
 
 
 @router.get("/ia/diagnostico", tags=["IA"])
-def diagnostico_ia() -> dict[str, Any]:
+def diagnostico_ia(_: SuperAdminUser) -> dict[str, Any]:
     """Endpoint de diagnóstico para probar la conectividad directa con Gemini API y el pool de claves."""
     import httpx
     from app.services.agente_ia_service import GeminiKeyRotator

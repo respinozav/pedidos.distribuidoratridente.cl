@@ -636,15 +636,107 @@ class DefontanaService:
         logger.info("Producto %s creado exitosamente en Defontana con precio %s", code, price)
         return True, None
 
-    def save_order(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Envía el pedido a SaveOrder en Defontana."""
-        url = f"{self.base_url}/api/Order/SaveOrder"
+    ALLOWED_SAVE_ORDER_FIELDS = {
+        "documentTypeId",
+        "number",
+        "pricingId",
+        "clientFileId",
+        "sellerFileId",
+        "referenceNumber",
+        "paymentConditionId",
+        "billingCoinId",
+        "billingRate",
+        "shopId",
+        "priceListId",
+        "billingType",
+        "giro",
+        "district",
+        "address",
+        "deliveryAddress",
+        "city",
+        "dateOrder",
+        "orderDetails",
+        "taxes",
+        "creationDate",
+        "expirationDate",
+        "glossGeneral",
+        "glossDispatch",
+        "glossBill",
+        "glossPresentation",
+        "orderRecDesGlobal",
+        "customFields",
+    }
+
+    ALLOWED_UPDATE_ORDER_FIELDS = {
+        "number",
+        "clientFileId",
+        "sellerFileId",
+        "paymentConditionId",
+        "billingCoinId",
+        "billingRate",
+        "shopId",
+        "priceListId",
+        "billingType",
+        "giro",
+        "district",
+        "orderDetails",
+        "taxes",
+        "creationDate",
+        "expirationDate",
+        "glossGeneral",
+        "glossDispatch",
+        "glossBill",
+        "glossPresentation",
+        "orderRecDesGlobal",
+        "customFields",
+    }
+
+    def get_order(self, number: int | str) -> dict[str, Any]:
+        """Consulta la información y líneas de un pedido en Defontana vía GET /api/Order/Get?number={number}."""
+        url = f"{self.base_url}/api/Order/Get"
         headers = self._get_headers()
         with httpx.Client(timeout=25.0) as client:
-            resp = client.post(url, json=payload, headers=headers)
+            resp = client.get(url, params={"number": int(number)}, headers=headers)
             if resp.status_code == 401:
                 headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
-                resp = client.post(url, json=payload, headers=headers)
+                resp = client.get(url, params={"number": int(number)}, headers=headers)
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+            resp.raise_for_status()
+            return resp.json()
+
+    def delete_order(self, number: int | str) -> dict[str, Any]:
+        """Elimina o anula un pedido pendiente en Defontana vía GET /api/Order/Delete?number={number}."""
+        url = f"{self.base_url}/api/Order/Delete"
+        headers = self._get_headers()
+        with httpx.Client(timeout=25.0) as client:
+            resp = client.get(url, params={"number": str(number)}, headers=headers)
+            if resp.status_code == 401:
+                headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
+                resp = client.get(url, params={"number": str(number)}, headers=headers)
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+            resp.raise_for_status()
+            return resp.json()
+
+    def save_order(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Envía el pedido a SaveOrder en Defontana cumpliendo estrictamente con el esquema OrderInput."""
+        url = f"{self.base_url}/api/Order/SaveOrder"
+        headers = self._get_headers()
+        clean_payload = {k: v for k, v in payload.items() if k in self.ALLOWED_SAVE_ORDER_FIELDS}
+        with httpx.Client(timeout=25.0) as client:
+            resp = client.post(url, json=clean_payload, headers=headers)
+            if resp.status_code == 401:
+                headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
+                resp = client.post(url, json=clean_payload, headers=headers)
             try:
                 data = resp.json()
                 if isinstance(data, dict) and ("success" in data or "message" in data or "exceptionMessage" in data or "errors" in data):
@@ -655,28 +747,20 @@ class DefontanaService:
             return resp.json()
 
     def update_order(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Envía el pedido a UpdateOrder en Defontana."""
+        """Envía el pedido a UpdateOrder en Defontana cumpliendo estrictamente con el esquema OrderUpdateInput (sin query params)."""
         url = f"{self.base_url}/api/Order/UpdateOrder"
         headers = self._get_headers()
-        params = {}
-        if "number" in payload and payload["number"] is not None:
-            params["number"] = payload["number"]
+        clean_payload = {k: v for k, v in payload.items() if k in self.ALLOWED_UPDATE_ORDER_FIELDS}
         logger.info(
             "Enviando UpdateOrder a Defontana para folio %s (%d líneas)",
-            payload.get("number"),
-            len(payload.get("orderDetails", [])),
+            clean_payload.get("number"),
+            len(clean_payload.get("orderDetails", [])),
         )
         with httpx.Client(timeout=25.0) as client:
-            resp = client.post(url, json=payload, params=params, headers=headers)
+            resp = client.post(url, json=clean_payload, headers=headers)
             if resp.status_code == 401:
                 headers["Authorization"] = f"Bearer {self.get_token(force_refresh=True)}"
-                resp = client.post(url, json=payload, params=params, headers=headers)
-
-            if resp.status_code == 404 and params:
-                # Reintentar sin query params en caso de que el enrutamiento de Defontana solo espere el body
-                resp2 = client.post(url, json=payload, headers=headers)
-                if resp2.status_code != 404:
-                    resp = resp2
+                resp = client.post(url, json=clean_payload, headers=headers)
 
             logger.info("Defontana UpdateOrder HTTP %s: %s", resp.status_code, resp.text[:500] if resp.text else "")
 
@@ -938,6 +1022,7 @@ class DefontanaService:
             details_afectos = [_build_item_detail(it, is_afecto=True) for it in items_afectos]
             total_afecto = sum(Decimal(str(it.precio_unitario)) * int(it.cantidad) for it in items_afectos)
             iva_value = float(round(total_afecto * Decimal("0.19"), 0))
+            expected_count_afecto = sum(int(it.cantidad) for it in items_afectos)
 
             gloss_suffix = " - Factura 33 (Afecto)" if items_exentos else " - Factura 33"
             gloss_delivery = f" | Despacho: {dispatch_full}" if addr_val else ""
@@ -971,103 +1056,145 @@ class DefontanaService:
             
             has_afecto_folio = bool(order.folio_defontana_afecto)
             is_afecto_update = bool(is_update and has_afecto_folio)
+
             if is_afecto_update:
                 folio_num = int(order.folio_defontana_afecto)
                 body_afecto["number"] = folio_num
                 body_afecto.pop("documentTypeId", None)
-                body_afecto.pop("firstNumber", None)
-                body_afecto.pop("folio", None)
-            elif has_afecto_folio:
-                folio_num = int(order.folio_defontana_afecto)
-                body_afecto["number"] = folio_num
-                body_afecto["firstNumber"] = folio_num
-                body_afecto["folio"] = str(folio_num)
 
-            try:
-                res_afecto = self.save_or_update_order(body_afecto, is_update=is_afecto_update)
-                success_afecto = bool(
-                    res_afecto.get("success", False)
-                    or res_afecto.get("isSuccess", False)
-                    or res_afecto.get("status") in (200, 201)
-                )
-                if success_afecto:
-                    new_folio = res_afecto.get("folio") or res_afecto.get("number")
-                    if new_folio:
-                        order.folio_defontana_afecto = int(new_folio)
-                    logger.info(
-                        "Pedido %s: Factura 33 (Afecta) generada/actualizada con éxito en Defontana con folio %s",
-                        order_id,
-                        order.folio_defontana_afecto,
-                    )
-                else:
-                    err_msg = (
-                        res_afecto.get("message")
-                        or res_afecto.get("exceptionMessage")
-                        or res_afecto.get("description")
-                        or res_afecto.get("detail")
-                        or f"Defontana rechazó la modificación: {res_afecto}"
-                    )
-                    if _is_address_error(err_msg) and order.direccion:
-                        logger.warning(
-                            "Pedido %s: Defontana reportó error de dirección ('%s'). Forzando sincronización de dirección y reintentando...",
+                # Intentar actualización in-place con UpdateOrder
+                try:
+                    res_afecto = self.update_order(body_afecto)
+                    success_afecto = bool(res_afecto.get("success", False) or res_afecto.get("isSuccess", False))
+                    needs_recreate = False
+
+                    if success_afecto:
+                        # Verificar si Defontana realmente aplicó la actualización de líneas o la ignoró
+                        try:
+                            get_res = self.get_order(folio_num)
+                            order_data = get_res.get("orderData") if isinstance(get_res, dict) else None
+                            if order_data and "details" in order_data:
+                                remote_details = order_data.get("details") or []
+                                remote_count = sum(float(d.get("count", 0)) for d in remote_details)
+                                if abs(remote_count - expected_count_afecto) > 0.001:
+                                    logger.warning(
+                                        "Pedido %s: Defontana UpdateOrder retornó éxito pero no aplicó las líneas (remoto %s vs esperado %s). Procediendo a recreación.",
+                                        order_id,
+                                        remote_count,
+                                        expected_count_afecto,
+                                    )
+                                    needs_recreate = True
+                                else:
+                                    logger.info(
+                                        "Pedido %s: Modificación in-place en Defontana verificada (Folio %s, Cantidad total %s).",
+                                        order_id,
+                                        folio_num,
+                                        remote_count,
+                                    )
+                        except Exception as get_err:
+                            logger.info("No fue posible verificar líneas con GetOrder (se asume éxito in-place): %s", get_err)
+                    if not success_afecto:
+                        err_msg = (
+                            res_afecto.get("message")
+                            or res_afecto.get("exceptionMessage")
+                            or res_afecto.get("description")
+                            or res_afecto.get("detail")
+                            or str(res_afecto)
+                        )
+                        if _is_address_error(err_msg) and order.direccion:
+                            self.update_client(order.cliente, order.direccion, client_data=client_data)
+                            res_afecto = self.update_order(body_afecto)
+                            success_afecto = bool(res_afecto.get("success", False) or res_afecto.get("isSuccess", False))
+
+                        if not success_afecto:
+                            errors.append(f"Factura 33: {err_msg}")
+                            sync_ok = False
+
+                    # Si UpdateOrder retornó éxito pero no aplicó las líneas en el ERP, recrear pedido
+                    if success_afecto and needs_recreate:
+                        logger.info("Pedido %s: Recreando pedido en Defontana para actualizar productos...", order_id)
+                        del_res = self.delete_order(folio_num)
+                        del_ok = bool(isinstance(del_res, dict) and (del_res.get("success", False) or del_res.get("isSuccess", False)))
+                        if not del_ok:
+                            del_msg = (del_res.get("message") or del_res.get("exceptionMessage") or str(del_res)) if isinstance(del_res, dict) else str(del_res)
+                            errors.append(f"Factura 33: Defontana no permite modificar el pedido #{folio_num}: {del_msg}")
+                            sync_ok = False
+                        else:
+                            body_save = dict(body_afecto)
+                            body_save["documentTypeId"] = "fvaelect"
+                            body_save.pop("number", None)
+                            save_res = self.save_order(body_save)
+                            if save_res.get("success", False) or save_res.get("isSuccess", False):
+                                new_folio = save_res.get("folio") or save_res.get("number")
+                                if new_folio:
+                                    order.folio_defontana_afecto = int(new_folio)
+                                logger.info(
+                                    "Pedido %s: Factura 33 recreada exitosamente en Defontana con folio %s",
+                                    order_id,
+                                    order.folio_defontana_afecto,
+                                )
+                            else:
+                                save_err = save_res.get("message") or save_res.get("exceptionMessage") or str(save_res)
+                                errors.append(f"Factura 33: Error al recrear en Defontana: {save_err}")
+                                sync_ok = False
+                except Exception as exc:
+                    err_msg = _extract_defontana_error(exc)
+                    errors.append(f"Factura 33: {err_msg}")
+                    sync_ok = False
+            else:
+                # Creación normal con SaveOrder
+                try:
+                    res_afecto = self.save_order(body_afecto)
+                    success_afecto = bool(res_afecto.get("success", False) or res_afecto.get("isSuccess", False))
+                    if success_afecto:
+                        new_folio = res_afecto.get("folio") or res_afecto.get("number")
+                        if new_folio:
+                            order.folio_defontana_afecto = int(new_folio)
+                        logger.info(
+                            "Pedido %s: Factura 33 generada con éxito en Defontana con folio %s",
                             order_id,
-                            err_msg,
+                            order.folio_defontana_afecto,
                         )
-                        self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_afecto, is_update=is_afecto_update)
-                        retry_success = bool(
-                            retry_res.get("success", False)
-                            or retry_res.get("isSuccess", False)
-                            or retry_res.get("status") in (200, 201)
+                    else:
+                        err_msg = (
+                            res_afecto.get("message")
+                            or res_afecto.get("exceptionMessage")
+                            or res_afecto.get("description")
+                            or res_afecto.get("detail")
+                            or f"Defontana rechazó la creación: {res_afecto}"
                         )
-                        if retry_success:
-                            new_folio = retry_res.get("folio") or retry_res.get("number")
-                            if new_folio:
-                                order.folio_defontana_afecto = int(new_folio)
-                            logger.info(
-                                "Pedido %s: Reintento de Factura 33 tras sincronizar dirección exitoso (Folio %s)",
-                                order_id,
-                                new_folio or order.folio_defontana_afecto,
-                            )
-                            err_msg = None
+                        if _is_address_error(err_msg) and order.direccion:
+                            self.update_client(order.cliente, order.direccion, client_data=client_data)
+                            res_afecto = self.save_order(body_afecto)
+                            if res_afecto.get("success", False) or res_afecto.get("isSuccess", False):
+                                new_folio = res_afecto.get("folio") or res_afecto.get("number")
+                                if new_folio:
+                                    order.folio_defontana_afecto = int(new_folio)
+                                err_msg = None
+                        if err_msg:
+                            errors.append(f"Factura 33: {err_msg}")
+                            sync_ok = False
+                except Exception as exc:
+                    err_msg = _extract_defontana_error(exc)
+                    if _is_address_error(err_msg) and order.direccion:
+                        try:
+                            self.update_client(order.cliente, order.direccion, client_data=client_data)
+                            res_afecto = self.save_order(body_afecto)
+                            if res_afecto.get("success", False) or res_afecto.get("isSuccess", False):
+                                new_folio = res_afecto.get("folio") or res_afecto.get("number")
+                                if new_folio:
+                                    order.folio_defontana_afecto = int(new_folio)
+                                err_msg = None
+                        except Exception as retry_exc:
+                            err_msg = _extract_defontana_error(retry_exc)
                     if err_msg:
                         errors.append(f"Factura 33: {err_msg}")
                         sync_ok = False
-            except Exception as exc:
-                err_msg = _extract_defontana_error(exc)
-                if _is_address_error(err_msg) and order.direccion:
-                    try:
-                        logger.warning(
-                            "Pedido %s: Excepción de dirección en Defontana ('%s'). Forzando sincronización de dirección y reintentando...",
-                            order_id,
-                            err_msg,
-                        )
-                        self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_afecto, is_update=is_afecto_update)
-                        retry_success = bool(
-                            retry_res.get("success", False)
-                            or retry_res.get("isSuccess", False)
-                            or retry_res.get("status") in (200, 201)
-                        )
-                        if retry_success:
-                            new_folio = retry_res.get("folio") or retry_res.get("number")
-                            if new_folio:
-                                order.folio_defontana_afecto = int(new_folio)
-                            logger.info(
-                                "Pedido %s: Reintento tras excepción de dirección exitoso (Folio %s)",
-                                order_id,
-                                new_folio or order.folio_defontana_afecto,
-                            )
-                            err_msg = None
-                    except Exception as retry_exc:
-                        err_msg = _extract_defontana_error(retry_exc)
-                if err_msg:
-                    errors.append(f"Factura 33: {err_msg}")
-                    sync_ok = False
 
         # 2. Factura No Afecta o Exenta Electrónica 34 (Exentos) -> documentTypeId = "fveelect", folio_defontana
         if items_exentos:
             details_exentos = [_build_item_detail(it, is_afecto=False) for it in items_exentos]
+            expected_count_exento = sum(int(it.cantidad) for it in items_exentos)
 
             gloss_suffix = " - Factura 34 (Exento)" if items_afectos else " - Factura 34"
             gloss_delivery = f" | Despacho: {dispatch_full}" if addr_val else ""
@@ -1096,99 +1223,140 @@ class DefontanaService:
             
             has_exento_folio = bool(order.folio_defontana)
             is_exento_update = bool(is_update and has_exento_folio)
+
             if is_exento_update:
                 folio_num = int(order.folio_defontana)
                 body_exento["number"] = folio_num
                 body_exento.pop("documentTypeId", None)
-                body_exento.pop("firstNumber", None)
-                body_exento.pop("folio", None)
-            elif has_exento_folio:
-                folio_num = int(order.folio_defontana)
-                body_exento["number"] = folio_num
-                body_exento["firstNumber"] = folio_num
-                body_exento["folio"] = str(folio_num)
 
-            try:
-                res_exento = self.save_or_update_order(body_exento, is_update=is_exento_update)
-                success_exento = bool(
-                    res_exento.get("success", False)
-                    or res_exento.get("isSuccess", False)
-                    or res_exento.get("status") in (200, 201)
-                )
-                if success_exento:
-                    new_folio = res_exento.get("folio") or res_exento.get("number")
-                    if new_folio:
-                        order.folio_defontana = int(new_folio)
-                    logger.info(
-                        "Pedido %s: Factura 34 (Exenta) generada/actualizada con éxito en Defontana con folio %s",
-                        order_id,
-                        order.folio_defontana,
-                    )
-                else:
-                    err_msg = (
-                        res_exento.get("message")
-                        or res_exento.get("exceptionMessage")
-                        or res_exento.get("description")
-                        or res_exento.get("detail")
-                        or f"Defontana rechazó la modificación: {res_exento}"
-                    )
-                    if _is_address_error(err_msg) and order.direccion:
-                        logger.warning(
-                            "Pedido %s: Defontana reportó error de dirección en Factura 34 ('%s'). Forzando sincronización y reintentando...",
+                # Intentar actualización in-place con UpdateOrder
+                try:
+                    res_exento = self.update_order(body_exento)
+                    success_exento = bool(res_exento.get("success", False) or res_exento.get("isSuccess", False))
+                    needs_recreate_exento = False
+
+                    if success_exento:
+                        # Verificar si Defontana realmente aplicó la actualización de líneas o la ignoró
+                        try:
+                            get_res = self.get_order(folio_num)
+                            order_data = get_res.get("orderData") if isinstance(get_res, dict) else None
+                            if order_data and "details" in order_data:
+                                remote_details = order_data.get("details") or []
+                                remote_count = sum(float(d.get("count", 0)) for d in remote_details)
+                                if abs(remote_count - expected_count_exento) > 0.001:
+                                    logger.warning(
+                                        "Pedido %s: Defontana UpdateOrder (Exento) retornó éxito pero no aplicó las líneas (remoto %s vs esperado %s). Procediendo a recreación.",
+                                        order_id,
+                                        remote_count,
+                                        expected_count_exento,
+                                    )
+                                    needs_recreate_exento = True
+                                else:
+                                    logger.info(
+                                        "Pedido %s: Modificación in-place Factura 34 en Defontana verificada (Folio %s, Cantidad total %s).",
+                                        order_id,
+                                        folio_num,
+                                        remote_count,
+                                    )
+                        except Exception as get_err:
+                            logger.info("No fue posible verificar líneas Factura 34 con GetOrder (se asume éxito in-place): %s", get_err)
+                    if not success_exento:
+                        err_msg = (
+                            res_exento.get("message")
+                            or res_exento.get("exceptionMessage")
+                            or res_afecto.get("description")
+                            or res_exento.get("detail")
+                            or str(res_exento)
+                        )
+                        if _is_address_error(err_msg) and order.direccion:
+                            self.update_client(order.cliente, order.direccion, client_data=client_data)
+                            res_exento = self.update_order(body_exento)
+                            success_exento = bool(res_exento.get("success", False) or res_exento.get("isSuccess", False))
+
+                        if not success_exento:
+                            errors.append(f"Factura 34: {err_msg}")
+                            sync_ok = False
+
+                    # Si UpdateOrder retornó éxito pero no aplicó las líneas en el ERP, recrear pedido
+                    if success_exento and needs_recreate_exento:
+                        logger.info("Pedido %s: Recreando pedido Factura 34 en Defontana para actualizar productos...", order_id)
+                        del_res = self.delete_order(folio_num)
+                        del_ok = bool(isinstance(del_res, dict) and (del_res.get("success", False) or del_res.get("isSuccess", False)))
+                        if not del_ok:
+                            del_msg = (del_res.get("message") or del_res.get("exceptionMessage") or str(del_res)) if isinstance(del_res, dict) else str(del_res)
+                            errors.append(f"Factura 34: Defontana no permite modificar el pedido #{folio_num}: {del_msg}")
+                            sync_ok = False
+                        else:
+                            body_save = dict(body_exento)
+                            body_save["documentTypeId"] = "fveelect"
+                            body_save.pop("number", None)
+                            save_res = self.save_order(body_save)
+                            if save_res.get("success", False) or save_res.get("isSuccess", False):
+                                new_folio = save_res.get("folio") or save_res.get("number")
+                                if new_folio:
+                                    order.folio_defontana = int(new_folio)
+                                logger.info(
+                                    "Pedido %s: Factura 34 recreada exitosamente en Defontana con folio %s",
+                                    order_id,
+                                    order.folio_defontana,
+                                )
+                            else:
+                                save_err = save_res.get("message") or save_res.get("exceptionMessage") or str(save_res)
+                                errors.append(f"Factura 34: Error al recrear en Defontana: {save_err}")
+                                sync_ok = False
+                except Exception as exc:
+                    err_msg = _extract_defontana_error(exc)
+                    errors.append(f"Factura 34: {err_msg}")
+                    sync_ok = False
+            else:
+                # Creación normal Factura 34 con SaveOrder
+                try:
+                    res_exento = self.save_order(body_exento)
+                    success_exento = bool(res_exento.get("success", False) or res_exento.get("isSuccess", False))
+                    if success_exento:
+                        new_folio = res_exento.get("folio") or res_exento.get("number")
+                        if new_folio:
+                            order.folio_defontana = int(new_folio)
+                        logger.info(
+                            "Pedido %s: Factura 34 (Exenta) generada con éxito en Defontana con folio %s",
                             order_id,
-                            err_msg,
+                            order.folio_defontana,
                         )
-                        self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_exento, is_update=is_exento_update)
-                        retry_success = bool(
-                            retry_res.get("success", False)
-                            or retry_res.get("isSuccess", False)
-                            or retry_res.get("status") in (200, 201)
+                    else:
+                        err_msg = (
+                            res_exento.get("message")
+                            or res_exento.get("exceptionMessage")
+                            or res_exento.get("description")
+                            or res_exento.get("detail")
+                            or f"Defontana rechazó la creación: {res_exento}"
                         )
-                        if retry_success:
-                            new_folio = retry_res.get("folio") or retry_res.get("number")
-                            if new_folio:
-                                order.folio_defontana = int(new_folio)
-                            logger.info(
-                                "Pedido %s: Reintento de Factura 34 tras sincronizar dirección exitoso (Folio %s)",
-                                order_id,
-                                new_folio or order.folio_defontana,
-                            )
-                            err_msg = None
+                        if _is_address_error(err_msg) and order.direccion:
+                            self.update_client(order.cliente, order.direccion, client_data=client_data)
+                            res_exento = self.save_order(body_exento)
+                            if res_exento.get("success", False) or res_exento.get("isSuccess", False):
+                                new_folio = res_exento.get("folio") or res_exento.get("number")
+                                if new_folio:
+                                    order.folio_defontana = int(new_folio)
+                                err_msg = None
+                        if err_msg:
+                            errors.append(f"Factura 34: {err_msg}")
+                            sync_ok = False
+                except Exception as exc:
+                    err_msg = _extract_defontana_error(exc)
+                    if _is_address_error(err_msg) and order.direccion:
+                        try:
+                            self.update_client(order.cliente, order.direccion, client_data=client_data)
+                            res_exento = self.save_order(body_exento)
+                            if res_exento.get("success", False) or res_exento.get("isSuccess", False):
+                                new_folio = res_exento.get("folio") or res_exento.get("number")
+                                if new_folio:
+                                    order.folio_defontana = int(new_folio)
+                                err_msg = None
+                        except Exception as retry_exc:
+                            err_msg = _extract_defontana_error(retry_exc)
                     if err_msg:
                         errors.append(f"Factura 34: {err_msg}")
                         sync_ok = False
-            except Exception as exc:
-                err_msg = _extract_defontana_error(exc)
-                if _is_address_error(err_msg) and order.direccion:
-                    try:
-                        logger.warning(
-                            "Pedido %s: Excepción de dirección en Defontana Factura 34 ('%s'). Forzando sincronización y reintentando...",
-                            order_id,
-                            err_msg,
-                        )
-                        self.update_client(order.cliente, order.direccion, client_data=client_data)
-                        retry_res = self.save_or_update_order(body_exento, is_update=is_exento_update)
-                        retry_success = bool(
-                            retry_res.get("success", False)
-                            or retry_res.get("isSuccess", False)
-                            or retry_res.get("status") in (200, 201)
-                        )
-                        if retry_success:
-                            new_folio = retry_res.get("folio") or retry_res.get("number")
-                            if new_folio:
-                                order.folio_defontana = int(new_folio)
-                            logger.info(
-                                "Pedido %s: Reintento tras excepción de dirección en Factura 34 exitoso (Folio %s)",
-                                order_id,
-                                new_folio or order.folio_defontana,
-                            )
-                            err_msg = None
-                    except Exception as retry_exc:
-                        err_msg = _extract_defontana_error(retry_exc)
-                if err_msg:
-                    errors.append(f"Factura 34: {err_msg}")
-                    sync_ok = False
 
         # Actualizar estado del pedido
         primary_folio = order.folio_defontana_afecto or order.folio_defontana

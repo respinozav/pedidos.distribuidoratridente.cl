@@ -117,7 +117,27 @@ export function getStoredSession() {
       return null;
     }
 
-    return { token, role, customer, adminProfile, payload };
+    // Aislamiento estricto de roles basado en el token criptográfico JWT
+    const tokenRole = (payload.role || "").toUpperCase();
+    if (tokenRole === "CLIENTE") {
+      // Un token de cliente jamás debe operar como admin ni acceder a vistas administrativas
+      if (role === "admin") {
+        try {
+          localStorage.setItem(STORAGE_KEY_ROLE, "customer");
+          localStorage.removeItem(STORAGE_KEY_ADMIN_PROFILE);
+        } catch {}
+      }
+      return { token, role: "customer", customer, adminProfile: null, payload };
+    } else {
+      // Token administrativo (ADMINISTRADOR, COLABORADOR, VENDEDOR)
+      if (role === "customer") {
+        try {
+          localStorage.setItem(STORAGE_KEY_ROLE, "admin");
+          localStorage.removeItem(STORAGE_KEY_CUSTOMER);
+        } catch {}
+      }
+      return { token, role: "admin", customer: null, adminProfile, payload };
+    }
   } catch {
     clearSessionStorage();
     return null;
@@ -173,7 +193,7 @@ api.interceptors.response.use(
     // No interceptar intentos fallidos en el formulario de login inicial
     const isLoginEndpoint = url.includes("/login") || url.includes("/clientes/login");
 
-    if (status === 401 && !isLoginEndpoint && currentToken) {
+    if ((status === 401 || status === 403) && !isLoginEndpoint && currentToken) {
       setAdminToken(null);
       clearSessionStorage();
       if (onAuthExpiredCallback) {
@@ -181,8 +201,10 @@ api.interceptors.response.use(
       }
       Swal.fire({
         icon: "warning",
-        title: "Sesión caducada",
-        text: "Tu sesión ha expirado por límite de tiempo. Por favor ingresa nuevamente con tus credenciales.",
+        title: status === 403 ? "Acceso denegado" : "Sesión caducada",
+        text: status === 403
+          ? "No tienes permisos para acceder a esta sección. Tu sesión ha sido cerrada por seguridad."
+          : "Tu sesión ha expirado por límite de tiempo. Por favor ingresa nuevamente con tus credenciales.",
         confirmButtonText: "Iniciar sesión",
         confirmButtonColor: "#0d6efd",
         allowOutsideClick: false,

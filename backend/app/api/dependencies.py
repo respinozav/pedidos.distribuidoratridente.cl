@@ -29,6 +29,14 @@ def get_current_admin(
             leeway=60,
         )
         user_id = UUID(payload["sub"])
+        token_role = str(payload.get("role", "")).strip().upper()
+        if token_role == "CLIENTE":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Acceso denegado: las credenciales de cliente no tienen permisos para funciones administrativas",
+            )
+    except HTTPException:
+        raise
     except (jwt.PyJWTError, KeyError, ValueError) as error:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token invalido") from error
     user = database.scalar(
@@ -38,6 +46,8 @@ def get_current_admin(
     )
     if not user or not user.activo:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no autorizado")
+    if user.rol and user.rol.nombre.strip().upper() == "CLIENTE":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso restringido a personal interno")
     return user
 
 
