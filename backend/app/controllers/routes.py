@@ -1155,6 +1155,7 @@ def interpretar_dictado_pedido(
         texto=payload.texto,
         cliente_id=payload.cliente_id,
         db=database,
+        estado_conversacion=payload.estado_conversacion,
     )
 
 

@@ -9,11 +9,21 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.entities import Cliente, Producto
 from app.schemas.dto import (
+    DictadoClienteCandidato,
     DictadoItemInterpretado,
     DictadoInterpretadoOutput,
     DictadoProductoMatch,
 )
 from app.services.pricing import customer_product_box_price, customer_product_price
+
+
+def pesos_a_voz(monto: Decimal | int | float) -> str:
+    """Convierte un monto numérico a formato ideal para síntesis de voz (TTS)."""
+    try:
+        val = int(round(float(monto)))
+        return f"${val:,}".replace(",", ".")
+    except Exception:
+        return f"${monto}"
 
 NUMEROS_PALABRAS: dict[str, int] = {
     "un": 1,
@@ -132,32 +142,95 @@ def normalizar_texto(texto: str) -> str:
 
 class AsistentePedidoService:
     @classmethod
-    def detectar_cliente(cls, texto_normalizado: str, db: Session) -> tuple[Cliente | None, str]:
+    def detectar_comando(cls, texto_normalizado: str) -> tuple[str | None, str | None]:
         """
-        Intenta detectar si el dictado contiene una mención de cliente:
-        Ej: "generame un pedido a nombre de minimarket san jorge los siguientes productos..."
-        Retorna (Cliente encontrado o None, texto restante sin el prefijo del cliente).
+        Detecta comandos por voz:
+        - 'finalizar', 'terminar', 'listo', 'eso es todo', 'cerrar pedido', 'revisar' -> ('finalizar', None)
+        - 'confirmar', 'emitir', 'emitir pedido', 'enviar pedido', 'si confirmar', 'dale' -> ('confirmar', None)
+        - 'eliminar <producto>', 'quita <producto>', 'borra <producto>' -> ('eliminar', producto)
+        - 'vaciar', 'vaciar pedido', 'borrar todo', 'empezar de nuevo', 'reiniciar' -> ('vaciar', None)
+        """
+        t = texto_normalizado.strip()
+        if not t:
+            return None, None
+
+        # Comandos de confirmación final
+        patrones_confirmar = [
+            r"^(?:si\s+)?(?:confirmar|emitir|enviar)(?:\s+el)?(?:\s+pedido)?$",
+            r"^(?:si|dale|proceder|listo\s+para\s+emitir|emitelo|confirmalo)$",
+            r"^si\s+por\s+favor$",
+        ]
+        for pat in patrones_confirmar:
+            if re.search(pat, t):
+                return "confirmar", None
+
+        # Comandos de finalización / revisión
+        patrones_finalizar = [
+            r"^(?:finalizar|terminar|cerrar)(?:\s+el)?(?:\s+pedido)?$",
+            r"^(?:listo|eso\s+es\s+todo|no\s+mas|nada\s+mas|ya\s+termine|completar\s+pedido)$",
+            r"^(?:revisar|ver\s+resumen)$",
+        ]
+        for pat in patrones_finalizar:
+            if re.search(pat, t):
+                return "finalizar", None
+
+        # Comandos de eliminación
+        m_eliminar = re.search(
+            r"^(?:eliminar|quita|quitar|borra|borrar|saca|sacar)\s+(?:el\s+|la\s+|los\s+|las\s+)?(.+)$",
+            t,
+        )
+        if m_eliminar:
+            prod_term = m_eliminar.group(1).strip()
+            prod_term = re.sub(r"\s+del\s+pedido$", "", prod_term).strip()
+            if prod_term:
+                return "eliminar", prod_term
+
+        # Comandos de vaciado / reinicio
+        if t in {
+            "vaciar",
+            "vaciar pedido",
+            "borrar todo",
+            "empezar de nuevo",
+            "reiniciar",
+            "limpiar pedido",
+        }:
+            return "vaciar", None
+
+        return None, None
+
+    @classmethod
+    def detectar_candidatos_cliente(
+        cls, texto: str, db: Session
+    ) -> tuple[Cliente | None, str, list[Cliente]]:
+        """
+        Detecta cliente a partir del dictado y devuelve (mejor_cliente, texto_restante, lista_candidatos).
+        Permite tanto frases con prefijo ('pedido para X') como frases directas ('X').
         """
         patrones = [
-            r"(?:generame|genera|crear|haz|hacer)?\s*(?:un\s+)?pedido\s+(?:a\s+nombre\s+de|para\s+el\s+cliente|para\s+cliente|para)\s+([a-zA-Z0-9\s\.\-]+?)(?:\s+(?:los\s+siguientes|con\s+los|y\s+los|productos|con|que\s+lleve|:)|$)",
-            r"(?:a\s+nombre\s+de|cliente)\s+([a-zA-Z0-9\s\.\-]+?)(?:\s+(?:los\s+siguientes|con\s+los|y\s+los|productos|con|que\s+lleve|:)|$)",
+            r"(?:generame|genera|crear|haz|hacer)?\s*(?:un\s+)?pedido\s+(?:a\s+nombre\s+de|para\s+el\s+cliente|para\s+cliente|para)\s+([a-zA-Z0-9\s\.\-]+?)(?:\s+(?:los\s+siguientes\s+productos|los\s+siguientes|con\s+los|y\s+los|productos|con|que\s+lleve|:)|$)",
+            r"(?:a\s+nombre\s+de|cliente)\s+([a-zA-Z0-9\s\.\-]+?)(?:\s+(?:los\s+siguientes\s+productos|los\s+siguientes|con\s+los|y\s+los|productos|con|que\s+lleve|:)|$)",
         ]
 
-        texto_restante = texto_normalizado
+        texto_restante = texto
         candidato_nombre = ""
 
         for patron in patrones:
-            match = re.search(patron, texto_normalizado)
+            match = re.search(patron, texto, flags=re.IGNORECASE)
             if match:
                 candidato_nombre = match.group(1).strip()
-                # Recortar el prefijo del cliente del texto del dictado
-                texto_restante = texto_normalizado[match.end():].strip()
+                texto_restante = texto[match.end():].strip()
+                # Limpiar residuos iniciales si quedaron
+                texto_restante = re.sub(r"^(?:productos|los siguientes|los siguientes productos|con|y)\s*", "", texto_restante, flags=re.IGNORECASE).strip()
                 break
 
-        if not candidato_nombre or len(candidato_nombre) < 2:
-            return None, texto_normalizado
+        # Si no hubo prefijo explícito pero el texto es corto, evaluarlo directamente como candidato
+        if not candidato_nombre and len(texto.strip()) <= 60:
+            candidato_nombre = texto.strip()
+            texto_restante = ""
 
-        # Buscar cliente en base de datos por alias, nombre o rut
+        if not candidato_nombre or len(candidato_nombre) < 2:
+            return None, texto, []
+
         clientes_activos = list(
             db.scalars(
                 select(Cliente)
@@ -169,35 +242,59 @@ class AsistentePedidoService:
         cand_norm = normalizar_texto(candidato_nombre)
         cand_tokens = set(cand_norm.split())
 
-        mejor_cliente = None
-        mejor_score = 0.0
+        ranking: list[tuple[float, Cliente]] = []
 
         for c in clientes_activos:
             score = 0.0
-            alias_norm = normalizar_texto(c.alias or "")
-            nombre_norm = normalizar_texto(c.nombre or "")
-            rut_norm = normalizar_texto(c.rut or "").replace("-", "").replace(".", "")
+            alias_val = getattr(c, "alias", None) or ""
+            nombre_val = getattr(c, "nombre", None) or ""
+            rut_val = getattr(c, "rut", None) or ""
 
-            if cand_norm in alias_norm or alias_norm in cand_norm:
+            alias_norm = normalizar_texto(alias_val)
+            nombre_norm = normalizar_texto(nombre_val)
+            rut_norm = normalizar_texto(rut_val).replace("-", "").replace(".", "")
+
+            if cand_norm == alias_norm or cand_norm == nombre_norm:
+                score = 100.0
+            elif cand_norm in alias_norm or alias_norm in cand_norm:
                 score = max(score, 90.0)
-            if cand_norm in nombre_norm or nombre_norm in cand_norm:
+            elif cand_norm in nombre_norm or nombre_norm in cand_norm:
                 score = max(score, 85.0)
-            if cand_norm == rut_norm or cand_norm in rut_norm:
-                score = max(score, 95.0)
 
-            # Coincidencia por tokens
-            alias_tokens = set(alias_norm.split())
+            if rut_norm and (cand_norm == rut_norm or cand_norm in rut_norm):
+                score = max(score, 98.0)
+
+            alias_tokens = set(alias_norm.split()).union(set(nombre_norm.split()))
             if cand_tokens and alias_tokens:
                 comunes = cand_tokens.intersection(alias_tokens)
                 if comunes:
                     pct = (len(comunes) / len(cand_tokens)) * 80.0
                     score = max(score, pct)
 
-            if score > mejor_score and score >= 60.0:
-                mejor_score = score
-                mejor_cliente = c
+            if score >= 55.0:
+                ranking.append((score, c))
 
-        return mejor_cliente, texto_restante if mejor_cliente else texto_normalizado
+        ranking.sort(key=lambda x: x[0], reverse=True)
+
+        if not ranking:
+            return None, texto, []
+
+        top_score, top_cliente = ranking[0]
+        if top_score >= 80.0:
+            if len(ranking) == 1 or (top_score - ranking[1][0] >= 15.0):
+                return top_cliente, texto_restante, []
+
+        candidatos = [c for _, c in ranking[:4]]
+        return None, texto_restante, candidatos
+
+    @classmethod
+    def detectar_cliente(cls, texto: str, db: Session) -> tuple[Cliente | None, str]:
+        """
+        Retorna (Cliente encontrado o None, texto restante).
+        Mantiene compatibilidad estricta con llamados existentes.
+        """
+        cliente, texto_rest, _ = cls.detectar_candidatos_cliente(texto, db)
+        return cliente, texto_rest if cliente else texto
 
     @classmethod
     def segmentar_clausulas(cls, texto: str) -> list[str]:
@@ -218,16 +315,14 @@ class AsistentePedidoService:
         return partes
 
     @classmethod
-    def extraer_cantidad_y_empaque(cls, frase: str) -> tuple[int, str, str]:
+    def extraer_cantidad_y_empaque_detallado(cls, frase: str) -> tuple[int, str, str, bool]:
         """
-        Extrae la cantidad numérica y el tipo de empaque ('unidad' o 'caja').
-        Prioriza pares <cantidad> <empaque> para no confundir números del nombre del producto
-        (ej: 'Pall Mall Azul 20 2 cartones', 'Bolsa 35x45 5 unidades').
-        Retorna (cantidad, tipo_empaque, termino_limpio_para_buscar).
+        Extrae la cantidad numérica, tipo de empaque ('unidad' o 'caja'), término limpio y si la cantidad fue explícita.
+        Retorna (cantidad, tipo_empaque, termino_limpio, cantidad_explicita).
         """
         texto_norm = normalizar_texto(frase)
         if not texto_norm:
-            return 1, "unidad", ""
+            return 1, "unidad", "", False
 
         cantidad = 1
         tipo_empaque = "unidad"
@@ -286,6 +381,8 @@ class AsistentePedidoService:
                 cantidad = int(num_str) if num_str.isdigit() else NUMEROS_PALABRAS.get(num_str, 1)
                 sub_eliminado = m_inicio.group(0)
 
+        cantidad_explicita = bool(sub_eliminado)
+
         # Limpiar la frase de la cantidad/empaque extraído
         if sub_eliminado:
             texto_limpio = texto_norm.replace(sub_eliminado, " ", 1)
@@ -296,7 +393,15 @@ class AsistentePedidoService:
         tokens_finales = [t for t in tokens if t not in STOPWORDS]
         termino_final = " ".join(tokens_finales).strip()
 
-        return max(1, cantidad), tipo_empaque, termino_final
+        return max(1, cantidad), tipo_empaque, termino_final, cantidad_explicita
+
+    @classmethod
+    def extraer_cantidad_y_empaque(cls, frase: str) -> tuple[int, str, str]:
+        """
+        Mantiene compatibilidad hacia atrás devolviendo (cantidad, tipo_empaque, termino_limpio).
+        """
+        cant, emp, term, _ = cls.extraer_cantidad_y_empaque_detallado(frase)
+        return cant, emp, term
 
     @classmethod
     def buscar_producto_en_catalogo(
@@ -399,31 +504,117 @@ class AsistentePedidoService:
         texto: str,
         cliente_id: UUID | None,
         db: Session,
+        estado_conversacion: str | None = None,
     ) -> DictadoInterpretadoOutput:
         """
         Orquesta la interpretación de voz/texto para armado de pedidos:
-        - Detecta cliente si viene en la frase.
+        - Detecta comandos de voz (finalizar, confirmar, eliminar, vaciar).
+        - Detecta cliente si viene en la frase o si estamos en paso de cliente.
         - Segmenta y procesa cada producto dictado con cantidad y unidad/caja.
-        - Resuelve coincidencias en catálogo o desambiguación.
+        - Detecta productos que requieren confirmación de cantidad o desambiguación.
+        - Retorna mensajes de síntesis de voz (TTS) optimizados en lenguaje natural.
         """
+        texto_limpio = texto.strip()
+        texto_norm = normalizar_texto(texto_limpio)
+
+        # 1. Detección de Comandos por Voz
+        cmd, param = cls.detectar_comando(texto_norm)
+        if cmd == "finalizar":
+            return DictadoInterpretadoOutput(
+                cliente_detectado_id=cliente_id,
+                comando_detectado="finalizar",
+                estado_conversacion="CONFIRMACION_FINAL",
+                mensaje_asistente="Pedido listo para revisión final. ¿Deseas confirmar la emisión a Defontana?",
+                mensaje_voz="¿Deseas confirmar la emisión del pedido a Defontana?",
+            )
+        elif cmd == "confirmar":
+            return DictadoInterpretadoOutput(
+                cliente_detectado_id=cliente_id,
+                comando_detectado="confirmar",
+                estado_conversacion="CONFIRMANDO",
+                mensaje_asistente="Confirmando y emitiendo pedido a Defontana...",
+                mensaje_voz="Emitiendo pedido a Defontana.",
+            )
+        elif cmd == "eliminar":
+            return DictadoInterpretadoOutput(
+                cliente_detectado_id=cliente_id,
+                comando_detectado="eliminar",
+                parametro_comando=param,
+                estado_conversacion=estado_conversacion or "ESPERANDO_PRODUCTOS",
+                mensaje_asistente=f"Eliminando producto '{param}' del pedido.",
+                mensaje_voz=f"Eliminado {param} del pedido.",
+            )
+        elif cmd == "vaciar":
+            return DictadoInterpretadoOutput(
+                cliente_detectado_id=cliente_id,
+                comando_detectado="vaciar",
+                estado_conversacion="ESPERANDO_PRODUCTOS",
+                mensaje_asistente="Se ha vaciado el borrador del pedido.",
+                mensaje_voz="He vaciado el borrador del pedido. ¿Qué productos deseas agregar?",
+            )
+
         cliente: Cliente | None = None
         if cliente_id:
             cliente = db.get(Cliente, cliente_id)
 
-        texto_trabajo = texto.strip()
-
-        # Si no venía cliente seleccionado, intentar detectarlo del dictado
+        texto_trabajo = texto_limpio
         cliente_detectado_id = None
         cliente_detectado_nombre = None
+        clientes_candidatos_dto: list[DictadoClienteCandidato] = []
+
+        # 2. Detección de Cliente si no venía seleccionado
         if not cliente:
-            cliente_detectado, texto_restante = cls.detectar_cliente(texto_trabajo, db)
+            cliente_detectado, texto_restante, cands = cls.detectar_candidatos_cliente(texto_trabajo, db)
             if cliente_detectado:
                 cliente = cliente_detectado
                 cliente_detectado_id = cliente.id
                 cliente_detectado_nombre = cliente.alias or cliente.nombre or cliente.rut
                 texto_trabajo = texto_restante
+                # Si el usuario solo dictó el cliente y nada más
+                if not texto_restante or len(texto_restante) < 3:
+                    return DictadoInterpretadoOutput(
+                        cliente_detectado_id=cliente.id,
+                        cliente_detectado_nombre=cliente_detectado_nombre,
+                        estado_conversacion="ESPERANDO_PRODUCTOS",
+                        mensaje_asistente=f"Cliente '{cliente_detectado_nombre}' seleccionado. ¿Qué productos deseas agregar?",
+                        mensaje_voz=f"Cliente {cliente_detectado_nombre} seleccionado. ¿Qué productos y cantidades deseas agregar?",
+                    )
+            elif cands:
+                # Múltiples candidatos encontrados
+                cands_dto = [
+                    DictadoClienteCandidato(id=c.id, nombre=c.nombre, alias=c.alias, rut=c.rut)
+                    for c in cands
+                ]
+                nombres = " o ".join([c.alias or c.nombre for c in cands[:3]])
+                return DictadoInterpretadoOutput(
+                    clientes_candidatos=cands_dto,
+                    estado_conversacion="ESPERANDO_CLIENTE",
+                    mensaje_asistente=f"Encontré varias opciones de cliente: {nombres}. Por favor indica cuál deseas.",
+                    mensaje_voz=f"Encontré varias opciones: {nombres}. ¿Cuál de ellos prefieres?",
+                )
 
-        # Obtener todos los productos activos de la empresa para matching
+        # 3. Caso especial: si estamos esperando cantidad
+        if estado_conversacion == "ESPERANDO_CANTIDAD":
+            cant_resp, emp_resp, _, explicita_resp = cls.extraer_cantidad_y_empaque_detallado(texto_trabajo)
+            if explicita_resp or cant_resp > 1 or emp_resp == "caja":
+                return DictadoInterpretadoOutput(
+                    cliente_detectado_id=cliente_id or (cliente.id if cliente else None),
+                    cliente_detectado_nombre=cliente_detectado_nombre or (cliente.alias or cliente.nombre if cliente else None),
+                    items=[
+                        DictadoItemInterpretado(
+                            termino_original=texto_trabajo,
+                            cantidad=cant_resp,
+                            tipo_empaque=emp_resp,
+                            estado="exacto",
+                            cantidad_explicita=True,
+                        )
+                    ],
+                    estado_conversacion="ESPERANDO_PRODUCTOS",
+                    mensaje_asistente=f"Cantidad registrada: {cant_resp} ({emp_resp}).",
+                    mensaje_voz=f"Registradas {cant_resp} {'cajas' if emp_resp == 'caja' else 'unidades'}.",
+                )
+
+        # 4. Obtener catálogo y procesar productos
         productos_activos = list(
             db.scalars(
                 select(Producto)
@@ -441,7 +632,7 @@ class AsistentePedidoService:
         total_no_encontrados = 0
 
         for frase in clausulas:
-            cant, empaque, termino = cls.extraer_cantidad_y_empaque(frase)
+            cant, empaque, termino, cantidad_explicita = cls.extraer_cantidad_y_empaque_detallado(frase)
             if not termino or len(termino) < 2:
                 continue
 
@@ -464,10 +655,25 @@ class AsistentePedidoService:
                     estado=estado,
                     producto=prod_exacto,
                     opciones=opciones,
+                    cantidad_explicita=cantidad_explicita,
                 )
             )
 
-        # Generar mensaje explicativo del asistente
+        # Caso: Usuario dictó 1 solo producto sin especificar cantidad explícita (ej: "bolsa taco transparente")
+        if len(items_interpretados) == 1:
+            solo_item = items_interpretados[0]
+            if solo_item.estado == "exacto" and not solo_item.cantidad_explicita and solo_item.producto:
+                return DictadoInterpretadoOutput(
+                    cliente_detectado_id=cliente_detectado_id or (cliente.id if cliente else None),
+                    cliente_detectado_nombre=cliente_detectado_nombre or (cliente.alias or cliente.nombre if cliente else None),
+                    items=items_interpretados,
+                    producto_pendiente_cantidad=solo_item.producto,
+                    estado_conversacion="ESPERANDO_CANTIDAD",
+                    mensaje_asistente=f"Encontré '{solo_item.producto.nombre}'. ¿Cuántas unidades o paquetes deseas agregar?",
+                    mensaje_voz=f"Encontré {solo_item.producto.nombre}. ¿Cuántas unidades o paquetes deseas agregar?",
+                )
+
+        # Generar mensajes para el asistente y síntesis de voz (TTS)
         partes_resumen = []
         if total_exactos > 0:
             partes_resumen.append(f"{total_exactos} producto{'s' if total_exactos > 1 else ''} agregado{'s' if total_exactos > 1 else ''}")
@@ -479,9 +685,30 @@ class AsistentePedidoService:
         resumen_texto = ", ".join(partes_resumen) if partes_resumen else "No se detectaron productos en el dictado."
         mensaje = f"He procesado tu dictado: {resumen_texto}."
 
+        # Construir mensaje de voz natural
+        estado_conv_siguiente = "ESPERANDO_PRODUCTOS"
+        if total_multiples > 0:
+            estado_conv_siguiente = "DESAMBIGUAR_PRODUCTO"
+            primer_multiple = next((it for it in items_interpretados if it.estado == "multiple"), None)
+            opc_nombres = " o ".join([op.nombre for op in (primer_multiple.opciones[:2] if primer_multiple else [])])
+            mensaje_voz = f"Para {primer_multiple.termino_original if primer_multiple else 'el producto'} encontré opciones: {opc_nombres}. ¿Cuál prefieres?"
+        elif total_exactos == 1 and len(items_interpretados) == 1:
+            it = items_interpretados[0]
+            emp_nombre = "cajas" if it.tipo_empaque == "caja" else "unidades"
+            mensaje_voz = f"Agregado {it.cantidad} {emp_nombre} de {it.producto.nombre if it.producto else 'producto'}. ¿Deseas agregar más productos o finalizar el pedido?"
+        elif total_exactos > 1:
+            mensaje_voz = f"Agregados {total_exactos} productos al pedido. ¿Deseas agregar más productos o finalizar?"
+        elif total_no_encontrados > 0:
+            mensaje_voz = f"No encontré el producto solicitado en el catálogo. ¿Podrías indicarme el nombre o código de otra forma?"
+        else:
+            mensaje_voz = "No pude entender los productos. Por favor repítemelos con su cantidad."
+
         return DictadoInterpretadoOutput(
             cliente_detectado_id=cliente_detectado_id or (cliente.id if cliente else None),
             cliente_detectado_nombre=cliente_detectado_nombre or (cliente.alias or cliente.nombre if cliente else None),
             items=items_interpretados,
             mensaje_asistente=mensaje,
+            mensaje_voz=mensaje_voz,
+            estado_conversacion=estado_conv_siguiente,
+            clientes_candidatos=clientes_candidatos_dto,
         )

@@ -317,11 +317,20 @@ class DictadoItemInterpretado(BaseModel):
     estado: str  # "exacto", "multiple", "no_encontrado"
     producto: DictadoProductoMatch | None = None
     opciones: list[DictadoProductoMatch] = []
+    cantidad_explicita: bool = True  # True si el usuario dictó un número explícito
 
 
 class DictadoInterpretadoInput(BaseModel):
     texto: str = Field(min_length=1)
     cliente_id: UUID | None = None
+    estado_conversacion: str | None = None
+
+
+class DictadoClienteCandidato(BaseModel):
+    id: UUID
+    nombre: str
+    alias: str | None = None
+    rut: str | None = None
 
 
 class DictadoInterpretadoOutput(BaseModel):
@@ -329,6 +338,12 @@ class DictadoInterpretadoOutput(BaseModel):
     cliente_detectado_nombre: str | None = None
     items: list[DictadoItemInterpretado] = []
     mensaje_asistente: str = ""
+    mensaje_voz: str = ""
+    estado_conversacion: str = "ESPERANDO_PRODUCTOS"
+    comando_detectado: str | None = None  # "finalizar", "confirmar", "eliminar", "vaciar", etc.
+    parametro_comando: str | None = None
+    producto_pendiente_cantidad: DictadoProductoMatch | None = None
+    clientes_candidatos: list[DictadoClienteCandidato] = []
 
 
 class OrderUpdateAdmin(BaseModel):

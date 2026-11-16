@@ -220,6 +220,51 @@ def test_asistente_detectar_cliente_y_productos_compuestos():
     assert resultado.items[2].producto.codigo == "KENT-ACT"
 
 
+def test_comandos_de_voz():
+    db = MagicMock()
+    # 1. Comando finalizar
+    r_fin = AsistentePedidoService.interpretar_dictado("finalizar pedido", None, db)
+    assert r_fin.comando_detectado == "finalizar"
+    assert r_fin.estado_conversacion == "CONFIRMACION_FINAL"
+    assert "¿Deseas confirmar" in r_fin.mensaje_voz
+
+    # 2. Comando confirmar
+    r_conf = AsistentePedidoService.interpretar_dictado("si confirmar", None, db)
+    assert r_conf.comando_detectado == "confirmar"
+    assert r_conf.estado_conversacion == "CONFIRMANDO"
+
+    # 3. Comando eliminar
+    r_elim = AsistentePedidoService.interpretar_dictado("eliminar bolsa camiseta", None, db)
+    assert r_elim.comando_detectado == "eliminar"
+    assert r_elim.parametro_comando == "bolsa camiseta"
+    assert "Eliminado bolsa camiseta" in r_elim.mensaje_voz
+
+    # 4. Comando vaciar
+    r_vac = AsistentePedidoService.interpretar_dictado("vaciar pedido", None, db)
+    assert r_vac.comando_detectado == "vaciar"
+
+
+def test_producto_sin_cantidad_solicita_cantidad():
+    db = MagicMock()
+    cat = Categoria(id=uuid4(), nombre="General", porcentaje=Decimal("0.00"), usa_porcentaje_cliente=False)
+    p = Producto(id=uuid4(), categoria=cat, codigo="VASO-500", nombre="VASO TRANSPARENTE 500CC", precio=Decimal("1500.00"), cantidad=100, activo=True)
+    
+    def mock_sc(query):
+        if "clientes" in str(query):
+            return []
+        return [p]
+        
+    db.scalars.side_effect = mock_sc
+    db.get.return_value = None
+
+    # Solo dicta el nombre del producto sin cantidad
+    resultado = AsistentePedidoService.interpretar_dictado("VASO TRANSPARENTE 500CC", None, db)
+    assert resultado.estado_conversacion == "ESPERANDO_CANTIDAD"
+    assert resultado.producto_pendiente_cantidad is not None
+    assert resultado.producto_pendiente_cantidad.codigo == "VASO-500"
+    assert "Cuántas unidades o paquetes deseas agregar" in resultado.mensaje_voz
+
+
 if __name__ == "__main__":
     test_normalizar_texto_y_cantidades()
     print("✓ test_normalizar_texto_y_cantidades PASSED")
@@ -231,4 +276,8 @@ if __name__ == "__main__":
     print("✓ test_interpretar_dictado_completo PASSED")
     test_asistente_detectar_cliente_y_productos_compuestos()
     print("✓ test_asistente_detectar_cliente_y_productos_compuestos PASSED")
+    test_comandos_de_voz()
+    print("✓ test_comandos_de_voz PASSED")
+    test_producto_sin_cantidad_solicita_cantidad()
+    print("✓ test_producto_sin_cantidad_solicita_cantidad PASSED")
     print(">>> ALL ASISTENTE PEDIDO TESTS PASSED SUCCESSFULLY! <<<")
