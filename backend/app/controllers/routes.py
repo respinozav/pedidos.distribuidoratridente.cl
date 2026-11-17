@@ -1023,16 +1023,28 @@ def list_customers(
         .where(Cliente.eliminado_at.is_(None))
     )
     if search and search.strip():
-        q = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
+        clean_search = search.strip()
+        tokens = [t.lower() for t in clean_search.split() if t.strip()]
+        clean_rut = clean_search.replace(".", "").replace("-", "").replace(" ", "").lower()
+
+        for tok in tokens:
+            q = f"%{tok}%"
+            conditions = [
                 func.lower(Cliente.alias).like(q),
                 func.lower(Cliente.nombre).like(q),
                 func.lower(Cliente.rut).like(q),
                 func.lower(Cliente.correo).like(q),
                 func.lower(Cliente.celular).like(q),
-            )
-        )
+            ]
+            if clean_rut and len(clean_rut) >= 2:
+                conditions.append(
+                    func.replace(
+                        func.replace(func.replace(func.lower(Cliente.rut), ".", ""), "-", ""),
+                        " ",
+                        "",
+                    ).like(f"%{clean_rut}%")
+                )
+            stmt = stmt.where(or_(*conditions))
     stmt = stmt.order_by(func.coalesce(Cliente.alias, Cliente.nombre, Cliente.rut).asc())
     return list(database.scalars(stmt))
 

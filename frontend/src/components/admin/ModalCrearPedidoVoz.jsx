@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -30,6 +30,27 @@ const money = new Intl.NumberFormat("es-CL", {
   currency: "CLP",
 });
 
+// Normalización universal: elimina tildes, diacríticos y pasa a minúsculas
+export const normalizarTextoBusqueda = (str) => {
+  if (!str) return "";
+  return str
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+};
+
+export const limpiarRutParaBusqueda = (rut) => {
+  if (!rut) return "";
+  return rut.toString().replace(/[^0-9kK]/g, "").toLowerCase();
+};
+
+export const limpiarTelefonoParaBusqueda = (tel) => {
+  if (!tel) return "";
+  return tel.toString().replace(/[^0-9]/g, "");
+};
+
 export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated }) {
   if (!isOpen) return null;
 
@@ -41,6 +62,7 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
   const [customerAddresses, setCustomerAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [clientCandidates, setClientCandidates] = useState([]);
+  const [searchingBackendCustomers, setSearchingBackendCustomers] = useState(false);
 
   // Estados de Voz y Diálogo Bidireccional
   const [isListening, setIsListening] = useState(false);
@@ -771,21 +793,110 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
     setManualSearchResults(results);
   }, [manualSearch, catalogProducts]);
 
-  // Filtrado de clientes para selector
-  const filteredCustomers = customers.filter((c) => {
-    if (!customerSearch.trim()) return false;
-    const term = customerSearch.toLowerCase();
-    const alias = (c.alias || "").toLowerCase();
-    const nombre = (c.nombre || "").toLowerCase();
-    const rut = (c.rut || "").toLowerCase().replace(/[\.\-]/g, "");
-    const cleanTerm = term.replace(/[\.\-]/g, "");
-    return (
-      alias.includes(term) ||
-      nombre.includes(term) ||
-      rut.includes(cleanTerm) ||
-      (c.celular || "").includes(term)
-    );
-  });
+  // Búsqueda remota complementaria (fallback si no está en la carga inicial)
+  useEffect(() => {
+    const term = customerSearch.trim();
+    if (term.length < 2) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        setSearchingBackendCustomers(true);
+        const { data } = await api.get("/clientes", { params: { search: term } });
+        if (data && data.length > 0) {
+          setCustomers((prev) => {
+            const existingIds = new Set(prev.map((c) => c.id));
+            const newOnes = data.filter((c) => !existingIds.has(c.id));
+            if (newOnes.length > 0) {
+              const updated = [...prev, ...newOnes];
+              customersRef.current = updated;
+              return updated;
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.warn("Error en búsqueda remota de clientes:", err);
+      } finally {
+        setSearchingBackendCustomers(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [customerSearch]);
+
+  // Filtrado de clientes de alta precisión con ranking multi-token y normalización de tildes
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch.trim()) return [];
+
+    const rawTerm = customerSearch.trim();
+    const normTerm = normalizarTextoBusqueda(rawTerm);
+    const termTokens = normTerm.split(/\s+/).filter(Boolean);
+    const cleanRutTerm = limpiarRutParaBusqueda(rawTerm);
+    const cleanPhoneTerm = limpiarTelefonoParaBusqueda(rawTerm);
+
+    const scored = [];
+
+    for (const c of customers) {
+      const aliasNorm = normalizarTextoBusqueda(c.alias || "");
+      const nombreNorm = normalizarTextoBusqueda(c.nombre || "");
+      const rutClean = limpiarRutParaBusqueda(c.rut || "");
+      const phoneClean = limpiarTelefonoParaBusqueda(c.celular || "");
+      const correoNorm = normalizarTextoBusqueda(c.correo || "");
+
+      // Cadena consolidada de búsqueda
+      const fullText = `${aliasNorm} ${nombreNorm} ${correoNorm} ${c.rut || ""} ${c.celular || ""}`;
+
+      let score = 0;
+
+      // 1. Coincidencia exacta de alias o nombre
+      if (aliasNorm === normTerm || nombreNorm === normTerm) {
+        score += 200;
+      }
+      // 2. Prefijo en alias o nombre
+      else if (aliasNorm.startsWith(normTerm) || nombreNorm.startsWith(normTerm)) {
+        score += 150;
+      }
+      // 3. Substring completo
+      else if (aliasNorm.includes(normTerm) || nombreNorm.includes(normTerm)) {
+        score += 100;
+      }
+
+      // 4. Coincidencia por RUT
+      if (cleanRutTerm.length >= 2 && rutClean) {
+        if (rutClean === cleanRutTerm) {
+          score += 180;
+        } else if (rutClean.includes(cleanRutTerm) || cleanRutTerm.includes(rutClean)) {
+          score += 120;
+        }
+      }
+
+      // 5. Coincidencia por Celular
+      if (cleanPhoneTerm.length >= 4 && phoneClean) {
+        if (phoneClean === cleanPhoneTerm) {
+          score += 150;
+        } else if (phoneClean.includes(cleanPhoneTerm)) {
+          score += 90;
+        }
+      }
+
+      // 6. Coincidencia multi-token (cada palabra debe coincidir en algún campo)
+      if (termTokens.length > 0) {
+        const matchingTokens = termTokens.filter((token) => fullText.includes(token));
+        if (matchingTokens.length === termTokens.length) {
+          score += 70 + termTokens.length * 10;
+        } else if (matchingTokens.length > 0 && matchingTokens.length / termTokens.length >= 0.5) {
+          score += 35 * (matchingTokens.length / termTokens.length);
+        }
+      }
+
+      if (score > 0) {
+        scored.push({ customer: c, score });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 15).map((item) => item.customer);
+  }, [customerSearch, customers]);
 
   // Cálculo de totales
   const calcularTotales = (items) => {
@@ -1052,18 +1163,29 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
 
             {!selectedCustomer ? (
               <div className="position-relative">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Buscar o dictar cliente por Razón Social, Alias, RUT o Celular..."
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  autoFocus
-                />
+                <div className="position-relative">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Buscar o dictar cliente por Razón Social, Alias, RUT o Celular..."
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    autoFocus
+                  />
+                  {searchingBackendCustomers && (
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y me-3 text-secondary"
+                      style={{ fontSize: "0.8rem", pointerEvents: "none" }}
+                    >
+                      <RotateCcw size={14} className="animate-spin text-primary" />
+                    </div>
+                  )}
+                </div>
+
                 {filteredCustomers.length > 0 && (
                   <div
                     className="dropdown-menu show w-100 position-absolute shadow mt-1"
-                    style={{ maxHeight: "220px", overflowY: "auto", zIndex: 1070 }}
+                    style={{ maxHeight: "260px", overflowY: "auto", zIndex: 1070 }}
                   >
                     {filteredCustomers.map((c) => (
                       <button
@@ -1074,16 +1196,37 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
                       >
                         <div>
                           <strong>{c.alias || c.nombre}</strong>
-                          {c.alias && c.nombre && (
+                          {c.alias && c.nombre && c.alias !== c.nombre && (
                             <small className="text-muted d-block">{c.nombre}</small>
                           )}
-                          <small className="text-secondary">{c.rut || "Sin RUT"}</small>
+                          <div className="d-flex align-items-center gap-2 mt-1">
+                            <span className="badge bg-light text-secondary border" style={{ fontSize: "0.75rem" }}>
+                              {c.rut || "Sin RUT"}
+                            </span>
+                            {c.celular && (
+                              <small className="text-secondary" style={{ fontSize: "0.75rem" }}>
+                                Tel: {c.celular}
+                              </small>
+                            )}
+                          </div>
                         </div>
                         <span className="badge bg-light text-dark border">
                           {c.porcentaje ? `${c.porcentaje}% desc.` : "Precio lista"}
                         </span>
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {customerSearch.trim().length >= 2 && filteredCustomers.length === 0 && !searchingBackendCustomers && (
+                  <div
+                    className="dropdown-menu show w-100 position-absolute shadow mt-1 p-3 text-center text-secondary small"
+                    style={{ zIndex: 1070 }}
+                  >
+                    No se encontraron clientes para "<strong>{customerSearch}</strong>".
+                    <div className="text-muted mt-1" style={{ fontSize: "0.75rem" }}>
+                      Intenta con otra palabra, alias o solo los números del RUT.
+                    </div>
                   </div>
                 )}
 

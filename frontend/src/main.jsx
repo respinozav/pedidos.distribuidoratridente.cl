@@ -1743,7 +1743,7 @@ function AdminOrderManager({ initialOpenCrearPedidoVoz = false, onResetInitialOp
     }));
   }
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><button type="button" className="btn btn-primary d-flex align-items-center gap-2 shadow-sm" onClick={() => setIsCreateVoiceModalOpen(true)}><Mic size={17} /><span>Crear Pedido con Voz / IA</span></button><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, cliente, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="admin-order-filters"><label className="filter-estado">Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Alias, nombre, RUT o celular..." value={filters.cliente} onChange={(event) => setFilters((current) => ({ ...current, cliente: event.target.value }))} /></label><label className="filter-pedido">Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label className="filter-desde">Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label className="filter-hasta">Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><button type="button" className="btn btn-primary d-flex align-items-center gap-2 shadow-sm" onClick={() => setIsCreateVoiceModalOpen(true)}><Plus size={17} /><span>Realizar pedido</span></button><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, cliente, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="admin-order-filters"><label className="filter-estado">Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Alias, nombre, RUT o celular..." value={filters.cliente} onChange={(event) => setFilters((current) => ({ ...current, cliente: event.target.value }))} /></label><label className="filter-pedido">Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label className="filter-desde">Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label className="filter-hasta">Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
     const stateName = getOrderStateName(order);
     const customerName = order.cliente?.alias || order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     const customerSub = order.cliente?.alias
@@ -2448,20 +2448,19 @@ const [loading, setLoading] = useState(true);
                           setMenuOpen(false);
                         }}
                       >
-                        <ClipboardList size={16} />
-                        <span>Listado de pedidos</span>
+                        <ClipboardList size={17} />
+                        <span>Pedidos</span>
                       </button>
                       <button
-                        className="d-flex align-items-center gap-2"
+                        className={activeSection === "orders" && initialOpenCrearPedidoVoz ? "active" : ""}
                         onClick={() => {
                           setSection("orders");
                           setInitialOpenCrearPedidoVoz(true);
                           setMenuOpen(false);
                         }}
-                        style={{ color: "#2563eb", fontWeight: 600 }}
                       >
-                        <Mic size={16} />
-                        <span>➕ Crear con Voz / IA</span>
+                        <Plus size={17} />
+                        <span>Realizar pedido</span>
                       </button>
                     </div>
                   )}

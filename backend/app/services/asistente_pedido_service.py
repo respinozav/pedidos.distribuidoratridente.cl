@@ -128,6 +128,39 @@ STOPWORDS: set[str] = {
 }
 
 
+CLIENTE_FILLER_WORDS: set[str] = {
+    "de",
+    "del",
+    "el",
+    "la",
+    "los",
+    "las",
+    "un",
+    "una",
+    "unos",
+    "unas",
+    "don",
+    "dona",
+    "sr",
+    "sra",
+    "almacen",
+    "almacenes",
+    "minimarket",
+    "market",
+    "botilleria",
+    "botillerias",
+    "comercial",
+    "distribuidora",
+    "negocio",
+    "local",
+    "tienda",
+    "spa",
+    "ltda",
+    "eirl",
+    "sociedad",
+}
+
+
 def normalizar_texto(texto: str) -> str:
     """Normaliza un texto eliminando tildes, caracteres especiales y pasando a minúsculas."""
     if not texto:
@@ -241,6 +274,8 @@ class AsistentePedidoService:
 
         cand_norm = normalizar_texto(candidato_nombre)
         cand_tokens = set(cand_norm.split())
+        cand_significativos = {t for t in cand_tokens if t not in CLIENTE_FILLER_WORDS} or cand_tokens
+        cand_rut_clean = re.sub(r"[^0-9k]", "", cand_norm)
 
         ranking: list[tuple[float, Cliente]] = []
 
@@ -249,11 +284,15 @@ class AsistentePedidoService:
             alias_val = getattr(c, "alias", None) or ""
             nombre_val = getattr(c, "nombre", None) or ""
             rut_val = getattr(c, "rut", None) or ""
+            celular_val = getattr(c, "celular", None) or ""
 
             alias_norm = normalizar_texto(alias_val)
             nombre_norm = normalizar_texto(nombre_val)
             rut_norm = normalizar_texto(rut_val).replace("-", "").replace(".", "")
+            rut_clean = re.sub(r"[^0-9k]", "", rut_norm)
+            celular_clean = re.sub(r"[^0-9]", "", celular_val)
 
+            # 1. Coincidencia exacta de alias o nombre
             if cand_norm == alias_norm or cand_norm == nombre_norm:
                 score = 100.0
             elif cand_norm in alias_norm or alias_norm in cand_norm:
@@ -261,17 +300,27 @@ class AsistentePedidoService:
             elif cand_norm in nombre_norm or nombre_norm in cand_norm:
                 score = max(score, 85.0)
 
-            if rut_norm and (cand_norm == rut_norm or cand_norm in rut_norm):
-                score = max(score, 98.0)
+            # 2. Coincidencia por RUT
+            if cand_rut_clean and rut_clean and len(cand_rut_clean) >= 4:
+                if cand_rut_clean == rut_clean:
+                    score = max(score, 100.0)
+                elif cand_rut_clean in rut_clean or rut_clean in cand_rut_clean:
+                    score = max(score, 95.0)
 
+            # 3. Coincidencia por Celular
+            if celular_clean and len(cand_rut_clean) >= 6 and cand_rut_clean in celular_clean:
+                score = max(score, 92.0)
+
+            # 4. Coincidencia por tokens significativos
             alias_tokens = set(alias_norm.split()).union(set(nombre_norm.split()))
-            if cand_tokens and alias_tokens:
-                comunes = cand_tokens.intersection(alias_tokens)
+            alias_significativos = {t for t in alias_tokens if t not in CLIENTE_FILLER_WORDS} or alias_tokens
+            if cand_significativos and alias_significativos:
+                comunes = cand_significativos.intersection(alias_significativos)
                 if comunes:
-                    pct = (len(comunes) / len(cand_tokens)) * 80.0
+                    pct = (len(comunes) / len(cand_significativos)) * 85.0
                     score = max(score, pct)
 
-            if score >= 55.0:
+            if score >= 35.0:
                 ranking.append((score, c))
 
         ranking.sort(key=lambda x: x[0], reverse=True)
@@ -280,8 +329,8 @@ class AsistentePedidoService:
             return None, texto, []
 
         top_score, top_cliente = ranking[0]
-        if top_score >= 80.0:
-            if len(ranking) == 1 or (top_score - ranking[1][0] >= 15.0):
+        if top_score >= 70.0:
+            if len(ranking) == 1 or (top_score - ranking[1][0] >= 12.0):
                 return top_cliente, texto_restante, []
 
         candidatos = [c for _, c in ranking[:4]]

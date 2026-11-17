@@ -265,6 +265,43 @@ def test_producto_sin_cantidad_solicita_cantidad():
     assert "Cuántas unidades o paquetes deseas agregar" in resultado.mensaje_voz
 
 
+def test_busqueda_cliente_afinada_tokens_y_tildes():
+    db = MagicMock()
+    c1 = Cliente(
+        id=uuid4(),
+        nombre="Comercial Pérez y Compañía SpA",
+        alias="Almacén Don Pérez",
+        rut="76.123.456-7",
+        celular="+56991234567",
+        activo=True,
+    )
+    c2 = Cliente(
+        id=uuid4(),
+        nombre="Sociedad Minimarket San Jorge Limitada",
+        alias="Minimarket San Jorge",
+        rut="77.987.654-K",
+        celular="+56987654321",
+        activo=True,
+    )
+
+    db.scalars.return_value = [c1, c2]
+
+    # 1. Búsqueda sin tilde ("perez" vs "Pérez")
+    cli1, _, _ = AsistentePedidoService.detectar_candidatos_cliente("perez", db)
+    assert cli1 is not None
+    assert cli1.id == c1.id
+
+    # 2. Búsqueda con orden invertido y con relleno ("San Jorge Almacen" o "San Jorge")
+    cli2, _, _ = AsistentePedidoService.detectar_candidatos_cliente("pedido para San Jorge", db)
+    assert cli2 is not None
+    assert cli2.id == c2.id
+
+    # 3. Búsqueda por RUT sin puntos ni guiones ("76123456")
+    cli3, _, _ = AsistentePedidoService.detectar_candidatos_cliente("76123456", db)
+    assert cli3 is not None
+    assert cli3.id == c1.id
+
+
 if __name__ == "__main__":
     test_normalizar_texto_y_cantidades()
     print("✓ test_normalizar_texto_y_cantidades PASSED")
@@ -280,4 +317,6 @@ if __name__ == "__main__":
     print("✓ test_comandos_de_voz PASSED")
     test_producto_sin_cantidad_solicita_cantidad()
     print("✓ test_producto_sin_cantidad_solicita_cantidad PASSED")
+    test_busqueda_cliente_afinada_tokens_y_tildes()
+    print("✓ test_busqueda_cliente_afinada_tokens_y_tildes PASSED")
     print(">>> ALL ASISTENTE PEDIDO TESTS PASSED SUCCESSFULLY! <<<")
