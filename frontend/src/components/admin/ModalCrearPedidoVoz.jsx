@@ -105,6 +105,8 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
   const pendingProductRef = useRef(null);
   const customersRef = useRef([]);
   const activeVoicesRef = useRef([]);
+  const ambiguousItemsRef = useRef([]);
+  const procesarEntradaVozRef = useRef(null);
 
   // Sincronizar referencias con estados reactivos
   useEffect(() => {
@@ -142,6 +144,10 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
   useEffect(() => {
     customersRef.current = customers;
   }, [customers]);
+
+  useEffect(() => {
+    ambiguousItemsRef.current = ambiguousItems;
+  }, [ambiguousItems]);
 
   // Montar componentes y arrancar asistente
   useEffect(() => {
@@ -312,7 +318,11 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
       // Si el usuario dijo algo, procesarlo inmediatamente de forma automática
       const textoCapturado = transcriptRef.current.trim();
       if (textoCapturado.length > 0) {
-        procesarEntradaVoz(textoCapturado);
+        if (typeof procesarEntradaVozRef.current === "function") {
+          procesarEntradaVozRef.current(textoCapturado);
+        } else {
+          procesarEntradaVoz(textoCapturado);
+        }
       }
     };
 
@@ -432,6 +442,7 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
 
   // Procesamiento Central de la Entrada por Voz con Máquina de Estados
   const procesarEntradaVoz = async (textoDictado) => {
+    procesarEntradaVozRef.current = procesarEntradaVoz;
     const texto = (textoDictado || transcriptRef.current || "").trim();
     if (!texto) return;
 
@@ -459,6 +470,7 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
           textoBajo.includes("cancelar")
         ) {
           setConversationState("ESPERANDO_PRODUCTOS");
+          conversationStateRef.current = "ESPERANDO_PRODUCTOS";
           hablarMensaje(
             "Entendido. ¿Qué otro producto deseas agregar o modificar?",
             () => {
@@ -470,39 +482,90 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
       }
 
       // 2. Si estamos en desambiguación y el usuario eligió una opción por voz
+      const listaAmbiguos = ambiguousItemsRef.current || [];
       if (
         conversationStateRef.current === "DESAMBIGUAR_PRODUCTO" &&
-        ambiguousItems.length > 0
+        listaAmbiguos.length > 0
       ) {
-        const itemAmbiguo = ambiguousItems[0];
+        const itemAmbiguo = listaAmbiguos[0];
         let opcionElegida = null;
 
-        if (
-          textoBajo.includes("primero") ||
-          textoBajo.includes("primera") ||
-          textoBajo.includes("uno") ||
-          textoBajo.includes("1")
-        ) {
-          opcionElegida = itemAmbiguo.opciones[0];
-        } else if (
-          textoBajo.includes("segundo") ||
-          textoBajo.includes("segunda") ||
-          textoBajo.includes("dos") ||
-          textoBajo.includes("2")
-        ) {
-          opcionElegida = itemAmbiguo.opciones[1] || itemAmbiguo.opciones[0];
-        } else if (
-          textoBajo.includes("tercero") ||
-          textoBajo.includes("tercera") ||
-          textoBajo.includes("tres") ||
-          textoBajo.includes("3")
-        ) {
-          opcionElegida = itemAmbiguo.opciones[2] || itemAmbiguo.opciones[0];
-        } else {
-          // Búsqueda por coincidencia de nombre
-          opcionElegida = itemAmbiguo.opciones.find((op) =>
-            textoBajo.includes(op.nombre.toLowerCase()) || op.nombre.toLowerCase().includes(textoBajo)
+        const tokensUsuario = textoBajo
+          .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, " ")
+          .split(/\s+/)
+          .filter(
+            (w) =>
+              w.length > 0 &&
+              !["el", "la", "los", "las", "un", "una", "de", "del", "por", "para", "quiero", "dame", "porfa", "favor"].includes(w)
           );
+
+        // A. Coincidencia por nombre completo o substring significativo
+        for (const op of itemAmbiguo.opciones || []) {
+          const opNom = (op.nombre || "").toLowerCase();
+          const opCod = (op.codigo || "").toLowerCase();
+          if (
+            textoBajo.includes(opNom) ||
+            (opNom.includes(textoBajo) && textoBajo.length >= 4) ||
+            (opCod && textoBajo.includes(opCod))
+          ) {
+            opcionElegida = op;
+            break;
+          }
+        }
+
+        // B. Coincidencia por tokens significativos y números de modelo (ej: 2025, 2016, 2032)
+        if (!opcionElegida && tokensUsuario.length > 0) {
+          let maxPuntaje = 0;
+          let mejorCandidato = null;
+          for (const op of itemAmbiguo.opciones || []) {
+            const opTokens = (op.nombre || "")
+              .toLowerCase()
+              .split(/\s+/)
+              .concat((op.codigo || "").toLowerCase().split(/\s+/));
+            let matches = 0;
+            let matchNumeroModelo = false;
+            for (const tu of tokensUsuario) {
+              if (opTokens.includes(tu)) {
+                matches++;
+                if (/^\d{3,4}$/.test(tu)) {
+                  matchNumeroModelo = true;
+                }
+              }
+            }
+            const puntaje = matches + (matchNumeroModelo ? 10 : 0);
+            if (puntaje > maxPuntaje) {
+              maxPuntaje = puntaje;
+              mejorCandidato = op;
+            }
+          }
+          if (mejorCandidato && maxPuntaje > 0) {
+            opcionElegida = mejorCandidato;
+          }
+        }
+
+        // C. Coincidencia por orden ordinal estricto (opción 1, primero, la dos, etc.)
+        if (!opcionElegida) {
+          const isOpt1 =
+            /^(?:opcion\s+)?(?:1|uno|primero|primera|el\s+uno)\b/i.test(textoBajo) ||
+            /\b(?:opcion\s+1|el\s+primero|la\s+primera|el\s+uno)\b/i.test(textoBajo);
+          const isOpt2 =
+            /^(?:opcion\s+)?(?:2|dos|segundo|segunda|el\s+dos)\b/i.test(textoBajo) ||
+            /\b(?:opcion\s+2|el\s+segundo|la\s+segunda|el\s+dos)\b/i.test(textoBajo);
+          const isOpt3 =
+            /^(?:opcion\s+)?(?:3|tres|tercero|tercera|el\s+tres)\b/i.test(textoBajo) ||
+            /\b(?:opcion\s+3|el\s+tercero|la\s+tercera|el\s+tres)\b/i.test(textoBajo);
+          const isOpt4 =
+            /^(?:opcion\s+)?(?:4|cuatro|cuarto|cuarta|el\s+cuatro)\b/i.test(textoBajo) ||
+            /\b(?:opcion\s+4|el\s+cuarto|la\s+cuarta|el\s+cuatro)\b/i.test(textoBajo);
+          const isOpt5 =
+            /^(?:opcion\s+)?(?:5|cinco|quinto|quinta|el\s+cinco)\b/i.test(textoBajo) ||
+            /\b(?:opcion\s+5|el\s+quinto|la\s+quinta|el\s+cinco)\b/i.test(textoBajo);
+
+          if (isOpt1 && itemAmbiguo.opciones[0]) opcionElegida = itemAmbiguo.opciones[0];
+          else if (isOpt2 && itemAmbiguo.opciones[1]) opcionElegida = itemAmbiguo.opciones[1];
+          else if (isOpt3 && itemAmbiguo.opciones[2]) opcionElegida = itemAmbiguo.opciones[2];
+          else if (isOpt4 && itemAmbiguo.opciones[3]) opcionElegida = itemAmbiguo.opciones[3];
+          else if (isOpt5 && itemAmbiguo.opciones[4]) opcionElegida = itemAmbiguo.opciones[4];
         }
 
         if (opcionElegida) {
@@ -621,7 +684,9 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
       // D. Caso: Producto encontrado que espera cantidad (ESPERANDO_CANTIDAD)
       if (data.producto_pendiente_cantidad) {
         setPendingProduct(data.producto_pendiente_cantidad);
+        pendingProductRef.current = data.producto_pendiente_cantidad;
         setConversationState("ESPERANDO_CANTIDAD");
+        conversationStateRef.current = "ESPERANDO_CANTIDAD";
         hablarMensaje(data.mensaje_voz, () => {
           if (isHandsFreeRef.current) iniciarEscucha();
         });
@@ -681,11 +746,15 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
 
       if (newAmbiguos.length > 0) {
         setAmbiguousItems(newAmbiguos);
+        ambiguousItemsRef.current = newAmbiguos;
         setConversationState("DESAMBIGUAR_PRODUCTO");
+        conversationStateRef.current = "DESAMBIGUAR_PRODUCTO";
       } else {
         setAmbiguousItems([]);
+        ambiguousItemsRef.current = [];
         if (selectedCustomerRef.current) {
           setConversationState("ESPERANDO_PRODUCTOS");
+          conversationStateRef.current = "ESPERANDO_PRODUCTOS";
         }
       }
 
@@ -712,17 +781,22 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
 
   // Resolver ítem ambiguo seleccionado por voz o clic
   const resolverItemAmbiguo = (ambiguo, opcionSeleccionada) => {
+    const cantSaneada =
+      ambiguo.cantidad && ambiguo.cantidad <= 100 ? ambiguo.cantidad : 1;
     agregarProductoAlBorrador(
       opcionSeleccionada,
-      ambiguo.cantidad || 1,
+      cantSaneada,
       ambiguo.tipo_empaque || "unidad"
     );
-    setAmbiguousItems((prev) => prev.filter((item) => item !== ambiguo));
+    const restantes = (ambiguousItemsRef.current || []).filter((item) => item !== ambiguo);
+    setAmbiguousItems(restantes);
+    ambiguousItemsRef.current = restantes;
     setConversationState("ESPERANDO_PRODUCTOS");
+    conversationStateRef.current = "ESPERANDO_PRODUCTOS";
 
     const empNombre =
       ambiguo.tipo_empaque === "caja" ? "cajas" : "unidades";
-    const msg = `Agregado ${ambiguo.cantidad || 1} ${empNombre} de ${
+    const msg = `Agregado ${cantSaneada} ${empNombre} de ${
       opcionSeleccionada.nombre
     }. ¿Deseas agregar más productos o finalizar?`;
     hablarMensaje(msg, () => {

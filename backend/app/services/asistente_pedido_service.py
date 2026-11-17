@@ -470,21 +470,27 @@ class AsistentePedidoService:
                 tipo_empaque = "caja"
                 sub_eliminado = m_solocaja.group(0)
 
-        # 5. Caso: Número al final absoluto de la frase (ej: "kent actron 3")
-        if not sub_eliminado:
-            m_final = re.search(rf"\b({patron_numeros})\s*$", texto_norm)
-            if m_final:
-                num_str = m_final.group(1)
-                cantidad = int(num_str) if num_str.isdigit() else NUMEROS_PALABRAS.get(num_str, 1)
-                sub_eliminado = m_final.group(0)
-
-        # 6. Caso: Número al inicio absoluto de la frase (ej: "3 kent actron")
+        # 5. Caso: Número al inicio absoluto de la frase (ej: "3 kent actron", "2 pilas duracell 2025")
         if not sub_eliminado:
             m_inicio = re.search(rf"^\s*({patron_numeros})\s+", texto_norm)
             if m_inicio:
                 num_str = m_inicio.group(1)
-                cantidad = int(num_str) if num_str.isdigit() else NUMEROS_PALABRAS.get(num_str, 1)
-                sub_eliminado = m_inicio.group(0)
+                val_num = int(num_str) if num_str.isdigit() else NUMEROS_PALABRAS.get(num_str, 1)
+                # Si es un número numérico >= 1000 al inicio sin palabras de empaque, probablemente no sea cantidad
+                if not (num_str.isdigit() and val_num >= 1000):
+                    cantidad = val_num
+                    sub_eliminado = m_inicio.group(0)
+
+        # 6. Caso: Número al final absoluto de la frase (ej: "kent actron 3")
+        # Si el número al final es numérico > 100 (ej: 2025, 2016, 2032, 500), se preserva como modelo/código numérico
+        if not sub_eliminado:
+            m_final = re.search(rf"\b({patron_numeros})\s*$", texto_norm)
+            if m_final:
+                num_str = m_final.group(1)
+                val_num = int(num_str) if num_str.isdigit() else NUMEROS_PALABRAS.get(num_str, 1)
+                if not (num_str.isdigit() and val_num > 100):
+                    cantidad = val_num
+                    sub_eliminado = m_final.group(0)
 
         cantidad_explicita = bool(sub_eliminado)
 
@@ -644,6 +650,8 @@ class AsistentePedidoService:
 
         term_norm = normalizar_texto(termino)
         term_tokens = set(term_norm.split())
+        term_significativos = {t for t in term_tokens if t not in STOPWORDS} or term_tokens
+        term_limpio_str = " ".join([t for t in term_norm.split() if t not in STOPWORDS]).strip()
 
         candidatos: list[tuple[float, Producto]] = []
 
@@ -655,27 +663,37 @@ class AsistentePedidoService:
             score = 0.0
 
             # 1. Coincidencia exacta de código
-            if term_norm == p_codigo_norm:
+            if term_norm == p_codigo_norm or (term_limpio_str and term_limpio_str == p_codigo_norm):
                 score = 100.0
             # 2. Coincidencia exacta de nombre
-            elif term_norm == p_nombre_norm:
+            elif term_norm == p_nombre_norm or (term_limpio_str and term_limpio_str == p_nombre_norm):
                 score = 98.0
             # 3. Substring completo de nombre
             elif term_norm in p_nombre_norm:
                 score = 85.0 + (len(term_norm) / max(len(p_nombre_norm), 1)) * 10.0
-            elif p_nombre_norm in term_norm:
+            elif term_limpio_str and term_limpio_str in p_nombre_norm:
+                score = 84.0 + (len(term_limpio_str) / max(len(p_nombre_norm), 1)) * 10.0
+            elif p_nombre_norm in term_norm or (term_limpio_str and p_nombre_norm in term_limpio_str):
                 score = 80.0
             else:
-                # 4. Coincidencia por tokens (palabras clave compartidas)
-                if term_tokens and p_tokens:
-                    comunes = term_tokens.intersection(p_tokens)
-                    if comunes:
-                        ratio_cubierto = len(comunes) / len(term_tokens)
-                        score = ratio_cubierto * 80.0
-                        # Bonificación si coincide la primera palabra (marca/categoría principal)
-                        primer_term = list(term_tokens)[0] if term_tokens else ""
-                        if primer_term in p_tokens:
-                            score += 5.0
+                # 4. Coincidencia por tokens significativos (palabras clave compartidas)
+                comunes_sig = term_significativos.intersection(p_tokens)
+                if comunes_sig:
+                    ratio_cubierto = len(comunes_sig) / max(len(term_significativos), 1)
+                    score = ratio_cubierto * 80.0
+                    # Si cubre el 100% de los tokens significativos dictados
+                    if len(comunes_sig) == len(term_significativos):
+                        if len(term_significativos) >= 2:
+                            score = 92.0
+                        elif any(t.isdigit() and len(t) >= 4 for t in term_significativos):
+                            score = 90.0
+                        else:
+                            score = 82.0
+
+                    # Bonificación si coincide la primera palabra (marca/categoría principal)
+                    primer_term = list(term_significativos)[0] if term_significativos else ""
+                    if primer_term in p_tokens:
+                        score += 3.0
 
             if score >= 40.0:
                 candidatos.append((score, p))

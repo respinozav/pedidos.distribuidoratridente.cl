@@ -361,6 +361,65 @@ def test_detectar_categoria_cigarros_y_lee_marcas():
     assert "bolsas necesitas?" in res_b.mensaje_voz
 
 
+def test_modelo_numerico_no_se_confunde_con_cantidad():
+    # 1. Extracción de cantidades y términos con números de modelo (ej: 2025, 2016, 2032)
+    c1, e1, t1, exp1 = AsistentePedidoService.extraer_cantidad_y_empaque_detallado("pilas duracell 2025")
+    assert c1 == 1
+    assert "2025" in t1
+    assert exp1 is False
+
+    c2, e2, t2, exp2 = AsistentePedidoService.extraer_cantidad_y_empaque_detallado("la duracell 2025")
+    assert c2 == 1
+    assert "2025" in t2
+    assert exp2 is False
+
+    c3, e3, t3, exp3 = AsistentePedidoService.extraer_cantidad_y_empaque_detallado("2 pilas duracell 2025")
+    assert c3 == 2
+    assert "2025" in t3
+    assert exp3 is True
+
+    c4, e4, t4, exp4 = AsistentePedidoService.extraer_cantidad_y_empaque_detallado("kent actron 3")
+    assert c4 == 3
+    assert "kent actron" in t4
+    assert exp4 is True
+
+    c5, e5, t5, exp5 = AsistentePedidoService.extraer_cantidad_y_empaque_detallado("3 kent actron")
+    assert c5 == 3
+    assert "kent actron" in t5
+    assert exp5 is True
+
+    # 2. Búsqueda exacta de producto con modelo numérico
+    cat = Categoria(id=uuid4(), nombre="Abarrotes", activo=True)
+    p2016 = Producto(id=uuid4(), codigo="PD2016", nombre="Pilas Duracell 2016", categoria=cat, categoria_id=cat.id, activo=True, precio=Decimal("3410"))
+    p2025 = Producto(id=uuid4(), codigo="PD2025", nombre="Pilas Duracell 2025", categoria=cat, categoria_id=cat.id, activo=True, precio=Decimal("3410"))
+    p2032 = Producto(id=uuid4(), codigo="PD2032", nombre="Pilas Duracell 2032", categoria=cat, categoria_id=cat.id, activo=True, precio=Decimal("3410"))
+    p9v = Producto(id=uuid4(), codigo="PD9V", nombre="Pilas Duracell 9 V (bateria)", categoria=cat, categoria_id=cat.id, activo=True, precio=Decimal("3611"))
+    pa13 = Producto(id=uuid4(), codigo="PDA13", nombre="Pilas Duracell Auditiva 13", categoria=cat, categoria_id=cat.id, activo=True, precio=Decimal("2836"))
+    catalogo = [p2016, p2025, p2032, p9v, pa13]
+
+    for consulta in ["pilas duracell 2025", "la duracell 2025", "duracell 2025", "la 2025", "2025"]:
+        estado, prod, opciones = AsistentePedidoService.buscar_producto_en_catalogo(consulta, catalogo)
+        assert estado == "exacto", f"Fallo para consulta '{consulta}': estado={estado}"
+        assert prod is not None
+        assert prod.nombre == "Pilas Duracell 2025"
+        assert len(opciones) == 0
+
+    # 3. Interpretación de dictado con cantidad y modelo numérico
+    db = MagicMock()
+    cliente = Cliente(id=uuid4(), nombre="Minimarket Don Pedro", rut="76.111.222-3")
+    db.get.return_value = cliente
+    db.scalars.side_effect = lambda q: catalogo
+
+    res = AsistentePedidoService.interpretar_dictado("2 pilas duracell 2025", cliente.id, db)
+    assert len(res.items) == 1
+    it = res.items[0]
+    assert it.estado == "exacto"
+    assert it.producto.nombre == "Pilas Duracell 2025"
+    assert it.cantidad == 2
+    assert it.cantidad_explicita is True
+    assert "Agregado 2 unidades de Pilas Duracell 2025" in res.mensaje_voz
+
+
 if __name__ == "__main__":
     test_normalizar_texto_y_cantidades()
     print("✓ test_normalizar_texto_y_cantidades PASSED")
@@ -382,4 +441,6 @@ if __name__ == "__main__":
     print("✓ test_cliente_prueba_sin_falsos_positivos_alias_nulo PASSED")
     test_detectar_categoria_cigarros_y_lee_marcas()
     print("✓ test_detectar_categoria_cigarros_y_lee_marcas PASSED")
+    test_modelo_numerico_no_se_confunde_con_cantidad()
+    print("✓ test_modelo_numerico_no_se_confunde_con_cantidad PASSED")
     print(">>> ALL ASISTENTE PEDIDO TESTS PASSED SUCCESSFULLY! <<<")
