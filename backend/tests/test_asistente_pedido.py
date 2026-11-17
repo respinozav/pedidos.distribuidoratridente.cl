@@ -302,6 +302,29 @@ def test_busqueda_cliente_afinada_tokens_y_tildes():
     assert cli3.id == c1.id
 
 
+def test_cliente_prueba_sin_falsos_positivos_alias_nulo():
+    db = MagicMock()
+    # Simular clientes reales de la base de datos sin alias
+    c1 = Cliente(id=uuid4(), nombre="Sergio Cortes", alias=None, rut="11111111-1", activo=True)
+    c2 = Cliente(id=uuid4(), nombre="Espiga de oro", alias=None, rut="22222222-2", activo=True)
+    c3 = Cliente(id=uuid4(), nombre="WH Handler spa", alias=None, rut="33333333-3", activo=True)
+    c4 = Cliente(id=uuid4(), nombre="Sociedad Comercial Amma LTDA", alias=None, rut="44444444-4", activo=True)
+    cp = Cliente(id=uuid4(), nombre="Cliente Prueba", alias="Cliente Prueba", rut="99999999-9", activo=True)
+
+    db.scalars.return_value = [c1, c2, c3, c4, cp]
+
+    # Al buscar "Cliente Prueba", no debe traer [c1, c2, c3, c4], debe detectar inmediatamente a Cliente Prueba
+    cli, rest, cands = AsistentePedidoService.detectar_candidatos_cliente("Cliente Prueba", db)
+    assert cli is not None
+    assert cli.id == cp.id
+    assert len(cands) == 0
+
+    # También con frase con prefijo "pedido para Cliente Prueba"
+    cli_pref, _, _ = AsistentePedidoService.detectar_candidatos_cliente("pedido para Cliente Prueba", db)
+    assert cli_pref is not None
+    assert cli_pref.id == cp.id
+
+
 if __name__ == "__main__":
     test_normalizar_texto_y_cantidades()
     print("✓ test_normalizar_texto_y_cantidades PASSED")
@@ -319,4 +342,6 @@ if __name__ == "__main__":
     print("✓ test_producto_sin_cantidad_solicita_cantidad PASSED")
     test_busqueda_cliente_afinada_tokens_y_tildes()
     print("✓ test_busqueda_cliente_afinada_tokens_y_tildes PASSED")
+    test_cliente_prueba_sin_falsos_positivos_alias_nulo()
+    print("✓ test_cliente_prueba_sin_falsos_positivos_alias_nulo PASSED")
     print(">>> ALL ASISTENTE PEDIDO TESTS PASSED SUCCESSFULLY! <<<")

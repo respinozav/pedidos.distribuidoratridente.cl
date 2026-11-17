@@ -150,6 +150,13 @@ export default function SessionLogs() {
         </span>
       );
     }
+    if (estado === "CADUCADA") {
+      return (
+        <span className="status-warning d-inline-flex align-items-center gap-1" style={{ backgroundColor: "#fff3cd", color: "#856404", padding: "3px 8px", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 600 }}>
+          <Clock size={13} /> Caducada
+        </span>
+      );
+    }
     return (
       <span className="status-inactive d-inline-flex align-items-center gap-1">
         <XCircle size={13} /> Fallido
@@ -283,6 +290,7 @@ export default function SessionLogs() {
                 <option value="">Todos</option>
                 <option value="EXITOSO">Exitoso</option>
                 <option value="FALLIDO">Fallido</option>
+                <option value="CADUCADA">Caducada</option>
               </select>
             </label>
 

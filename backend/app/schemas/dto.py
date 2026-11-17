@@ -518,10 +518,18 @@ class SesionLogPage(BaseModel):
     page_size: int
 
 
+class SesionCaducadaInput(BaseModel):
+    correo: str | None = None
+    tipo_usuario: str | None = None
+    motivo: str | None = "Inactividad"
+    minutos_inactividad: int | None = None
+
+
 class SesionLogStats(BaseModel):
     total: int
     exitosos: int
     fallidos: int
+    caducadas: int = 0
     admin_total: int
     cliente_total: int
 

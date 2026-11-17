@@ -120,6 +120,7 @@ from app.schemas.dto import (
     RoleOutput,
     SendPublicidadEmailInput,
     SendPublicidadEmailOutput,
+    SesionCaducadaInput,
     SesionLogOutput,
     SesionLogPage,
     SesionLogStats,
@@ -332,6 +333,63 @@ def refresh_session_token(current_auth: AuthSubject, database: DatabaseSession) 
     expire_minutes = SystemSettingsRepository().get_settings(database).jwt_access_token_expire_minutes
     new_token = create_access_token(subject_id, role, expires_minutes=expire_minutes)
     return TokenOutput(access_token=new_token)
+
+
+@router.post("/auth/sesion-caducada", tags=["Autenticacion"])
+def registrar_sesion_caducada(
+    payload: SesionCaducadaInput,
+    request: Request,
+    database: DatabaseSession,
+) -> dict:
+    """Registra en la auditoría cuando una sesión expira por inactividad según la configuración."""
+    ip, user_agent = extract_client_info(request)
+    correo = payload.correo
+    tipo_usuario = (payload.tipo_usuario or "ADMINISTRADOR").upper()
+    usuario_id = None
+    cliente_id = None
+
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            unverified = jwt.decode(token, options={"verify_signature": False, "verify_exp": False})
+            sub = unverified.get("sub")
+            role = (unverified.get("role") or "").upper()
+            if role == "CLIENTE":
+                tipo_usuario = "CLIENTE"
+                if sub:
+                    cli = database.get(Cliente, UUID(sub))
+                    if cli:
+                        cliente_id = cli.id
+                        correo = correo or cli.correo
+            else:
+                tipo_usuario = "ADMINISTRADOR"
+                if sub:
+                    usr = database.get(Usuario, UUID(sub))
+                    if usr:
+                        usuario_id = usr.id
+                        correo = correo or usr.correo
+        except Exception:
+            pass
+
+    if not correo:
+        correo = "sesion-inactiva@tridente.cl"
+
+    minutos_str = f" tras {payload.minutos_inactividad} minutos de inactividad" if payload.minutos_inactividad else " por inactividad"
+    mensaje = f"Sesión caducada automáticamente{minutos_str} según configuración."
+
+    registrar_intento_sesion(
+        database,
+        tipo_usuario=tipo_usuario,
+        correo=correo,
+        estado="CADUCADA",
+        mensaje=mensaje,
+        usuario_id=usuario_id,
+        cliente_id=cliente_id,
+        ip_address=ip,
+        user_agent=user_agent,
+    )
+    return {"status": "ok", "message": "Sesión registrada como caducada"}
 
 
 @router.get("/roles", response_model=list[RoleOutput], tags=["Usuarios"])
@@ -1758,6 +1816,7 @@ def session_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> SesionLo
     total = database.scalar(select(func.count(SesionLog.id))) or 0
     exitosos = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.estado == "EXITOSO")) or 0
     fallidos = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.estado == "FALLIDO")) or 0
+    caducadas = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.estado == "CADUCADA")) or 0
     admin_total = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.tipo_usuario == "ADMINISTRADOR")) or 0
     cliente_total = database.scalar(select(func.count(SesionLog.id)).where(SesionLog.tipo_usuario == "CLIENTE")) or 0
 
@@ -1765,6 +1824,7 @@ def session_logs_stats(database: DatabaseSession, _: SuperAdminUser) -> SesionLo
         total=total,
         exitosos=exitosos,
         fallidos=fallidos,
+        caducadas=caducadas,
         admin_total=admin_total,
         cliente_total=cliente_total,
     )

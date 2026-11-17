@@ -14,6 +14,13 @@ function decodeToken(token) {
   }
 }
 
+const notificarSesionCaducada = (minutos) => {
+  api.post("/auth/sesion-caducada", {
+    minutos_inactividad: minutos,
+    motivo: "Inactividad",
+  }).catch(() => {});
+};
+
 export function useSessionInactivity({ active, onLogout }) {
   const lastActivityRef = useRef(Date.now());
   const modalOpenRef = useRef(false);
@@ -36,14 +43,20 @@ export function useSessionInactivity({ active, onLogout }) {
       return;
     }
 
-    lastActivityRef.current = Date.now();
-    hookMountedAtRef.current = Date.now();
+    const now = Date.now();
+    lastActivityRef.current = now;
+    try {
+      localStorage.setItem("tridente_last_activity", String(now));
+    } catch {}
+    hookMountedAtRef.current = now;
     modalOpenRef.current = false;
 
     const handleUserActivity = () => {
-      if (!modalOpenRef.current) {
-        lastActivityRef.current = Date.now();
-      }
+      const ts = Date.now();
+      lastActivityRef.current = ts;
+      try {
+        localStorage.setItem("tridente_last_activity", String(ts));
+      } catch {}
     };
 
     const activityEvents = [
@@ -90,20 +103,32 @@ export function useSessionInactivity({ active, onLogout }) {
 
       const tokenSecondsLeft = tokenExpSec ? Math.max(0, Math.ceil(tokenExpSec - nowServerSec)) : null;
 
-      // Período de gracia inicial: si el hook lleva menos de 20 segundos activo,
+      // Calcular tiempo de inactividad sincronizado entre pestañas
+      let lastActivity = lastActivityRef.current;
+      try {
+        const storedAct = localStorage.getItem("tridente_last_activity");
+        if (storedAct) {
+          lastActivity = Math.max(lastActivity, Number(storedAct));
+        }
+      } catch {}
+      const idleSec = (Date.now() - lastActivity) / 1000;
+
+      // Período de gracia inicial: si el hook lleva menos de 10 segundos activo,
       // no cerrar la sesión intempestivamente por discrepancias transitorias de reloj
       const secondsSinceMount = (Date.now() - hookMountedAtRef.current) / 1000;
-      if (secondsSinceMount < 20 && tokenSecondsLeft !== null && tokenSecondsLeft <= 0) {
+      if (secondsSinceMount < 10 && tokenSecondsLeft !== null && tokenSecondsLeft <= 0) {
         return;
       }
 
-      // 1. Si el token ya expiró y el modal no estaba abierto
-      if (tokenSecondsLeft !== null && tokenSecondsLeft <= 0) {
+      // 1. Si la inactividad superó el total de minutos configurados o el token ya expiró
+      if (idleSec >= totalDurationSec || (tokenSecondsLeft !== null && tokenSecondsLeft <= 0)) {
+        const mins = Math.max(1, Math.round(totalDurationSec / 60));
+        notificarSesionCaducada(mins);
         if (onLogout) onLogout();
         Swal.fire({
           icon: "warning",
           title: "Sesión caducada",
-          text: "Tu sesión ha expirado por límite de tiempo. Por favor ingresa nuevamente con tus credenciales.",
+          text: `Tu sesión ha caducado por inactividad tras superar los ${mins} minutos configurados. Por favor ingresa nuevamente con tus credenciales.`,
           confirmButtonText: "Aceptar",
           confirmButtonColor: "#0d6efd",
           allowOutsideClick: false,
@@ -114,7 +139,6 @@ export function useSessionInactivity({ active, onLogout }) {
       // 2. Ventana de advertencia: 59 segundos antes de expirar (o la mitad si dura <= 60s)
       const warningWindowSec = totalDurationSec > 60 ? 59 : Math.max(10, Math.floor(totalDurationSec / 2));
       const idleWarningTriggerSec = totalDurationSec - warningWindowSec;
-      const idleSec = (Date.now() - lastActivityRef.current) / 1000;
 
       const isTokenExpiringSoon = tokenSecondsLeft !== null && tokenSecondsLeft <= warningWindowSec && tokenSecondsLeft > 0;
       const isIdleExpiringSoon = idleSec >= idleWarningTriggerSec;
@@ -164,7 +188,11 @@ export function useSessionInactivity({ active, onLogout }) {
                 setAdminToken(data.access_token);
                 saveSessionStorage(data.access_token, session?.role || "admin", session?.customer);
               }
-              lastActivityRef.current = Date.now();
+              const renewedNow = Date.now();
+              lastActivityRef.current = renewedNow;
+              try {
+                localStorage.setItem("tridente_last_activity", String(renewedNow));
+              } catch {}
               Swal.fire({
                 toast: true,
                 position: "top-end",
@@ -181,11 +209,13 @@ export function useSessionInactivity({ active, onLogout }) {
             result.dismiss === Swal.DismissReason.cancel
           ) {
             // El contador llegó a 0 o el usuario pulsó "Cerrar sesión"
+            const mins = Math.max(1, Math.round(totalDurationSec / 60));
+            notificarSesionCaducada(mins);
             if (onLogout) onLogout();
             Swal.fire({
-              icon: "info",
-              title: "Sesión cerrada",
-              text: "Tu sesión ha finalizado por inactividad.",
+              icon: "warning",
+              title: "Sesión caducada",
+              text: `Tu sesión ha caducado por inactividad tras superar los ${mins} minutos configurados.`,
               confirmButtonText: "Aceptar",
               confirmButtonColor: "#0d6efd",
               allowOutsideClick: false,

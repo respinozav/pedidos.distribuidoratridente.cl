@@ -37,6 +37,7 @@ export function clearSessionStorage() {
     localStorage.removeItem(STORAGE_KEY_CUSTOMER);
     localStorage.removeItem(STORAGE_KEY_ADMIN_PROFILE);
     localStorage.removeItem(STORAGE_KEY_TIME_OFFSET);
+    localStorage.removeItem("tridente_last_activity");
   } catch {
     // Ignorar excepciones de localStorage
   }

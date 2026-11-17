@@ -135,6 +135,19 @@ def test_get_current_customer_rejects_admin_token():
     assert raised, "Se esperaba HTTPException 401 pero no se levantó excepción"
 
 
+def test_create_access_token_configurable_minutes():
+    """create_access_token debe respetar los minutos configurados, incluso duraciones cortas."""
+    import jwt
+    from app.core.config import get_settings
+    from app.core.security import get_jwt_secret
+    settings = get_settings()
+
+    token = create_access_token(uuid4(), role="ADMINISTRADOR", expires_minutes=2)
+    payload = jwt.decode(token, get_jwt_secret(), algorithms=[settings.jwt_algorithm])
+    assert payload["minutes"] == 2
+    assert payload["exp"] - payload["iat"] == 120
+
+
 if __name__ == "__main__":
     test_customer_token_rejected_by_admin_dependency()
     test_purged_user_rejected_by_admin_dependency()
@@ -142,4 +155,5 @@ if __name__ == "__main__":
     test_require_super_admin_rejects_non_admin()
     test_require_not_vendedor_rejects_vendedor()
     test_get_current_customer_rejects_admin_token()
+    test_create_access_token_configurable_minutes()
     print(">>> TODOS LOS TESTS DE AISLAMIENTO DE ROLES PASARON EXITOSAMENTE! <<<")

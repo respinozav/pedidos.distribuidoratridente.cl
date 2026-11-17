@@ -273,6 +273,7 @@ class AsistentePedidoService:
         )
 
         cand_norm = normalizar_texto(candidato_nombre)
+        cand_full_norm = normalizar_texto(texto)
         cand_tokens = set(cand_norm.split())
         cand_significativos = {t for t in cand_tokens if t not in CLIENTE_FILLER_WORDS} or cand_tokens
         cand_rut_clean = re.sub(r"[^0-9k]", "", cand_norm)
@@ -292,23 +293,28 @@ class AsistentePedidoService:
             rut_clean = re.sub(r"[^0-9k]", "", rut_norm)
             celular_clean = re.sub(r"[^0-9]", "", celular_val)
 
-            # 1. Coincidencia exacta de alias o nombre
-            if cand_norm == alias_norm or cand_norm == nombre_norm:
+            # 1. Coincidencia exacta de alias o nombre (tanto con candidato extraído como con frase completa)
+            if (cand_norm and (cand_norm == alias_norm or cand_norm == nombre_norm)) or \
+               (cand_full_norm and (cand_full_norm == alias_norm or cand_full_norm == nombre_norm)):
                 score = 100.0
-            elif cand_norm in alias_norm or alias_norm in cand_norm:
+            elif len(alias_norm) >= 3 and len(cand_norm) >= 3 and (cand_norm in alias_norm or alias_norm in cand_norm):
                 score = max(score, 90.0)
-            elif cand_norm in nombre_norm or nombre_norm in cand_norm:
+            elif len(nombre_norm) >= 3 and len(cand_norm) >= 3 and (cand_norm in nombre_norm or nombre_norm in cand_norm):
                 score = max(score, 85.0)
+            elif len(alias_norm) >= 3 and len(cand_full_norm) >= 3 and (cand_full_norm in alias_norm or alias_norm in cand_full_norm):
+                score = max(score, 88.0)
+            elif len(nombre_norm) >= 3 and len(cand_full_norm) >= 3 and (cand_full_norm in nombre_norm or nombre_norm in cand_full_norm):
+                score = max(score, 84.0)
 
             # 2. Coincidencia por RUT
-            if cand_rut_clean and rut_clean and len(cand_rut_clean) >= 4:
+            if cand_rut_clean and rut_clean and len(cand_rut_clean) >= 4 and len(rut_clean) >= 4:
                 if cand_rut_clean == rut_clean:
                     score = max(score, 100.0)
                 elif cand_rut_clean in rut_clean or rut_clean in cand_rut_clean:
                     score = max(score, 95.0)
 
             # 3. Coincidencia por Celular
-            if celular_clean and len(cand_rut_clean) >= 6 and cand_rut_clean in celular_clean:
+            if celular_clean and len(cand_rut_clean) >= 6 and len(celular_clean) >= 6 and cand_rut_clean in celular_clean:
                 score = max(score, 92.0)
 
             # 4. Coincidencia por tokens significativos
@@ -318,9 +324,11 @@ class AsistentePedidoService:
                 comunes = cand_significativos.intersection(alias_significativos)
                 if comunes:
                     pct = (len(comunes) / len(cand_significativos)) * 85.0
+                    if comunes == cand_significativos:
+                        pct = max(pct, 92.0)
                     score = max(score, pct)
 
-            if score >= 35.0:
+            if score >= 50.0:
                 ranking.append((score, c))
 
         ranking.sort(key=lambda x: x[0], reverse=True)
