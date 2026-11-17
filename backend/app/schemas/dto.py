@@ -344,6 +344,9 @@ class DictadoInterpretadoOutput(BaseModel):
     parametro_comando: str | None = None
     producto_pendiente_cantidad: DictadoProductoMatch | None = None
     clientes_candidatos: list[DictadoClienteCandidato] = []
+    categoria_detectada: str | None = None
+    marcas_categoria: list[str] = []
+    productos_categoria: list[DictadoProductoMatch] = []
 
 
 class OrderUpdateAdmin(BaseModel):

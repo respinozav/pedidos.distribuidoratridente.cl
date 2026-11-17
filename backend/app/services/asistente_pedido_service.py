@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.entities import Cliente, Producto
+from app.models.entities import Categoria, Cliente, Producto
 from app.schemas.dto import (
     DictadoClienteCandidato,
     DictadoItemInterpretado,
@@ -158,6 +158,54 @@ CLIENTE_FILLER_WORDS: set[str] = {
     "ltda",
     "eirl",
     "sociedad",
+}
+
+SINONIMOS_CATEGORIAS: dict[str, str] = {
+    "cigarro": "cigarrillos",
+    "cigarros": "cigarrillos",
+    "cigarrillo": "cigarrillos",
+    "cigarrillos": "cigarrillos",
+    "pucho": "cigarrillos",
+    "puchos": "cigarrillos",
+    "tabaco": "cigarrillos",
+    "tabacos": "cigarrillos",
+    "bolsa": "bolsas",
+    "bolsas": "bolsas",
+    "funda": "bolsas",
+    "fundas": "bolsas",
+    "camiseta": "bolsas",
+    "vaso": "vasos",
+    "vasos": "vasos",
+    "envase": "vasos",
+    "envases": "vasos",
+    "termico": "vasos",
+    "termicos": "vasos",
+    "encendedor": "encendedores",
+    "encendedores": "encendedores",
+    "chispero": "encendedores",
+    "chisperos": "encendedores",
+    "fosforo": "encendedores",
+    "fosforos": "encendedores",
+    "rollo": "papeleria",
+    "rollos": "papeleria",
+    "papel": "papeleria",
+    "papeleria": "papeleria",
+    "dulce": "dulces",
+    "dulces": "dulces",
+    "golosina": "dulces",
+    "golosinas": "dulces",
+    "confite": "dulces",
+    "confites": "dulces",
+    "bebida": "bebidas",
+    "bebidas": "bebidas",
+    "jugo": "bebidas",
+    "jugos": "bebidas",
+    "abarrote": "abarrotes",
+    "abarrotes": "abarrotes",
+    "alimento": "abarrotes",
+    "alimentos": "abarrotes",
+    "limpieza": "limpieza",
+    "aseo": "limpieza",
 }
 
 
@@ -461,6 +509,126 @@ class AsistentePedidoService:
         return cant, emp, term
 
     @classmethod
+    def armar_dto_producto(
+        cls, prod: Producto, sc: float, cliente: Cliente | None = None
+    ) -> DictadoProductoMatch:
+        """Construye un DTO DictadoProductoMatch calculando los precios según el cliente."""
+        precio_aplicado = prod.precio
+        precio_caja_aplicado = prod.precio_caja
+        if cliente:
+            try:
+                precio_aplicado = customer_product_price(prod, cliente)
+                precio_caja_calc = customer_product_box_price(prod, cliente)
+                if precio_caja_calc is not None:
+                    precio_caja_aplicado = precio_caja_calc
+            except Exception:
+                pass
+
+        return DictadoProductoMatch(
+            id=prod.id,
+            codigo=prod.codigo or "",
+            nombre=prod.nombre or "",
+            precio=precio_aplicado,
+            afecto=bool(prod.afecto),
+            tiene_caja=bool(prod.tiene_caja),
+            cantidad_caja=prod.cantidad_caja,
+            precio_caja=precio_caja_aplicado,
+            stock=prod.cantidad or 0,
+            score=round(sc, 1),
+        )
+
+    @classmethod
+    def extraer_marca_o_familia(cls, nombre_producto: str) -> str:
+        """Extrae la marca o familia principal de un nombre de producto."""
+        if not nombre_producto:
+            return ""
+        limpio = re.sub(r"\b\d+(?:x\d+|cc|oz|paq|gr|kg|ml)?\b", "", nombre_producto, flags=re.IGNORECASE)
+        limpio = re.sub(r"[\(\)\[\]\-]", " ", limpio)
+        palabras_ignorar = {
+            "blando", "box", "corto", "largo", "paq", "x100", "x50", "caja", "pack", "unidad", "unidades", "de", "con", "y"
+        }
+        tokens = [w.capitalize() for w in limpio.split() if len(w) > 1 and w.lower() not in palabras_ignorar]
+        if not tokens:
+            return nombre_producto.split()[0].capitalize() if nombre_producto.split() else ""
+
+        prefijos_compuestos = {"vaso", "bolsa", "papel", "rollo", "caja", "encendedor", "plato", "envase", "tira"}
+        if tokens[0].lower() in prefijos_compuestos and len(tokens) >= 2:
+            return " ".join(tokens[:2])
+
+        marcas_compuestas = {"pall", "lucky", "red", "san", "don", "santa"}
+        if len(tokens) >= 2 and tokens[0].lower() in marcas_compuestas:
+            return " ".join(tokens[:2])
+
+        return tokens[0]
+
+    @classmethod
+    def extraer_marcas_de_categoria(cls, productos: list[Producto], max_marcas: int = 5) -> list[str]:
+        """Obtiene la lista de marcas/familias principales de los productos de una categoría."""
+        marcas: list[str] = []
+        for p in productos:
+            m = cls.extraer_marca_o_familia(p.nombre or "")
+            if m and m not in marcas:
+                marcas.append(m)
+                if len(marcas) >= max_marcas:
+                    break
+        return marcas
+
+    @classmethod
+    def detectar_categoria(
+        cls,
+        texto: str,
+        categorias_activas: list[Categoria],
+    ) -> Categoria | None:
+        """
+        Detecta si el texto dictado corresponde a una consulta de categoría general
+        (ej: 'cigarros', 'bolsas', 'vasos', 'encendedores', etc.).
+        """
+        t_norm = normalizar_texto(texto)
+        if not t_norm or len(t_norm) < 3:
+            return None
+
+        palabras_ignorar = {
+            "quiero", "dame", "tienes", "hay", "muestra", "muestrame", "ver", "que", "los",
+            "las", "el", "la", "de", "un", "una", "unos", "unas", "en", "categoria", "tipo", "tipos"
+        }
+        tokens = [w for w in t_norm.split() if w not in palabras_ignorar]
+        t_limpio = " ".join(tokens).strip()
+
+        alias_cat = SINONIMOS_CATEGORIAS.get(t_limpio) or SINONIMOS_CATEGORIAS.get(t_norm)
+        if not alias_cat and tokens:
+            for tok in tokens:
+                if tok in SINONIMOS_CATEGORIAS:
+                    alias_cat = SINONIMOS_CATEGORIAS[tok]
+                    break
+
+        for cat in categorias_activas:
+            cat_norm = normalizar_texto(cat.nombre or "")
+            if not cat_norm:
+                continue
+
+            # A. Coincidencia por sinónimo
+            if alias_cat and (alias_cat == cat_norm or alias_cat in cat_norm or cat_norm in alias_cat):
+                return cat
+
+            # B. Coincidencia directa exacta
+            if t_limpio == cat_norm or t_norm == cat_norm:
+                return cat
+
+            # C. Raíz singular (ej: 'cigarro' vs 'cigarrillos', 'bolsa' vs 'bolsas')
+            t_singular = t_limpio.rstrip("s")
+            cat_singular = cat_norm.rstrip("s")
+            if len(t_singular) >= 4 and (t_singular in cat_norm or cat_singular in t_limpio):
+                return cat
+
+            # D. Coincidencia por token individual
+            for tok in tokens:
+                tok_sing = tok.rstrip("s")
+                if len(tok_sing) >= 4 and (tok_sing == cat_singular or tok_sing in cat_norm):
+                    return cat
+
+        return None
+
+    @classmethod
     def buscar_producto_en_catalogo(
         cls,
         termino: str,
@@ -518,41 +686,15 @@ class AsistentePedidoService:
         if not candidatos:
             return "no_encontrado", None, []
 
-        def armar_dto(prod: Producto, sc: float) -> DictadoProductoMatch:
-            # Calcular precio acorde al cliente si existe
-            precio_aplicado = prod.precio
-            precio_caja_aplicado = prod.precio_caja
-            if cliente:
-                try:
-                    precio_aplicado = customer_product_price(prod, cliente)
-                    precio_caja_calc = customer_product_box_price(prod, cliente)
-                    if precio_caja_calc is not None:
-                        precio_caja_aplicado = precio_caja_calc
-                except Exception:
-                    pass
-
-            return DictadoProductoMatch(
-                id=prod.id,
-                codigo=prod.codigo,
-                nombre=prod.nombre,
-                precio=precio_aplicado,
-                afecto=bool(prod.afecto),
-                tiene_caja=bool(prod.tiene_caja),
-                cantidad_caja=prod.cantidad_caja,
-                precio_caja=precio_caja_aplicado,
-                stock=prod.cantidad or 0,
-                score=round(sc, 1),
-            )
-
         top_score, top_prod = candidatos[0]
 
         # Si el mejor resultado tiene score alto y supera con claridad al segundo:
         if top_score >= 82.0:
             if len(candidatos) == 1 or (top_score - candidatos[1][0] >= 15.0):
-                return "exacto", armar_dto(top_prod, top_score), []
+                return "exacto", cls.armar_dto_producto(top_prod, top_score, cliente), []
 
         # Si hay múltiples coincidencias con puntajes cercanos o score moderado:
-        opciones_dto = [armar_dto(p, sc) for sc, p in candidatos[:5]]
+        opciones_dto = [cls.armar_dto_producto(p, sc, cliente) for sc, p in candidatos[:5]]
         return "multiple", None, opciones_dto
 
     @classmethod
@@ -728,6 +870,56 @@ class AsistentePedidoService:
                     estado_conversacion="ESPERANDO_CANTIDAD",
                     mensaje_asistente=f"Encontré '{solo_item.producto.nombre}'. ¿Cuántas unidades o paquetes deseas agregar?",
                     mensaje_voz=f"Encontré {solo_item.producto.nombre}. ¿Cuántas unidades o paquetes deseas agregar?",
+                )
+
+        # 5. Si no se detectaron productos exactos, verificar si el dictado es una consulta de CATEGORÍA (ej: "cigarros", "bolsas", "vasos", etc.)
+        if total_exactos == 0:
+            categorias_activas = list(
+                db.scalars(
+                    select(Categoria)
+                    .where(Categoria.activo.is_(True))
+                    .order_by(Categoria.nombre.asc())
+                )
+            )
+            cat_detectada = cls.detectar_categoria(texto_trabajo, categorias_activas)
+            if cat_detectada:
+                prods_cat = [
+                    p for p in productos_activos
+                    if (p.categoria_id == cat_detectada.id or (p.categoria and p.categoria.id == cat_detectada.id))
+                ]
+                marcas = cls.extraer_marcas_de_categoria(prods_cat)
+                cat_lower = normalizar_texto(cat_detectada.nombre)
+
+                if marcas:
+                    if len(marcas) == 1:
+                        txt_marcas = marcas[0]
+                    else:
+                        txt_marcas = ", ".join(marcas[:-1]) + " y " + marcas[-1]
+                else:
+                    txt_marcas = "variadas opciones"
+
+                if any(k in cat_lower for k in ["cigarr", "tabac"]):
+                    mensaje_voz = f"¿Qué cigarros buscas? En esta categoría tenemos {txt_marcas}. ¿Cuál de ellos deseas agregar?"
+                elif "bolsa" in cat_lower:
+                    mensaje_voz = f"¿Qué tipo de bolsas necesitas? Tenemos {txt_marcas}. ¿Cuál deseas agregar?"
+                elif any(k in cat_lower for k in ["vaso", "envase", "termic"]):
+                    mensaje_voz = f"¿Qué vasos o envases buscas? Disponemos de {txt_marcas}. ¿Cuál necesitas?"
+                elif "encendedor" in cat_lower:
+                    mensaje_voz = f"¿Qué encendedores buscas? Tenemos {txt_marcas}. ¿Cuál deseas?"
+                else:
+                    mensaje_voz = f"¿Qué productos de {cat_detectada.nombre} buscas? Tenemos {txt_marcas}. ¿Cuál te gustaría agregar?"
+
+                mensaje_asistente = f"Categoría '{cat_detectada.nombre}' detectada. Opciones disponibles: {txt_marcas}. Indica la marca o producto y su cantidad."
+
+                return DictadoInterpretadoOutput(
+                    cliente_detectado_id=cliente_detectado_id or (cliente.id if cliente else None),
+                    cliente_detectado_nombre=cliente_detectado_nombre or (cliente.alias or cliente.nombre if cliente else None),
+                    categoria_detectada=cat_detectada.nombre,
+                    marcas_categoria=marcas,
+                    productos_categoria=[cls.armar_dto_producto(p, 90.0, cliente) for p in prods_cat[:8]],
+                    estado_conversacion="EXPLORANDO_CATEGORIA",
+                    mensaje_asistente=mensaje_asistente,
+                    mensaje_voz=mensaje_voz,
                 )
 
         # Generar mensajes para el asistente y síntesis de voz (TTS)

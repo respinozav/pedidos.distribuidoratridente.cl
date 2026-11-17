@@ -325,6 +325,42 @@ def test_cliente_prueba_sin_falsos_positivos_alias_nulo():
     assert cli_pref.id == cp.id
 
 
+def test_detectar_categoria_cigarros_y_lee_marcas():
+    """Al dictar 'cigarros', el agente debe detectar la categoría Cigarrillos y leer sus marcas disponibles."""
+    db = MagicMock()
+    cat_cig = Categoria(id=uuid4(), nombre="Cigarrillos", activo=True)
+    p1 = Producto(id=uuid4(), codigo="PM-1", nombre="PALL MALL AZUL 20 BLANDO", categoria=cat_cig, categoria_id=cat_cig.id, activo=True, precio=Decimal("3500"))
+    p2 = Producto(id=uuid4(), codigo="PM-2", nombre="PALL MALL ROJO 20", categoria=cat_cig, categoria_id=cat_cig.id, activo=True, precio=Decimal("3500"))
+    p3 = Producto(id=uuid4(), codigo="K-1", nombre="KENT ACTRON", categoria=cat_cig, categoria_id=cat_cig.id, activo=True, precio=Decimal("4200"))
+    p4 = Producto(id=uuid4(), codigo="LS-1", nombre="LUCKY STRIKE CLICK", categoria=cat_cig, categoria_id=cat_cig.id, activo=True, precio=Decimal("4000"))
+
+    db.scalars.side_effect = lambda q: [cat_cig] if "categorias" in str(q) else [p1, p2, p3, p4]
+    db.get.return_value = None
+
+    # 1. Dictado 'cigarros'
+    res = AsistentePedidoService.interpretar_dictado("cigarros", None, db)
+    assert res.estado_conversacion == "EXPLORANDO_CATEGORIA"
+    assert res.categoria_detectada == "Cigarrillos"
+    assert "Pall Mall" in res.marcas_categoria
+    assert "Kent" in res.marcas_categoria
+    assert "Lucky Strike" in res.marcas_categoria
+    assert "¿Qué cigarros buscas?" in res.mensaje_voz
+    assert "Pall Mall, Kent y Lucky Strike" in res.mensaje_voz
+
+    # 2. Dictado de categoría Bolsas
+    cat_bol = Categoria(id=uuid4(), nombre="Bolsas", activo=True)
+    pb1 = Producto(id=uuid4(), codigo="B-1", nombre="BOLSA CAMISETA 35X45 (PAQ X100)", categoria=cat_bol, categoria_id=cat_bol.id, activo=True, precio=Decimal("1200"))
+    pb2 = Producto(id=uuid4(), codigo="B-2", nombre="BOLSA TACO TRANSPARENTE", categoria=cat_bol, categoria_id=cat_bol.id, activo=True, precio=Decimal("900"))
+
+    db.scalars.side_effect = lambda q: [cat_bol] if "categorias" in str(q) else [pb1, pb2]
+    res_b = AsistentePedidoService.interpretar_dictado("bolsas", None, db)
+    assert res_b.estado_conversacion == "EXPLORANDO_CATEGORIA"
+    assert res_b.categoria_detectada == "Bolsas"
+    assert "Bolsa Camiseta" in res_b.marcas_categoria
+    assert "Bolsa Taco" in res_b.marcas_categoria
+    assert "bolsas necesitas?" in res_b.mensaje_voz
+
+
 if __name__ == "__main__":
     test_normalizar_texto_y_cantidades()
     print("✓ test_normalizar_texto_y_cantidades PASSED")
@@ -344,4 +380,6 @@ if __name__ == "__main__":
     print("✓ test_busqueda_cliente_afinada_tokens_y_tildes PASSED")
     test_cliente_prueba_sin_falsos_positivos_alias_nulo()
     print("✓ test_cliente_prueba_sin_falsos_positivos_alias_nulo PASSED")
+    test_detectar_categoria_cigarros_y_lee_marcas()
+    print("✓ test_detectar_categoria_cigarros_y_lee_marcas PASSED")
     print(">>> ALL ASISTENTE PEDIDO TESTS PASSED SUCCESSFULLY! <<<")

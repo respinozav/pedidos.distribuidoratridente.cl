@@ -80,6 +80,9 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
   const [conversationState, setConversationState] = useState("ESPERANDO_CLIENTE");
   const [pendingProduct, setPendingProduct] = useState(null);
   const [ambiguousItems, setAmbiguousItems] = useState([]);
+  const [detectedCategory, setDetectedCategory] = useState(null);
+  const [categoryBrands, setCategoryBrands] = useState([]);
+  const [categoryProducts, setCategoryProducts] = useState([]);
 
   // Estados del Borrador del Pedido
   const [cartItems, setCartItems] = useState([]);
@@ -575,6 +578,9 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
         setCartItems([]);
         setAmbiguousItems([]);
         setPendingProduct(null);
+        setDetectedCategory(null);
+        setCategoryBrands([]);
+        setCategoryProducts([]);
         hablarMensaje(
           "He vaciado el borrador del pedido. ¿Qué productos deseas agregar?",
           () => {
@@ -600,7 +606,19 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
         return;
       }
 
-      // C. Caso: Producto encontrado que espera cantidad (ESPERANDO_CANTIDAD)
+      // C. Detección de Categoría General (ej: "cigarros", "bolsas", "vasos", etc.)
+      if (data.categoria_detectada && data.marcas_categoria && data.marcas_categoria.length > 0) {
+        setDetectedCategory(data.categoria_detectada);
+        setCategoryBrands(data.marcas_categoria || []);
+        setCategoryProducts(data.productos_categoria || []);
+        setConversationState("EXPLORANDO_CATEGORIA");
+        hablarMensaje(data.mensaje_voz, () => {
+          if (isHandsFreeRef.current) iniciarEscucha();
+        });
+        return;
+      }
+
+      // D. Caso: Producto encontrado que espera cantidad (ESPERANDO_CANTIDAD)
       if (data.producto_pendiente_cantidad) {
         setPendingProduct(data.producto_pendiente_cantidad);
         setConversationState("ESPERANDO_CANTIDAD");
@@ -712,12 +730,20 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
     });
   };
 
+  const handleSelectCategoryBrand = (marca) => {
+    // Si el usuario pulsa en una marca o familia sugerida por voz
+    procesarEntradaVoz(marca);
+  };
+
   // Agregar al borrador del pedido
   const agregarProductoAlBorrador = (
     prod,
     cantidad = 1,
     tipo_empaque = "unidad"
   ) => {
+    setDetectedCategory(null);
+    setCategoryBrands([]);
+    setCategoryProducts([]);
     setCartItems((prev) => {
       const index = prev.findIndex(
         (p) => p.id === prod.id && p.tipo_empaque === tipo_empaque
@@ -1389,6 +1415,29 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
                 <p className="mb-0 text-dark fw-medium" style={{ fontSize: "0.95rem" }}>
                   {assistantMessage}
                 </p>
+
+                {/* Opciones interactivas de marcas si se detectó una categoría */}
+                {detectedCategory && categoryBrands.length > 0 && (
+                  <div className="mt-2 pt-2 border-top border-light">
+                    <span className="small text-primary fw-bold d-block mb-1">
+                      🏷️ Opciones disponibles en {detectedCategory} (haz clic o dicta tu elección):
+                    </span>
+                    <div className="d-flex flex-wrap gap-2">
+                      {categoryBrands.map((marca, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          className="btn btn-sm btn-outline-primary bg-white shadow-sm d-inline-flex align-items-center gap-1"
+                          onClick={() => handleSelectCategoryBrand(marca)}
+                          title={`Ver opciones de ${marca}`}
+                        >
+                          <Sparkles size={13} className="text-primary" />
+                          <span>{marca}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
