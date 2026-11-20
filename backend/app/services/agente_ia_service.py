@@ -495,16 +495,17 @@ class AgenteIAService:
             contents.append({"role": "user", "parts": [{"text": mensaje_usuario}]})
 
         modelo_env = getattr(settings, "gemini_model", None)
-        if modelo_env in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"):
-            modelo_env = "gemini-3.8-flash"
+        if modelo_env in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite"):
+            modelo_env = "gemini-3.5-flash-lite"
 
+        # Priorizar modelos de alta disponibilidad, baja latencia y soporte completo de herramientas
         lista_base = [
-            modelo_env if modelo_env else "gemini-3.8-flash",
-            "gemini-3.8-flash",
+            modelo_env if modelo_env else "gemini-3.5-flash-lite",
             "gemini-3.5-flash-lite",
-            "gemini-3.1-flash-lite",
-            "gemini-3.6-flash",
             "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
         ]
         # Eliminar duplicados manteniendo orden de prioridad
         modelos_candidatos = list(dict.fromkeys(lista_base))
@@ -513,7 +514,7 @@ class AgenteIAService:
         texto_final = ""
         errores_intentos: list[str] = []
 
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=12.0) as client:
             for current_key in active_keys:
                 key_masked = current_key[:4] + "..." + current_key[-4:] if len(current_key) > 8 else "***"
                 key_invalid = False
@@ -548,6 +549,9 @@ class AgenteIAService:
                                     GeminiKeyRotator.mark_key_failed(current_key, "HTTP 429 Quota Exceeded")
                                     key_invalid = True
                                     break
+                                elif res.status_code == 503:
+                                    logger.warning("Modelo %s con 503 (alta demanda), avanzando a siguiente candidato...", modelo)
+                                    break
                                 else:
                                     break
 
@@ -578,14 +582,18 @@ class AgenteIAService:
                             for fc in function_calls:
                                 fn_name = fc.get("name")
                                 fn_args = fc.get("args", {})
+                                fc_id = fc.get("id")
                                 herramientas_ejecutadas.append(fn_name)
                                 tool_result = self.ejecutar_herramienta(fn_name, fn_args)
+                                resp_item = {
+                                    "name": fn_name,
+                                    "response": {"result": tool_result},
+                                }
+                                if fc_id:
+                                    resp_item["id"] = fc_id
                                 response_parts.append(
                                     {
-                                        "functionResponse": {
-                                            "name": fn_name,
-                                            "response": {"result": tool_result},
-                                        }
+                                        "functionResponse": resp_item
                                     }
                                 )
 

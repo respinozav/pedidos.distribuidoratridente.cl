@@ -2440,6 +2440,7 @@ def send_ia_chat_message(
 @router.get("/ia/diagnostico", tags=["IA"])
 def diagnostico_ia(_: SuperAdminUser) -> dict[str, Any]:
     """Endpoint de diagnóstico para probar la conectividad directa con Gemini API y el pool de claves."""
+    import time
     import httpx
     from app.services.agente_ia_service import GeminiKeyRotator
 
@@ -2452,7 +2453,7 @@ def diagnostico_ia(_: SuperAdminUser) -> dict[str, Any]:
             "instrucciones": "Genera una o varias claves en https://aistudio.google.com/app/apikey y configúralas en .env",
         }
 
-    modelo = getattr(cfg, "gemini_model", None) or "gemini-3.8-flash"
+    modelo = getattr(cfg, "gemini_model", None) or "gemini-3.5-flash-lite"
     pool_status = GeminiKeyRotator.get_status_summary()
 
     resultados_keys = []
@@ -2462,30 +2463,39 @@ def diagnostico_ia(_: SuperAdminUser) -> dict[str, Any]:
             es_aistudio = key.startswith("AIzaSy")
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={key}"
             payload = {"contents": [{"parts": [{"text": "Responde OK"}]}]}
+            t_inicio = time.perf_counter()
             try:
                 res = client.post(url, json=payload)
+                latencia_ms = round((time.perf_counter() - t_inicio) * 1000, 1)
                 if res.status_code == 200:
                     GeminiKeyRotator.mark_key_success(key)
                     resultados_keys.append({
                         "key_prefijo": masked_key,
+                        "modelo_probado": modelo,
                         "tipo_formato": "Google AI Studio (Estándar)" if es_aistudio else "Cuenta de Servicio GCP / Personalizada",
                         "status": "ok",
                         "http_status": 200,
+                        "latencia_ms": latencia_ms,
                         "respuesta": res.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "OK"),
                     })
                 else:
                     GeminiKeyRotator.mark_key_failed(key, f"HTTP {res.status_code}")
                     resultados_keys.append({
                         "key_prefijo": masked_key,
+                        "modelo_probado": modelo,
                         "tipo_formato": "Google AI Studio (Estándar)" if es_aistudio else "Cuenta de Servicio GCP / Personalizada",
                         "status": "error",
                         "http_status": res.status_code,
+                        "latencia_ms": latencia_ms,
                         "detalle": res.text[:300],
                     })
             except Exception as ex:
+                latencia_ms = round((time.perf_counter() - t_inicio) * 1000, 1)
                 resultados_keys.append({
                     "key_prefijo": masked_key,
+                    "modelo_probado": modelo,
                     "status": "excepcion",
+                    "latencia_ms": latencia_ms,
                     "error_tipo": type(ex).__name__,
                     "detalle": str(ex)[:200],
                 })

@@ -314,9 +314,11 @@ export default function AgenteTridenteIA() {
     setSendingMessage(true);
 
     try {
-      const res = await api.post(`/admin/ia/chats/${currentChatId}/mensajes`, {
-        mensaje: text,
-      });
+      const res = await api.post(
+        `/admin/ia/chats/${currentChatId}/mensajes`,
+        { mensaje: text },
+        { timeout: 45000 }
+      );
 
       const assistantMsg = res.data;
       setMessages((prev) => [...prev, assistantMsg]);
@@ -338,17 +340,36 @@ export default function AgenteTridenteIA() {
       );
     } catch (err) {
       console.error("Error al enviar mensaje:", err);
-      const errorMsg =
-        err.response?.data?.detail || "No fue posible obtener respuesta del Agente IA.";
-      Swal.fire("Error de Conexión", errorMsg, "error");
-      // Agregar mensaje de error visual
+      const isTimeout =
+        err.code === "ECONNABORTED" ||
+        err.message?.toLowerCase().includes("timeout") ||
+        (!err.response && !err.status);
+
+      let errorMsg = "";
+      if (isTimeout) {
+        errorMsg =
+          "La consulta tomó más tiempo del esperado en procesarse debido a alta demanda o cálculo complejo. Puedes presionar 'Reintentar consulta' para volver a intentarlo.";
+      } else {
+        errorMsg =
+          err.response?.data?.detail || "No fue posible obtener respuesta del Agente IA en este momento.";
+      }
+
+      Swal.fire({
+        icon: isTimeout ? "warning" : "error",
+        title: isTimeout ? "Tiempo de Espera Agotado" : "Error de Conexión",
+        text: errorMsg,
+        confirmButtonColor: "#4f46e5",
+      });
+
+      // Agregar mensaje de error visual con opción de reintentar
       setMessages((prev) => [
         ...prev,
         {
           id: "err-" + Date.now(),
           chat_id: currentChatId,
           rol: "assistant",
-          contenido: `⚠️ **Error:** ${errorMsg}`,
+          contenido: `⚠️ **Aviso:** ${errorMsg}`,
+          retry_prompt: text,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -576,6 +597,21 @@ export default function AgenteTridenteIA() {
                             <IAPredictionRenderer predictionData={msg.datos_estructurados} />
                           </div>
                         )}
+
+                      {/* Botón de reintento inline para mensajes con error */}
+                      {!isUser && msg.retry_prompt && (
+                        <div className="mt-2 pt-2 border-top border-secondary-subtle d-flex align-items-center gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+                            onClick={() => handleSendMessage(msg.retry_prompt)}
+                            disabled={sendingMessage}
+                          >
+                            <RefreshCw size={13} />
+                            <span>Reintentar consulta</span>
+                          </button>
+                        </div>
+                      )}
 
                       <span className="message-timestamp">
                         {new Date(msg.created_at).toLocaleTimeString("es-CL", {
