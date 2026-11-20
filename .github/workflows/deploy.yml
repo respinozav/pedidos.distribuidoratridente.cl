@@ -31,7 +31,7 @@ jobs:
 
             echo "--- INYECTANDO VARIABLES GLOBALES EN SYSTEMD ---" >> "$REPORT_FILE" 2>&1
             sudo systemctl set-environment GEMINI_API_KEY="$G_KEY" >> "$REPORT_FILE" 2>&1 || true
-            sudo systemctl set-environment GEMINI_MODEL="gemini-3.6-flash" >> "$REPORT_FILE" 2>&1 || true
+            sudo systemctl set-environment GEMINI_MODEL="gemini-3.5-flash-lite" >> "$REPORT_FILE" 2>&1 || true
 
             echo "--- AJUSTANDO PERMISOS PARA ACTUALIZACION GIT ---" >> "$REPORT_FILE" 2>&1
             sudo chown -R $(whoami):$(whoami) /var/www/pedidos.distribuidoratridente.cl >> "$REPORT_FILE" 2>&1 || true
@@ -50,11 +50,11 @@ jobs:
                   echo "" | sudo tee -a "$ENV_FILE" > /dev/null
                   echo "# Google Gemini AI" | sudo tee -a "$ENV_FILE" > /dev/null
                   echo "GEMINI_API_KEY=$G_KEY" | sudo tee -a "$ENV_FILE" > /dev/null
-                  echo "GEMINI_MODEL=gemini-3.6-flash" | sudo tee -a "$ENV_FILE" > /dev/null
+                  echo "GEMINI_MODEL=gemini-3.5-flash-lite" | sudo tee -a "$ENV_FILE" > /dev/null
                   echo "Agregado GEMINI_API_KEY a $ENV_FILE" >> "$REPORT_FILE" 2>&1
                 else
                   sudo sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=$G_KEY|" "$ENV_FILE"
-                  sudo sed -i "s|^GEMINI_MODEL=.*|GEMINI_MODEL=gemini-3.6-flash|" "$ENV_FILE"
+                  sudo sed -i "s|^GEMINI_MODEL=.*|GEMINI_MODEL=gemini-3.5-flash-lite|" "$ENV_FILE"
                   echo "Actualizado GEMINI_API_KEY en $ENV_FILE" >> "$REPORT_FILE" 2>&1
                 fi
                 sudo chmod 644 "$ENV_FILE" 2>/dev/null || true

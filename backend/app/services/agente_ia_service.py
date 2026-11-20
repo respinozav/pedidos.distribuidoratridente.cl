@@ -495,15 +495,25 @@ class AgenteIAService:
             contents.append({"role": "user", "parts": [{"text": mensaje_usuario}]})
 
         modelo_env = getattr(settings, "gemini_model", None)
-        if modelo_env in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite"):
+        # Sanitizar modelos obsoletos o propensos a saturacion/429
+        if modelo_env in (
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-3.6-flash",
+            "gemini-3.8-flash",
+        ):
             modelo_env = "gemini-3.5-flash-lite"
 
-        # Priorizar modelos de alta disponibilidad, baja latencia y soporte completo de herramientas
+        # Priorizar SIEMPRE modelos de máxima cuota, alta disponibilidad y baja latencia
         lista_base = [
-            modelo_env if modelo_env else "gemini-3.5-flash-lite",
             "gemini-3.5-flash-lite",
             "gemini-flash-lite-latest",
             "gemini-3.1-flash-lite",
+            modelo_env if modelo_env else "gemini-3.5-flash-lite",
             "gemini-3.8-flash",
             "gemini-3.6-flash",
         ]
@@ -546,8 +556,11 @@ class AgenteIAService:
                                     key_invalid = True
                                     break
                                 elif res.status_code == 429:
-                                    GeminiKeyRotator.mark_key_failed(current_key, "HTTP 429 Quota Exceeded")
-                                    key_invalid = True
+                                    logger.warning(
+                                        "Modelo %s con HTTP 429 (cuota de modelo agotada), intentando con siguiente modelo candidato...",
+                                        modelo,
+                                    )
+                                    # No descartamos la clave completa: las cuotas de Google AI Studio son por modelo (flash-lite tiene cuota independiente)
                                     break
                                 elif res.status_code == 503:
                                     logger.warning("Modelo %s con 503 (alta demanda), avanzando a siguiente candidato...", modelo)
