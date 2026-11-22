@@ -115,9 +115,12 @@ NGINX_ROOT="/var/www/html/$PROJECT_NAME"
 echo ""
 echo -e "${YELLOW}>> Actualizando repositorio...${NC}"
 
-git checkout main 2>/dev/null || true
-git fetch origin main || true
-git reset --hard origin/main || true
+TARGET_BRANCH="${TARGET_BRANCH:-${DEPLOY_BRANCH:-${CURRENT_BRANCH:-main}}}"
+echo "Rama objetivo para despliegue: $TARGET_BRANCH"
+
+git checkout "$TARGET_BRANCH" 2>/dev/null || git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH" 2>/dev/null || true
+git fetch origin "$TARGET_BRANCH" 2>/dev/null || git fetch origin 2>/dev/null || true
+git reset --hard "origin/$TARGET_BRANCH" 2>/dev/null || git reset --hard HEAD || true
 git clean -fd deploy/ || true
 
 NEW_COMMIT=$(git rev-parse --short HEAD)

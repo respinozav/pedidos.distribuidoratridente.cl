@@ -4,27 +4,54 @@ on:
   push:
     branches:
       - main
+      - develop
+      - qa
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Entorno de despliegue (production o qa)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - qa
+      branch:
+        description: 'Rama a desplegar (opcional; si se deja vacia se usa la rama por defecto)'
+        required: false
+        default: ''
 
 concurrency:
-  group: deploy-aws
+  group: deploy-${{ github.event.inputs.environment != '' && github.event.inputs.environment || (github.ref_name == 'main' && 'production' || 'qa') }}
   cancel-in-progress: true
 
 jobs:
   deploy:
+    name: Despliegue (${{ github.event.inputs.environment != '' && github.event.inputs.environment || (github.ref_name == 'main' && 'production' || 'qa') }})
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment != '' && github.event.inputs.environment || (github.ref_name == 'main' && 'production' || 'qa') }}
     steps:
       - name: Ejecutar comandos de despliegue vía SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_ENV: "${{ github.event.inputs.environment != '' && github.event.inputs.environment || (github.ref_name == 'main' && 'production' || 'qa') }}"
+          DEPLOY_BRANCH: "${{ github.event.inputs.branch != '' && github.event.inputs.branch || (github.event.inputs.environment == 'qa' && github.ref_name == 'main' && 'develop' || (github.event.inputs.environment == 'production' && github.ref_name != 'main' && 'main' || github.ref_name)) }}"
+          AWS_HOST_BD: ${{ vars.AWS_HOST_BD || secrets.AWS_HOST_BD }}
+          AWS_SCHEME_BD: ${{ vars.AWS_SCHEME_BD || secrets.AWS_SCHEME_BD }}
+          AWS_USER_BD: ${{ vars.AWS_USER_BD || secrets.AWS_USER_BD }}
+          AWS_PASSWORD_BD: ${{ secrets.AWS_PASSWORD_BD || vars.AWS_PASSWORD_BD }}
         with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.AWS_USERNAME }}
+          host: ${{ vars.AWS_HOST || secrets.AWS_HOST }}
+          username: ${{ vars.AWS_USERNAME || secrets.AWS_USERNAME }}
           key: ${{ secrets.AWS_PRIVATE_KEY }}
+          envs: DEPLOY_ENV,DEPLOY_BRANCH,AWS_HOST_BD,AWS_SCHEME_BD,AWS_USER_BD,AWS_PASSWORD_BD
           script: |
             set +e
             REPORT_FILE="/tmp/status_ports.txt"
             echo "==========================================" > "$REPORT_FILE" 2>&1
             echo "DESPLIEGUE Y DIAGNOSTICO EN AWS: $(date)" >> "$REPORT_FILE" 2>&1
+            echo "ENTORNO ACTIVO: ${DEPLOY_ENV:-production}" >> "$REPORT_FILE" 2>&1
+            echo "RAMA SELECCIONADA: ${DEPLOY_BRANCH:-main}" >> "$REPORT_FILE" 2>&1
             echo "==========================================" >> "$REPORT_FILE" 2>&1
 
             G_KEY=$(echo "QVEuQWI4Uk42TENTX21hUHJXMkJpREdqTFpxbEZ5dkFFRXN4d1pCZHNUYmtDcWlRMUR6SVE=" | base64 -d)
@@ -33,41 +60,64 @@ jobs:
             sudo systemctl set-environment GEMINI_API_KEY="$G_KEY" >> "$REPORT_FILE" 2>&1 || true
             sudo systemctl set-environment GEMINI_MODEL="gemini-3.5-flash-lite" >> "$REPORT_FILE" 2>&1 || true
 
-            echo "--- AJUSTANDO PERMISOS PARA ACTUALIZACION GIT ---" >> "$REPORT_FILE" 2>&1
-            sudo chown -R $(whoami):$(whoami) /var/www/pedidos.distribuidoratridente.cl >> "$REPORT_FILE" 2>&1 || true
+            if [ -n "$AWS_HOST_BD" ]; then
+              echo "Inyectando DATABASE_HOST en systemd..." >> "$REPORT_FILE" 2>&1
+              sudo systemctl set-environment DATABASE_HOST="$AWS_HOST_BD" >> "$REPORT_FILE" 2>&1 || true
+            fi
+            if [ -n "$AWS_SCHEME_BD" ]; then
+              echo "Inyectando DATABASE_SCHEMA y POSTGREST_SCHEMA en systemd ($AWS_SCHEME_BD)..." >> "$REPORT_FILE" 2>&1
+              sudo systemctl set-environment DATABASE_SCHEMA="$AWS_SCHEME_BD" >> "$REPORT_FILE" 2>&1 || true
+              sudo systemctl set-environment POSTGREST_SCHEMA="$AWS_SCHEME_BD" >> "$REPORT_FILE" 2>&1 || true
+            fi
+            if [ -n "$AWS_USER_BD" ]; then
+              echo "Inyectando DATABASE_USER en systemd..." >> "$REPORT_FILE" 2>&1
+              sudo systemctl set-environment DATABASE_USER="$AWS_USER_BD" >> "$REPORT_FILE" 2>&1 || true
+            fi
+            if [ -n "$AWS_PASSWORD_BD" ]; then
+              sudo systemctl set-environment DATABASE_PASSWORD="$AWS_PASSWORD_BD" >> "$REPORT_FILE" 2>&1 || true
+            fi
 
-            echo "--- ACTUALIZANDO REPOSITORIO GIT ---" >> "$REPORT_FILE" 2>&1
-            cd /var/www/pedidos.distribuidoratridente.cl || true
-            git checkout main >> "$REPORT_FILE" 2>&1 || true
-            git fetch origin main >> "$REPORT_FILE" 2>&1 || true
-            git reset --hard origin/main >> "$REPORT_FILE" 2>&1 || true
+            echo "--- LOCALIZANDO DIRECTORIO DEL PROYECTO ---" >> "$REPORT_FILE" 2>&1
+            TARGET_APP_DIR="/var/www/pedidos.distribuidoratridente.cl"
+            if [ ! -d "$TARGET_APP_DIR" ]; then
+              for CANDIDATE in "/var/www/distribuidoratridente.cl" "/var/www/qa.distribuidoratridente.cl" "/var/www/pedidos-qa.distribuidoratridente.cl" "/var/www/pedidos"; do
+                if [ -d "$CANDIDATE" ]; then
+                  TARGET_APP_DIR="$CANDIDATE"
+                  break
+                fi
+              done
+            fi
+            echo "Directorio identificado: $TARGET_APP_DIR" >> "$REPORT_FILE" 2>&1
+
+            echo "--- AJUSTANDO PERMISOS PARA ACTUALIZACION GIT ---" >> "$REPORT_FILE" 2>&1
+            sudo chown -R $(whoami):$(whoami) "$TARGET_APP_DIR" >> "$REPORT_FILE" 2>&1 || true
+
+            echo "--- ACTUALIZANDO REPOSITORIO GIT (Rama: $DEPLOY_BRANCH) ---" >> "$REPORT_FILE" 2>&1
+            cd "$TARGET_APP_DIR" || true
+            BRANCH="${DEPLOY_BRANCH:-main}"
+            git fetch origin "$BRANCH" >> "$REPORT_FILE" 2>&1 || git fetch origin >> "$REPORT_FILE" 2>&1 || true
+            git checkout "$BRANCH" >> "$REPORT_FILE" 2>&1 || git checkout -B "$BRANCH" "origin/$BRANCH" >> "$REPORT_FILE" 2>&1 || true
+            git reset --hard "origin/$BRANCH" >> "$REPORT_FILE" 2>&1 || git reset --hard HEAD >> "$REPORT_FILE" 2>&1 || true
             git clean -fd >> "$REPORT_FILE" 2>&1 || true
 
             echo "--- INYECTANDO VARIABLES EN ARCHIVOS .ENV ---" >> "$REPORT_FILE" 2>&1
-            for ENV_FILE in "/var/www/pedidos.distribuidoratridente.cl/.env" "/var/www/pedidos.distribuidoratridente.cl/backend/.env" "/var/www/distribuidoratridente.cl/.env" "/var/www/distribuidoratridente.cl/backend/.env"; do
+            for ENV_FILE in "$TARGET_APP_DIR/.env" "$TARGET_APP_DIR/backend/.env" "/var/www/pedidos.distribuidoratridente.cl/.env" "/var/www/pedidos.distribuidoratridente.cl/backend/.env" "/var/www/distribuidoratridente.cl/.env" "/var/www/distribuidoratridente.cl/backend/.env"; do
               if [ -f "$ENV_FILE" ]; then
-                if ! grep -q "GEMINI_API_KEY" "$ENV_FILE"; then
-                  echo "" | sudo tee -a "$ENV_FILE" > /dev/null
-                  echo "# Google Gemini AI" | sudo tee -a "$ENV_FILE" > /dev/null
-                  echo "GEMINI_API_KEY=$G_KEY" | sudo tee -a "$ENV_FILE" > /dev/null
-                  echo "GEMINI_MODEL=gemini-3.5-flash-lite" | sudo tee -a "$ENV_FILE" > /dev/null
-                  echo "Agregado GEMINI_API_KEY a $ENV_FILE" >> "$REPORT_FILE" 2>&1
-                else
-                  sudo sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=$G_KEY|" "$ENV_FILE"
-                  sudo sed -i "s|^GEMINI_MODEL=.*|GEMINI_MODEL=gemini-3.5-flash-lite|" "$ENV_FILE"
-                  echo "Actualizado GEMINI_API_KEY en $ENV_FILE" >> "$REPORT_FILE" 2>&1
+                if [ -f "$TARGET_APP_DIR/backend/scripts/sync_env.py" ]; then
+                  sudo AWS_HOST_BD="$AWS_HOST_BD" AWS_USER_BD="$AWS_USER_BD" AWS_PASSWORD_BD="$AWS_PASSWORD_BD" AWS_SCHEME_BD="$AWS_SCHEME_BD" GEMINI_API_KEY="$G_KEY" GEMINI_MODEL="gemini-3.5-flash-lite" python3 "$TARGET_APP_DIR/backend/scripts/sync_env.py" "$ENV_FILE" >> "$REPORT_FILE" 2>&1 || true
                 fi
+                echo "Variables sincronizadas en: $ENV_FILE" >> "$REPORT_FILE" 2>&1
                 sudo chmod 644 "$ENV_FILE" 2>/dev/null || true
                 sudo chown www-data:www-data "$ENV_FILE" 2>/dev/null || true
               fi
             done
 
             echo "--- EJECUTANDO DEPLOY.SH ---" >> "$REPORT_FILE" 2>&1
-            cd /var/www/pedidos.distribuidoratridente.cl/deploy || true
-            bash deploy.sh >> "$REPORT_FILE" 2>&1 || echo "deploy.sh finalizo con advertencias" >> "$REPORT_FILE" 2>&1
+            cd "$TARGET_APP_DIR/deploy" || true
+            TARGET_BRANCH="$BRANCH" DEPLOY_BRANCH="$BRANCH" bash deploy.sh >> "$REPORT_FILE" 2>&1 || echo "deploy.sh finalizo con advertencias" >> "$REPORT_FILE" 2>&1
 
             echo "--- ASEGURANDO VIRTUALENV Y DEPENDENCIAS BACKEND ---" >> "$REPORT_FILE" 2>&1
-            BACKEND_PATH="/var/www/pedidos.distribuidoratridente.cl/backend"
+            BACKEND_PATH="$TARGET_APP_DIR/backend"
             if [ -d "$BACKEND_PATH" ]; then
               sudo "$BACKEND_PATH/venv/bin/pip" install --upgrade pip >> "$REPORT_FILE" 2>&1 || true
               sudo "$BACKEND_PATH/venv/bin/pip" install --force-reinstall "sniffio>=1.3.1" "anyio>=4.4.0" >> "$REPORT_FILE" 2>&1 || true
