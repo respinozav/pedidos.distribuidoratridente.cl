@@ -64,12 +64,12 @@ jobs:
             fi
 
             echo "Ejecutando setup_and_clone_qa_db.py..."
-            sudo DATABASE_HOST="${AWS_HOST_BD:-localhost}" \
-                 DATABASE_USER="${AWS_USER_BD:-postgres}" \
-                 DATABASE_PASSWORD="${AWS_PASSWORD_BD}" \
-                 DATABASE_NAME="postgres" \
-                 DATABASE_SCHEMA="${AWS_SCHEME_BD:-bdtridente}" \
-                 "$PYTHON_EXEC" "$APP_DIR/backend/scripts/setup_and_clone_qa_db.py"
+            sudo env DATABASE_HOST="${AWS_HOST_BD:-localhost}" \
+                     DATABASE_USER="${AWS_USER_BD:-postgres}" \
+                     DATABASE_PASSWORD="${AWS_PASSWORD_BD}" \
+                     DATABASE_NAME="postgres" \
+                     DATABASE_SCHEMA="${AWS_SCHEME_BD:-bdtridente}" \
+                     "$PYTHON_EXEC" "$APP_DIR/backend/scripts/setup_and_clone_qa_db.py"
 
             echo "=========================================="
             echo "CLONADO FINALIZADO EXITOSAMENTE"
