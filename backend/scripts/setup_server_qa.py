@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Script utilitario para inicializar y configurar el servidor de QA:
-1. Instala y asegura Nginx y dependencias si faltan.
-2. Crea el servicio systemd /etc/systemd/system/pedidos-tridente-qa.service si no existe.
-3. Crea el virtualhost de Nginx /etc/nginx/sites-available/pedidos-qa.distribuidoratridente.cl si no existe.
-4. Deshabilita el sitio default de Nginx para evitar conflictos en el puerto 80.
-5. Habilita y arranca los servicios.
+1. Instala y asegura Nginx, Python3 venv, Node.js y dependencias del sistema.
+2. Crea el servicio systemd /etc/systemd/system/pedidos-tridente-qa.service.
+3. Configura el virtualhost Nginx con soporte HTTP 80 y HTTPS 443 (Certbot SSL).
+4. Recrea el entorno virtual Python (venv) y compila el frontend.
+5. Habilita y arranca todos los servicios.
 """
 
 import os
@@ -38,7 +38,45 @@ RestartSec=5
 WantedBy=multi-user.target
 """
 
-NGINX_CONTENT = f"""server {{
+
+def get_nginx_config() -> str:
+    cert_file = Path("/etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl/fullchain.pem")
+    key_file = Path("/etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl/privkey.pem")
+
+    if cert_file.exists() and key_file.exists():
+        return f"""server {{
+    listen 80;
+    listen [::]:80;
+    server_name pedidos-qa.distribuidoratridente.cl;
+    return 301 https://$host$request_uri;
+}}
+
+server {{
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name pedidos-qa.distribuidoratridente.cl;
+
+    ssl_certificate /etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl/privkey.pem;
+
+    root {QA_HTML_DIR};
+    index index.html;
+
+    location / {{
+        try_files $uri $uri/ /index.html;
+    }}
+
+    location /api {{
+        proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+}}
+"""
+    else:
+        return f"""server {{
     listen 80;
     listen [::]:80;
     server_name pedidos-qa.distribuidoratridente.cl _;
@@ -72,12 +110,22 @@ def setup_qa_system():
         subprocess.run(["systemctl", "stop", "apache2"], check=False)
         subprocess.run(["systemctl", "disable", "apache2"], check=False)
 
-    # 1. Asegurar instalación de Nginx
-    if not shutil.which("nginx"):
-        print("Instalando Nginx en el servidor de QA...")
-        subprocess.run(["apt-get", "update", "-y"], check=False)
-        subprocess.run(["apt-get", "install", "-y", "nginx"], check=False)
-        print("✓ Nginx instalado.")
+    # 1. Asegurar instalación de paquetes del sistema operativo
+    print("Instalando dependencias del sistema en QA (Nginx, Python3-venv, Pip, Certbot, Node)...")
+    subprocess.run(["apt-get", "update", "-y"], check=False)
+    subprocess.run([
+        "apt-get", "install", "-y",
+        "nginx",
+        "python3-venv",
+        "python3.12-venv",
+        "python3-pip",
+        "nodejs",
+        "npm",
+        "certbot",
+        "python3-certbot-nginx",
+        "postgresql-client"
+    ], check=False)
+    print("✓ Paquetes del sistema asegurados.")
 
     # 2. Crear directorios requeridos
     Path(QA_HTML_DIR).mkdir(parents=True, exist_ok=True)
@@ -95,7 +143,7 @@ def setup_qa_system():
             print("Aviso al remover default site:", e)
 
     # 4. Configurar VirtualHost de QA
-    QA_NGINX_PATH.write_text(NGINX_CONTENT, encoding="utf-8")
+    QA_NGINX_PATH.write_text(get_nginx_config(), encoding="utf-8")
     if not QA_NGINX_ENABLED.exists():
         try:
             QA_NGINX_ENABLED.symlink_to(QA_NGINX_PATH)
@@ -103,14 +151,11 @@ def setup_qa_system():
             pass
     print(f"✓ VirtualHost Nginx configurado: {QA_NGINX_PATH}")
 
-    # 5. Configurar servicio systemd si no existe
-    if not QA_SERVICE_PATH.exists() and not Path("/etc/systemd/system/pedidos-tridente.service").exists():
-        QA_SERVICE_PATH.write_text(SERVICE_CONTENT, encoding="utf-8")
-        subprocess.run(["systemctl", "daemon-reload"], check=False)
-        subprocess.run(["systemctl", "enable", "pedidos-tridente-qa"], check=False)
-        print(f"✓ Servicio systemd creado y habilitado: {QA_SERVICE_PATH}")
-    else:
-        print("✓ Servicio systemd ya se encuentra presente.")
+    # 5. Configurar servicio systemd
+    QA_SERVICE_PATH.write_text(SERVICE_CONTENT, encoding="utf-8")
+    subprocess.run(["systemctl", "daemon-reload"], check=False)
+    subprocess.run(["systemctl", "enable", "pedidos-tridente-qa"], check=False)
+    print(f"✓ Servicio systemd creado y habilitado: {QA_SERVICE_PATH}")
 
     # 6. Habilitar reglas de firewall local UFW si está activo
     if shutil.which("ufw"):
@@ -119,7 +164,44 @@ def setup_qa_system():
         subprocess.run(["ufw", "allow", "Nginx Full"], check=False)
         print("✓ Reglas de puerto 80/443 aplicadas en UFW.")
 
-    # 7. Reiniciar y verificar Nginx
+    # 7. Asegurar entorno virtual backend con ensurepip
+    venv_dir = Path(f"{QA_DIR}/backend/venv")
+    pip_bin = venv_dir / "bin" / "pip"
+    if not pip_bin.exists():
+        print(f"Creando entorno virtual Python funcional en {venv_dir}...")
+        if venv_dir.exists():
+            shutil.rmtree(venv_dir, ignore_errors=True)
+        subprocess.run(["python3", "-m", "venv", str(venv_dir)], check=False)
+        if pip_bin.exists():
+            print("✓ Entorno virtual venv creado exitosamente.")
+            subprocess.run([str(pip_bin), "install", "--upgrade", "pip"], check=False)
+        else:
+            print("Aviso: pip no se encontró tras venv.")
+
+    # 8. Asegurar index.html en frontend
+    html_index = Path(QA_HTML_DIR) / "index.html"
+    frontend_dir = Path(QA_DIR) / "frontend"
+    if not html_index.exists() and (frontend_dir / "package.json").exists():
+        print("Compilando frontend React para generar index.html...")
+        subprocess.run(["npm", "install"], cwd=str(frontend_dir), check=False)
+        subprocess.run(["npm", "run", "build"], cwd=str(frontend_dir), check=False)
+        dist_dir = frontend_dir / "dist"
+        if dist_dir.exists():
+            for item in dist_dir.glob("*"):
+                dest = Path(QA_HTML_DIR) / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, dest)
+            print("✓ Frontend compilado y copiado a HTML root.")
+
+    # Asegurar permisos www-data
+    subprocess.run(["chown", "-R", "www-data:www-data", QA_HTML_DIR], check=False)
+
+    # 9. Configurar SSL / HTTPS en puerto 443 con Certbot
+    setup_ssl_certbot()
+
+    # 10. Reiniciar y verificar Nginx
     print("Verificando configuración de Nginx...")
     t = subprocess.run(["nginx", "-t"], capture_output=True, text=True)
     if t.stdout:
@@ -135,9 +217,6 @@ def setup_qa_system():
     else:
         print("✓ Servicio Nginx reiniciado y activo.")
 
-    # 8. Configurar SSL / HTTPS en puerto 443 con Certbot
-    setup_ssl_certbot()
-
     print("=" * 60)
     print("SERVIDOR QA CONFIGURADO EXITOSAMENTE")
     print("=" * 60)
@@ -145,36 +224,28 @@ def setup_qa_system():
 
 def setup_ssl_certbot():
     print("\n--- VERIFICANDO CONFIGURACION SSL / HTTPS (PUERTO 443) ---")
-    cert_dir = Path("/etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl")
-    if cert_dir.exists():
-        print("✓ Certificado SSL activo en /etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl")
-        return
+    cert_file = Path("/etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl/fullchain.pem")
+    if not cert_file.exists():
+        if shutil.which("certbot"):
+            print("Solicitando certificado SSL para pedidos-qa.distribuidoratridente.cl...")
+            res = subprocess.run([
+                "certbot", "--nginx",
+                "-d", "pedidos-qa.distribuidoratridente.cl",
+                "--non-interactive",
+                "--agree-tos",
+                "-m", "admin@correodistribuidoratridente.cl",
+                "--redirect"
+            ], capture_output=True, text=True)
+            if res.returncode == 0:
+                print("✓ Certificado SSL emitido con éxito vía certbot!")
+            else:
+                print("Aviso Certbot:", (res.stderr or res.stdout).strip()[-200:])
 
-    # Instalar certbot si es necesario
-    if not shutil.which("certbot"):
-        print("Instalando Certbot y python3-certbot-nginx...")
-        subprocess.run(["apt-get", "update", "-y"], check=False)
-        subprocess.run(["apt-get", "install", "-y", "certbot", "python3-certbot-nginx"], check=False)
-
-    if shutil.which("certbot"):
-        print("Solicitando certificado SSL para pedidos-qa.distribuidoratridente.cl...")
-        res = subprocess.run([
-            "certbot", "--nginx",
-            "-d", "pedidos-qa.distribuidoratridente.cl",
-            "--non-interactive",
-            "--agree-tos",
-            "-m", "admin@correodistribuidoratridente.cl",
-            "--redirect"
-        ], capture_output=True, text=True)
-        if res.returncode == 0:
-            print("✓ Certificado SSL (HTTPS 443) emitido y configurado exitosamente con redirección automática!")
-            subprocess.run(["systemctl", "reload", "nginx"], check=False)
-        else:
-            print("Aviso Certbot: No se pudo emitir el certificado automáticamente en este intento.")
-            print("Verifica que los puertos 80 y 443 estén abiertos en el Security Group de AWS.")
-            if res.stderr or res.stdout:
-                output = (res.stderr or res.stdout).strip()
-                print("Detalle:", output[-300:])
+    # Re-escribir virtualhost para garantizar bloque 443 si los certificados existen
+    QA_NGINX_PATH.write_text(get_nginx_config(), encoding="utf-8")
+    subprocess.run(["nginx", "-t"], check=False)
+    subprocess.run(["systemctl", "reload", "nginx"], check=False)
+    print("✓ Virtualhost Nginx actualizado con directivas SSL 443.")
 
 
 if __name__ == "__main__":
