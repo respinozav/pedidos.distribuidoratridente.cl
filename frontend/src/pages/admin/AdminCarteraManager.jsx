@@ -445,7 +445,7 @@ export default function AdminCarteraManager() {
                           />
                         </td>
                         <td>
-                          <div className="fw-bold text-dark">
+                          <div className="fw-bold text-dark text-truncate" style={{ maxWidth: "260px" }} title={client.nombre || ""}>
                             {client.nombre || "Sin nombre registrado"}
                             {client.alias && (
                               <span className="badge bg-light text-primary border ms-2" title={`Alias: ${client.alias}`}>
@@ -456,13 +456,13 @@ export default function AdminCarteraManager() {
                           <small className="text-muted d-block font-monospace">RUT: {client.rut || "-"}</small>
                         </td>
                         <td>
-                          {client.correo && <div className="small text-truncate" style={{ maxWidth: "200px" }}>{client.correo}</div>}
-                          {client.celular && <small className="text-muted">{client.celular}</small>}
+                          {client.correo && <div className="small text-truncate" style={{ maxWidth: "200px" }} title={client.correo}>{client.correo}</div>}
+                          {client.celular && <small className="text-muted d-block text-truncate" style={{ maxWidth: "160px" }} title={client.celular}>{client.celular}</small>}
                           {!client.correo && !client.celular && <span className="text-muted small">-</span>}
                         </td>
                         <td>
                           {isAssigned ? (
-                            <div className="d-flex align-items-center gap-2">
+                            <div className="d-flex align-items-center gap-2" style={{ maxWidth: "240px" }}>
                               <span
                                 style={{
                                   display: "inline-flex",
@@ -480,12 +480,12 @@ export default function AdminCarteraManager() {
                               >
                                 {client.vendedor_nombre?.slice(0, 2).toUpperCase() || "VD"}
                               </span>
-                              <div>
-                                <span className="fw-semibold text-dark d-block">
+                              <div style={{ minWidth: 0, overflow: "hidden" }}>
+                                <span className="fw-semibold text-dark d-block text-truncate" title={client.vendedor_nombre}>
                                   {client.vendedor_nombre}
                                 </span>
                                 {client.vendedor_correo && (
-                                  <small className="text-muted">{client.vendedor_correo}</small>
+                                  <small className="text-muted d-block text-truncate" title={client.vendedor_correo}>{client.vendedor_correo}</small>
                                 )}
                               </div>
                             </div>

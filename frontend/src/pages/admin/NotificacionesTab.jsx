@@ -516,7 +516,9 @@ export default function NotificacionesTab({ onUpdateCount }) {
                       <td className="px-3 py-2 text-nowrap font-monospace text-muted">
                         {log.enviado_el ? new Date(log.enviado_el).toLocaleString("es-CL") : "-"}
                       </td>
-                      <td className="px-3 py-2 fw-semibold text-dark">{log.destinatario}</td>
+                      <td className="px-3 py-2 fw-semibold text-dark text-truncate" style={{ maxWidth: "220px" }} title={log.destinatario || ""}>
+                        {log.destinatario}
+                      </td>
                       <td className="px-3 py-2">
                         <span
                           className={`badge ${
@@ -531,7 +533,7 @@ export default function NotificacionesTab({ onUpdateCount }) {
                           {log.tipo}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-truncate text-secondary" style={{ maxWidth: "260px" }}>
+                      <td className="px-3 py-2 text-truncate text-secondary" style={{ maxWidth: "260px" }} title={log.asunto || ""}>
                         {log.asunto}
                       </td>
                       <td className="px-3 py-2 text-end">
