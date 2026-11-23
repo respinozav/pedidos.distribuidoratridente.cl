@@ -603,14 +603,216 @@ button, input, select, textarea {
   box-shadow: 0 0 0 3px rgba(20, 108, 206, 0.18); 
   background: #ffffff;
 }
-.category-table, .product-table, .user-table, .customer-table, .admin-order-table, .credit-table, .admin-log-table, .promo-table, .admin-cart-table, .camila-log-table { 
-  background: #ffffff; 
-  border: 1px solid var(--line-hairline); 
-  border-radius: var(--radius-lg); 
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  overflow-x: auto; 
-  -webkit-overflow-scrolling: touch; 
+/* ==========================================================================
+   SISTEMA ESTANDARIZADO DE TABLAS MODERNAS (100% RESPONSIVE)
+   Patrón Stripe / Linear / Google AI Studio unificado
+   ========================================================================== */
+
+/* 1. Contenedores de tablas estándar y wrappers responsive */
+.table-responsive,
+.stock-alert-table-container,
+.category-table, 
+.product-table, 
+.user-table, 
+.customer-table, 
+.admin-order-table, 
+.credit-table, 
+.admin-log-table, 
+.promo-table, 
+.admin-cart-table, 
+.camila-log-table,
+.admin-ventas-table,
+.vendor-sales-table,
+.address-table,
+.order-history,
+.order-detail-lines,
+.vendor-order-detail-lines,
+.ia-prediction-table-wrap {
+  background: #ffffff;
+  border: 1px solid var(--line-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 16px -2px rgba(16, 42, 67, 0.03);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  width: 100%;
+  margin-bottom: 1.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.15) transparent;
 }
+
+/* Evitar bordes dobles si la tabla está dentro de un card-body o modal */
+.card-body > .table-responsive,
+.settings-card-body > .table-responsive,
+.modal-body-custom > .table-responsive {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  margin-bottom: 0;
+}
+
+/* Scrollbar estilizado moderno para tablas */
+.table-responsive::-webkit-scrollbar,
+.stock-alert-table-container::-webkit-scrollbar,
+.category-table::-webkit-scrollbar, 
+.product-table::-webkit-scrollbar, 
+.user-table::-webkit-scrollbar, 
+.customer-table::-webkit-scrollbar, 
+.admin-order-table::-webkit-scrollbar, 
+.credit-table::-webkit-scrollbar,
+.admin-log-table::-webkit-scrollbar,
+.promo-table::-webkit-scrollbar,
+.admin-cart-table::-webkit-scrollbar,
+.camila-log-table::-webkit-scrollbar,
+.admin-ventas-table::-webkit-scrollbar,
+.vendor-sales-table::-webkit-scrollbar,
+.order-history::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.table-responsive::-webkit-scrollbar-track,
+.stock-alert-table-container::-webkit-scrollbar-track,
+.category-table::-webkit-scrollbar-track,
+.product-table::-webkit-scrollbar-track,
+.user-table::-webkit-scrollbar-track,
+.customer-table::-webkit-scrollbar-track,
+.admin-order-table::-webkit-scrollbar-track,
+.credit-table::-webkit-scrollbar-track,
+.admin-log-table::-webkit-scrollbar-track,
+.promo-table::-webkit-scrollbar-track,
+.admin-cart-table::-webkit-scrollbar-track,
+.camila-log-table::-webkit-scrollbar-track,
+.admin-ventas-table::-webkit-scrollbar-track,
+.vendor-sales-table::-webkit-scrollbar-track,
+.order-history::-webkit-scrollbar-track {
+  background: transparent;
+}
+.table-responsive::-webkit-scrollbar-thumb,
+.stock-alert-table-container::-webkit-scrollbar-thumb,
+.category-table::-webkit-scrollbar-thumb,
+.product-table::-webkit-scrollbar-thumb,
+.user-table::-webkit-scrollbar-thumb,
+.customer-table::-webkit-scrollbar-thumb,
+.admin-order-table::-webkit-scrollbar-thumb,
+.credit-table::-webkit-scrollbar-thumb,
+.admin-log-table::-webkit-scrollbar-thumb,
+.promo-table::-webkit-scrollbar-thumb,
+.admin-cart-table::-webkit-scrollbar-thumb,
+.camila-log-table::-webkit-scrollbar-thumb,
+.admin-ventas-table::-webkit-scrollbar-thumb,
+.vendor-sales-table::-webkit-scrollbar-thumb,
+.order-history::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.15);
+  border-radius: 99px;
+}
+.table-responsive::-webkit-scrollbar-thumb:hover,
+.stock-alert-table-container::-webkit-scrollbar-thumb:hover,
+.category-table::-webkit-scrollbar-thumb:hover,
+.product-table::-webkit-scrollbar-thumb:hover,
+.user-table::-webkit-scrollbar-thumb:hover,
+.customer-table::-webkit-scrollbar-thumb:hover,
+.admin-order-table::-webkit-scrollbar-thumb:hover,
+.credit-table::-webkit-scrollbar-thumb:hover,
+.admin-log-table::-webkit-scrollbar-thumb:hover,
+.promo-table::-webkit-scrollbar-thumb:hover,
+.admin-cart-table::-webkit-scrollbar-thumb:hover,
+.camila-log-table::-webkit-scrollbar-thumb:hover,
+.admin-ventas-table::-webkit-scrollbar-thumb:hover,
+.vendor-sales-table::-webkit-scrollbar-thumb:hover,
+.order-history::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.3);
+}
+
+/* 2. Estandarización de tablas HTML nativas (<table>) */
+table.table,
+table.stock-alert-table,
+.table-responsive table,
+table.ia-prediction-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+table.table thead,
+table.stock-alert-table thead,
+.table-responsive table thead,
+table.ia-prediction-table thead {
+  background: #f8fafc;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+table.table thead th,
+table.stock-alert-table thead th,
+.table-responsive table thead th,
+table.ia-prediction-table thead th {
+  background: #f8fafc !important;
+  border-bottom: 1px solid var(--line-hairline) !important;
+  border-top: 0 !important;
+  color: #475569 !important;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  padding: 0.85rem 1.15rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+table.table tbody tr,
+table.stock-alert-table tbody tr,
+.table-responsive table tbody tr,
+table.ia-prediction-table tbody tr {
+  transition: background-color var(--duration) ease;
+}
+
+table.table tbody tr:hover,
+table.stock-alert-table tbody tr:hover,
+.table-responsive table tbody tr:hover,
+table.ia-prediction-table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+table.table tbody td,
+table.stock-alert-table tbody td,
+.table-responsive table tbody td,
+table.ia-prediction-table tbody td {
+  border-top: 1px solid rgba(15, 23, 42, 0.05) !important;
+  border-bottom: 0 !important;
+  color: var(--ink);
+  font-size: 0.86rem;
+  padding: 0.85rem 1.15rem;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+table.table tbody tr:first-child td,
+table.stock-alert-table tbody tr:first-child td,
+.table-responsive table tbody tr:first-child td,
+table.ia-prediction-table tbody tr:first-child td {
+  border-top: 0 !important;
+}
+
+/* Checkboxes y formularios dentro de tablas */
+table.table .form-check-input {
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  height: 18px;
+  width: 18px;
+  transition: all var(--duration) ease;
+}
+table.table .form-check-input:checked {
+  background-color: var(--blue);
+  border-color: var(--blue);
+}
+
+/* 3. Estandarización de tablas CSS Grid (div-based) */
 .category-table-head, .category-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: 65px minmax(150px, 1.3fr) minmax(90px, .8fr) minmax(110px, .9fr) minmax(110px, 1fr) 80px 80px; min-width: 680px; }
 .promo-table-head, .promo-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: 55px minmax(180px, 1.5fr) minmax(150px, 1.3fr) minmax(105px, 1fr) 90px minmax(115px, 125px) 115px; min-width: 850px; }
 .promo-row > div { min-width: 0; }
@@ -624,12 +826,13 @@ button, input, select, textarea {
   padding: .9rem 1.15rem; 
   text-transform: uppercase; 
   border-bottom: 1px solid var(--line-hairline);
+  white-space: nowrap;
 }
 .category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row, .promo-row, .admin-cart-row, .vendor-sales-row, .admin-ventas-row, .admin-vendedor-summary-row, .camila-log-row { 
   align-items: center; 
   border-top: 1px solid rgba(15, 23, 42, 0.05); 
   color: var(--ink); 
-  font-size: .85rem; 
+  font-size: .86rem; 
   padding: .9rem 1.15rem; 
   transition: background-color var(--duration) ease; 
 }
@@ -714,7 +917,7 @@ button, input, select, textarea {
 .switch input:checked + span { background: var(--blue); }
 .switch input:checked + span::before { transform: translateX(21px); }
 .category-modal footer { border-top: 1px solid var(--line-hairline); gap: .75rem; justify-content: flex-end; background: #fafbfc; }
-.product-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* .product-table utiliza el sistema unificado de tablas */
 .product-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.25rem; }
 .product-filters > select.form-select { flex: 1 1 180px; min-height: 42px; }
 .product-search { flex: 2 1 200px; position: relative; }
@@ -725,7 +928,7 @@ button, input, select, textarea {
 .btn-full-catalog { align-items: center; display: inline-flex; flex: 0 0 auto; gap: .45rem; height: 42px; white-space: nowrap; }
 .stock-critical { background: #fff0ef; border-radius: 4px; color: #b42318; font-weight: 800; padding: .25rem .4rem; text-align: center; }
 .product-table-head, .product-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(200px, 1.6fr) minmax(110px, 1fr) minmax(85px, .8fr) 65px 95px 70px 75px 70px; min-width: 800px; }
-.product-row { border-top: 1px solid var(--line); padding: .75rem 1rem; }
+.product-row { padding: .85rem 1.15rem; }
 .product-name { align-items: center; display: flex; gap: .65rem; min-width: 0; }
 .product-name strong { color: var(--ink); display: block; font-size: .82rem; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .product-name small { color: var(--muted); display: block; font-size: .72rem; font-weight: 600; margin-top: .15rem; }
@@ -737,7 +940,7 @@ button, input, select, textarea {
 .form-text { color: var(--muted); display: block; font-size: .76rem; margin-top: .35rem; }
 .image-preview { align-items: center; display: flex; gap: .75rem; margin-top: 1rem; }
 .image-preview img { border: 1px solid var(--line); border-radius: 5px; height: 58px; object-fit: cover; width: 58px; }
-.user-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* .user-table utiliza el sistema unificado de tablas */
 .user-table-head, .user-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(170px, 1.3fr) minmax(130px, 1fr) minmax(110px, .9fr) 105px minmax(160px, 1.2fr) 76px 80px; min-width: 860px; }
 .camila-channels { align-items: center; display: flex; flex-wrap: wrap; gap: .35rem; }
 .camila-badge { border-radius: 99px; display: inline-flex; font-size: .72rem !important; font-weight: 750; line-height: 1; padding: .3rem .55rem; white-space: nowrap; }
@@ -747,18 +950,18 @@ button, input, select, textarea {
 .product-row > .icon-button, .user-row > .icon-button, .category-row > .icon-button { justify-self: center; }
 .customer-row { cursor: pointer; }
 .customer-row:hover { background: #f8fafc; }
-.customer-table, .address-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* .customer-table y .address-table utilizan el sistema unificado de tablas */
 .customer-table-head, .address-table-head, .address-row { align-items: center; display: grid; gap: .75rem; }
 .customer-table-head, .customer-row { grid-template-columns: minmax(110px, .9fr) minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(110px, .9fr) minmax(150px, 1.1fr) 48px 75px 75px 78px; min-width: 960px; }
-.customer-row { align-items: center; border-top: 1px solid var(--line); display: grid; gap: .75rem; padding: .75rem 1rem; }
+.customer-row { align-items: center; display: grid; gap: .75rem; padding: .85rem 1.15rem; }
 .customer-actions { display: flex; gap: .35rem; }
 .customer-alias-tag { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 4px; color: #1d4ed8; display: inline-block; font-size: .78rem; font-weight: 700; max-width: 100%; overflow: hidden; padding: .2rem .45rem; text-overflow: ellipsis; white-space: nowrap; }
 .address-table-head, .address-row { grid-template-columns: minmax(0, 1.5fr) minmax(0, .8fr) 62px 52px; }
-.address-row { border-top: 1px solid var(--line); padding: .75rem 1rem; }
+.address-row { padding: .85rem 1.15rem; }
 .address-row .switch { justify-self: start; transform: scale(.8); transform-origin: left center; }
 .address-form { align-items: end; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) minmax(0, .75fr) 46px 46px; margin-top: 1.25rem; }
 .address-principal, .address-active { margin-bottom: .5rem; }
-.user-row { border-top: 1px solid var(--line); padding: .75rem 1rem; }
+.user-row { padding: .85rem 1.15rem; }
 .user-name { align-items: center; display: flex; gap: .65rem; min-width: 0; }
 .user-name strong, .user-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-name small, .user-role { color: var(--muted); font-size: .78rem; }
@@ -856,7 +1059,7 @@ button, input, select, textarea {
 .customer-product-filters + .search-field { display: inline-flex; margin-bottom: .75rem; vertical-align: top; width: calc((100% - 2rem) / 3 * 2 + 1rem); }
 .customer-product-filters .form-select, .customer-product-filters + .search-field .form-control { font-size: .92rem; height: 46px; border-radius: var(--radius-sm); }
 .cart-items { margin-top: 1rem; }
-.order-history { display: grid; overflow: hidden; }
+.order-history { display: block; }
 .order-history-filters { align-items: end; display: grid; gap: .8rem; grid-template-columns: minmax(130px, .8fr) minmax(160px, 1.2fr) minmax(140px, 1fr) minmax(140px, 1fr); margin: 1rem 0; }
 .order-history-filters label { color: var(--muted); display: grid; font-size: .76rem; font-weight: 750; gap: .32rem; }
 
@@ -916,7 +1119,7 @@ button, input, select, textarea {
 }
 
 .history-filter-empty { color: var(--muted); margin: 1rem 0 0; }
-.admin-order-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* .admin-order-table utiliza el sistema unificado de tablas */
 .admin-order-head, .admin-order-row { align-items: center; display: grid; gap: .8rem; grid-template-columns: minmax(150px, 1.2fr) minmax(160px, 1.2fr) minmax(140px, 1fr) 95px 95px 80px; min-width: 720px; }
 .admin-order-head span:last-child, .admin-log-head span:last-child { text-align: center; }
 .admin-order-row > .icon-button, .admin-log-row > .icon-button { justify-self: center; }
@@ -1071,7 +1274,7 @@ button, input, select, textarea {
 .camila-log-row > .icon-button { justify-self: center; }
 .credit-filters { align-items: center; display: flex; gap: .65rem; margin-top: 1.25rem; max-width: 300px; }
 .credit-filters label { color: var(--muted); font-size: .8rem; font-weight: 750; white-space: nowrap; }
-.credit-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* .credit-table utiliza el sistema unificado de tablas */
 .credit-table-head, .credit-row { align-items: center; display: grid; gap: .7rem; grid-template-columns: minmax(150px, 1.35fr) minmax(105px, .9fr) 90px 100px minmax(110px, .9fr) 110px minmax(118px, .9fr); min-width: 920px; }
 .admin-cart-head, .admin-cart-row {
   align-items: center;
@@ -1159,8 +1362,8 @@ button, input, select, textarea {
   border: 1px solid #fca5a5;
 }
 @media (max-width: 575px) { .order-history-filters { grid-template-columns: 1fr; } }
-.order-history-head { grid-template-columns: minmax(105px, 1.35fr) minmax(115px, .95fr) minmax(80px, .7fr) minmax(86px, .65fr) 42px; }
-.order-history-row { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: .6rem; grid-template-columns: minmax(105px, 1.35fr) minmax(115px, .95fr) minmax(80px, .7fr) minmax(86px, .65fr) 42px; min-width: 0; }
+.order-history-head { grid-template-columns: minmax(110px, 1.35fr) minmax(115px, .95fr) minmax(85px, .7fr) minmax(90px, .65fr) 44px; min-width: 540px; }
+.order-history-row { align-items: center; border-top: 1px solid rgba(15, 23, 42, 0.05); display: grid; gap: .6rem; grid-template-columns: minmax(110px, 1.35fr) minmax(115px, .95fr) minmax(85px, .7fr) minmax(90px, .65fr) 44px; min-width: 540px; }
 .order-history-row small { display: block; margin-top: .15rem; }
 .order-date { color: var(--muted); }
 .order-history-action { min-width: 42px; padding: .35rem .45rem; }
@@ -1170,7 +1373,7 @@ button, input, select, textarea {
 .order-entregado { background: #e7f7ef; color: #167548; }
 .order-cancelado { background: #fff0ef; color: #b42318; }
 .order-detail-meta { color: var(--muted); display: flex; font-size: .82rem; justify-content: space-between; margin-bottom: 1rem; }
-.order-detail-lines { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.order-detail-lines { border: 1px solid var(--line-hairline); border-radius: var(--radius-md); overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .order-detail-lines > div { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) 68px 80px 100px 100px; padding: .75rem; }
 .order-detail-lines > div:first-child { background: #f8fafc; color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .04rem; text-transform: uppercase; }
 .order-detail-lines > div + div { border-top: 1px solid var(--line); }
@@ -2468,51 +2671,8 @@ button, input, select, textarea {
 }
 
 .stock-alert-table-container {
-  border: 1px solid var(--line);
-  border-radius: 8px;
   max-height: 420px;
   overflow-y: auto;
-  overflow-x: auto;
-}
-
-.stock-alert-table {
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.88rem;
-  width: 100%;
-}
-
-.stock-alert-table thead th {
-  background: #f8fafc;
-  border-bottom: 1px solid var(--line);
-  color: var(--navy);
-  font-size: 0.78rem;
-  font-weight: 750;
-  letter-spacing: 0.02em;
-  padding: 0.75rem 1rem;
-  position: sticky;
-  text-transform: uppercase;
-  top: 0;
-  z-index: 2;
-}
-
-.stock-alert-table tbody tr {
-  border-bottom: 1px solid var(--line);
-  transition: background 0.15s ease;
-}
-
-.stock-alert-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.stock-alert-table tbody tr:hover {
-  background: #fcfdfe;
-}
-
-.stock-alert-table td {
-  border-bottom: 1px solid #f1f5f9;
-  padding: 0.75rem 1rem;
-  vertical-align: middle;
 }
 
 .stock-alert-code {
@@ -2968,13 +3128,7 @@ button, input, select, textarea {
   font-weight: normal;
 }
 
-.vendor-sales-table {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
+/* .vendor-sales-table utiliza el sistema unificado de tablas */
 
 .vendor-sales-head,
 .vendor-sales-row {
@@ -2993,13 +3147,7 @@ button, input, select, textarea {
   justify-self: center;
 }
 
-.admin-ventas-table {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
+/* .admin-ventas-table utiliza el sistema unificado de tablas */
 
 .admin-ventas-head,
 .admin-ventas-row {
@@ -3794,4 +3942,100 @@ button, input, select, textarea {
 .pulse-recording {
   animation: pulseRecording 1.4s infinite !important;
 }
-
+
+
+/* ==========================================================================
+   ESTANDARIZACIÓN RESPONSIVE DE TABLAS (100% RESPONSIVE)
+   Garantiza legibilidad y tactilidad en tablets y móviles
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Padding optimizado en celdas para dispositivos móviles */
+  table.table thead th,
+  table.stock-alert-table thead th,
+  .table-responsive table thead th,
+  table.ia-prediction-table thead th,
+  .category-table-head, 
+  .product-table-head, 
+  .user-table-head, 
+  .customer-table-head, 
+  .admin-order-head, 
+  .credit-table-head, 
+  .admin-log-head, 
+  .order-history-head, 
+  .address-table-head, 
+  .promo-table-head, 
+  .admin-cart-head, 
+  .vendor-sales-head, 
+  .admin-ventas-head, 
+  .admin-vendedor-summary-head, 
+  .camila-log-head {
+    padding: 0.72rem 0.85rem !important;
+    font-size: 0.7rem !important;
+  }
+
+  table.table tbody td,
+  table.stock-alert-table tbody td,
+  .table-responsive table tbody td,
+  table.ia-prediction-table tbody td,
+  .category-row, 
+  .product-row, 
+  .user-row, 
+  .customer-row, 
+  .admin-order-row, 
+  .credit-row, 
+  .admin-log-row, 
+  .order-history-row, 
+  .address-row, 
+  .promo-row, 
+  .admin-cart-row, 
+  .vendor-sales-row, 
+  .admin-ventas-row, 
+  .admin-vendedor-summary-row, 
+  .camila-log-row {
+    padding: 0.72rem 0.85rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  /* Área táctil cómoda para botones de acción en tablas */
+  .category-row .icon-button,
+  .product-row .icon-button,
+  .user-row .icon-button,
+  .customer-row .icon-button,
+  .admin-order-row .icon-button,
+  .credit-row .icon-button,
+  .admin-log-row .icon-button,
+  .promo-row .icon-button,
+  .admin-cart-row .icon-button,
+  .camila-log-row .icon-button,
+  .vendor-sales-row .icon-button,
+  .order-history-action {
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0.35rem;
+  }
+
+  /* Ajuste de contenedor de tablas en pantallas angostas */
+  .table-responsive,
+  .stock-alert-table-container,
+  .category-table, 
+  .product-table, 
+  .user-table, 
+  .customer-table, 
+  .admin-order-table, 
+  .credit-table, 
+  .admin-log-table, 
+  .promo-table, 
+  .admin-cart-table, 
+  .camila-log-table, 
+  .admin-ventas-table, 
+  .vendor-sales-table, 
+  .address-table, 
+  .order-history, 
+  .order-detail-lines, 
+  .vendor-order-detail-lines,
+  .ia-prediction-table-wrap {
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+}
