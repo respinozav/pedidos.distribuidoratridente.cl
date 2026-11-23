@@ -119,9 +119,46 @@ def setup_qa_system():
     subprocess.run(["systemctl", "restart", "nginx"], check=False)
     print("✓ Servicio Nginx reiniciado y activo.")
 
+    # 8. Configurar SSL / HTTPS en puerto 443 con Certbot
+    setup_ssl_certbot()
+
     print("=" * 60)
     print("SERVIDOR QA CONFIGURADO EXITOSAMENTE")
     print("=" * 60)
+
+
+def setup_ssl_certbot():
+    print("\n--- VERIFICANDO CONFIGURACION SSL / HTTPS (PUERTO 443) ---")
+    cert_dir = Path("/etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl")
+    if cert_dir.exists():
+        print("✓ Certificado SSL activo en /etc/letsencrypt/live/pedidos-qa.distribuidoratridente.cl")
+        return
+
+    # Instalar certbot si es necesario
+    if not shutil.which("certbot"):
+        print("Instalando Certbot y python3-certbot-nginx...")
+        subprocess.run(["apt-get", "update", "-y"], check=False)
+        subprocess.run(["apt-get", "install", "-y", "certbot", "python3-certbot-nginx"], check=False)
+
+    if shutil.which("certbot"):
+        print("Solicitando certificado SSL para pedidos-qa.distribuidoratridente.cl...")
+        res = subprocess.run([
+            "certbot", "--nginx",
+            "-d", "pedidos-qa.distribuidoratridente.cl",
+            "--non-interactive",
+            "--agree-tos",
+            "-m", "admin@correodistribuidoratridente.cl",
+            "--redirect"
+        ], capture_output=True, text=True)
+        if res.returncode == 0:
+            print("✓ Certificado SSL (HTTPS 443) emitido y configurado exitosamente con redirección automática!")
+            subprocess.run(["systemctl", "reload", "nginx"], check=False)
+        else:
+            print("Aviso Certbot: No se pudo emitir el certificado automáticamente en este intento.")
+            print("Verifica que los puertos 80 y 443 estén abiertos en el Security Group de AWS.")
+            if res.stderr or res.stdout:
+                output = (res.stderr or res.stdout).strip()
+                print("Detalle:", output[-300:])
 
 
 if __name__ == "__main__":

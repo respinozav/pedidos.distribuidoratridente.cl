@@ -19,6 +19,7 @@ def sync_env_file(env_path_str: str) -> bool:
     sch = os.environ.get("AWS_SCHEME_BD")
     gemini_key = os.environ.get("GEMINI_API_KEY")
     gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    deploy_env = os.environ.get("DEPLOY_ENV", "")
 
     with open(env_path, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
@@ -57,6 +58,10 @@ def sync_env_file(env_path_str: str) -> bool:
                 new_lines.append(f"GEMINI_API_KEY={gemini_key}\n")
                 updated.add(k)
                 continue
+            if k == "CORS_ORIGINS" and deploy_env == "qa":
+                new_lines.append("CORS_ORIGINS=http://pedidos-qa.distribuidoratridente.cl,https://pedidos-qa.distribuidoratridente.cl,http://localhost:5173\n")
+                updated.add(k)
+                continue
         new_lines.append(l)
 
     # Si alguna variable requerida no existia previamente, agregarla
@@ -74,6 +79,8 @@ def sync_env_file(env_path_str: str) -> bool:
         new_lines.append(f"GEMINI_API_KEY={gemini_key}\n")
     if gemini_model and "GEMINI_MODEL" not in updated:
         new_lines.append(f"GEMINI_MODEL={gemini_model}\n")
+    if deploy_env == "qa" and "CORS_ORIGINS" not in updated:
+        new_lines.append("CORS_ORIGINS=http://pedidos-qa.distribuidoratridente.cl,https://pedidos-qa.distribuidoratridente.cl,http://localhost:5173\n")
 
     with open(env_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)

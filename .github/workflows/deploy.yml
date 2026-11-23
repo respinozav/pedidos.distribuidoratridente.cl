@@ -127,7 +127,7 @@ jobs:
             for ENV_FILE in "$TARGET_APP_DIR/.env" "$TARGET_APP_DIR/backend/.env" "/var/www/pedidos-qa.distribuidoratridente.cl/.env" "/var/www/pedidos-qa.distribuidoratridente.cl/backend/.env" "/var/www/pedidos.distribuidoratridente.cl/.env" "/var/www/pedidos.distribuidoratridente.cl/backend/.env"; do
               if [ -f "$ENV_FILE" ]; then
                 if [ -f "$TARGET_APP_DIR/backend/scripts/sync_env.py" ]; then
-                  sudo AWS_HOST_BD="$AWS_HOST_BD" AWS_USER_BD="$AWS_USER_BD" AWS_PASSWORD_BD="$AWS_PASSWORD_BD" AWS_SCHEME_BD="$AWS_SCHEME_BD" GEMINI_API_KEY="$G_KEY" GEMINI_MODEL="gemini-3.5-flash-lite" python3 "$TARGET_APP_DIR/backend/scripts/sync_env.py" "$ENV_FILE" >> "$REPORT_FILE" 2>&1 || true
+                  sudo DEPLOY_ENV="$DEPLOY_ENV" AWS_HOST_BD="$AWS_HOST_BD" AWS_USER_BD="$AWS_USER_BD" AWS_PASSWORD_BD="$AWS_PASSWORD_BD" AWS_SCHEME_BD="$AWS_SCHEME_BD" GEMINI_API_KEY="$G_KEY" GEMINI_MODEL="gemini-3.5-flash-lite" python3 "$TARGET_APP_DIR/backend/scripts/sync_env.py" "$ENV_FILE" >> "$REPORT_FILE" 2>&1 || true
                 fi
                 echo "Variables sincronizadas en: $ENV_FILE" >> "$REPORT_FILE" 2>&1
                 sudo chmod 644 "$ENV_FILE" 2>/dev/null || true
