@@ -84,6 +84,8 @@ jobs:
                 TARGET_APP_DIR="/var/www/pedidos-qa.distribuidoratridente.cl"
               elif [ -d "/var/www/qa.distribuidoratridente.cl" ]; then
                 TARGET_APP_DIR="/var/www/qa.distribuidoratridente.cl"
+              else
+                TARGET_APP_DIR="/var/www/pedidos-qa.distribuidoratridente.cl"
               fi
             elif [ ! -d "$TARGET_APP_DIR" ]; then
               for CANDIDATE in "/var/www/pedidos-qa.distribuidoratridente.cl" "/var/www/distribuidoratridente.cl" "/var/www/qa.distribuidoratridente.cl" "/var/www/pedidos"; do
@@ -94,6 +96,14 @@ jobs:
               done
             fi
             echo "Directorio identificado: $TARGET_APP_DIR" >> "$REPORT_FILE" 2>&1
+
+            echo "--- ASEGURANDO EXISTENCIA DEL REPOSITORIO ---" >> "$REPORT_FILE" 2>&1
+            if [ ! -d "$TARGET_APP_DIR/.git" ]; then
+              echo "Clonando repositorio en $TARGET_APP_DIR..." >> "$REPORT_FILE" 2>&1
+              sudo mkdir -p "$TARGET_APP_DIR" >> "$REPORT_FILE" 2>&1 || true
+              sudo chown -R $(whoami):$(whoami) "$TARGET_APP_DIR" >> "$REPORT_FILE" 2>&1 || true
+              git clone https://github.com/respinozav/pedidos.distribuidoratridente.cl.git "$TARGET_APP_DIR" >> "$REPORT_FILE" 2>&1 || true
+            fi
 
             echo "--- AJUSTANDO PERMISOS PARA ACTUALIZACION GIT ---" >> "$REPORT_FILE" 2>&1
             sudo chown -R $(whoami):$(whoami) "$TARGET_APP_DIR" >> "$REPORT_FILE" 2>&1 || true
@@ -107,7 +117,14 @@ jobs:
             git clean -fd >> "$REPORT_FILE" 2>&1 || true
 
             echo "--- INYECTANDO VARIABLES EN ARCHIVOS .ENV ---" >> "$REPORT_FILE" 2>&1
-            for ENV_FILE in "$TARGET_APP_DIR/.env" "$TARGET_APP_DIR/backend/.env" "/var/www/pedidos.distribuidoratridente.cl/.env" "/var/www/pedidos.distribuidoratridente.cl/backend/.env" "/var/www/distribuidoratridente.cl/.env" "/var/www/distribuidoratridente.cl/backend/.env"; do
+            if [ ! -f "$TARGET_APP_DIR/.env" ] && [ -f "$TARGET_APP_DIR/.env.example" ]; then
+              cp "$TARGET_APP_DIR/.env.example" "$TARGET_APP_DIR/.env" || true
+            fi
+            if [ ! -f "$TARGET_APP_DIR/backend/.env" ] && [ -f "$TARGET_APP_DIR/.env.example" ]; then
+              cp "$TARGET_APP_DIR/.env.example" "$TARGET_APP_DIR/backend/.env" || true
+            fi
+
+            for ENV_FILE in "$TARGET_APP_DIR/.env" "$TARGET_APP_DIR/backend/.env" "/var/www/pedidos-qa.distribuidoratridente.cl/.env" "/var/www/pedidos-qa.distribuidoratridente.cl/backend/.env" "/var/www/pedidos.distribuidoratridente.cl/.env" "/var/www/pedidos.distribuidoratridente.cl/backend/.env"; do
               if [ -f "$ENV_FILE" ]; then
                 if [ -f "$TARGET_APP_DIR/backend/scripts/sync_env.py" ]; then
                   sudo AWS_HOST_BD="$AWS_HOST_BD" AWS_USER_BD="$AWS_USER_BD" AWS_PASSWORD_BD="$AWS_PASSWORD_BD" AWS_SCHEME_BD="$AWS_SCHEME_BD" GEMINI_API_KEY="$G_KEY" GEMINI_MODEL="gemini-3.5-flash-lite" python3 "$TARGET_APP_DIR/backend/scripts/sync_env.py" "$ENV_FILE" >> "$REPORT_FILE" 2>&1 || true
@@ -117,6 +134,11 @@ jobs:
                 sudo chown www-data:www-data "$ENV_FILE" 2>/dev/null || true
               fi
             done
+
+            if [ "$DEPLOY_ENV" = "qa" ] && [ -f "$TARGET_APP_DIR/backend/scripts/setup_server_qa.py" ]; then
+              echo "--- CONFIGURANDO SISTEMA PARA QA ---" >> "$REPORT_FILE" 2>&1
+              sudo python3 "$TARGET_APP_DIR/backend/scripts/setup_server_qa.py" >> "$REPORT_FILE" 2>&1 || true
+            fi
 
             echo "--- EJECUTANDO DEPLOY.SH ---" >> "$REPORT_FILE" 2>&1
             cd "$TARGET_APP_DIR/deploy" || true
