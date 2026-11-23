@@ -17,6 +17,15 @@
   --surface: #ffffff;
   --page: #f8fafc;
 
+  /* Modern ERP B2B Wholesale Amber / Gold Accents */
+  --amber: #d97706;
+  --amber-light: #f59e0b;
+  --amber-dark: #b45309;
+  --amber-subtle: #fef3c7;
+  --amber-surface: #fffbeb;
+  --amber-border: #fde68a;
+  --amber-glow: rgba(245, 158, 11, 0.22);
+
   /* Stripe / Linear Design System Tokens */
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   
@@ -535,7 +544,7 @@ button, input, select, textarea {
 .dashboard-metrics article:nth-child(1) { --metric-color: #15803d; --metric-border: #dcfce7; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%); }
 .dashboard-metrics article:nth-child(2) { --metric-color: #146cce; --metric-border: #dbeafe; background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%); }
 .dashboard-metrics article:nth-child(3) { --metric-color: #7e22ce; --metric-border: #f3e8ff; background: linear-gradient(180deg, #ffffff 0%, #faf5ff 100%); }
-.dashboard-metrics article:nth-child(4) { --metric-color: #c2410c; --metric-border: #ffedd5; background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%); }
+.dashboard-metrics article:nth-child(4) { --metric-color: #d97706; --metric-border: #fde68a; background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%); }
 .dashboard-metrics article::before { background: var(--metric-color); content: ""; height: 24px; mask: var(--metric-icon) center / contain no-repeat; position: absolute; right: 1.25rem; top: 1.25rem; width: 24px; z-index: 1; }
 .dashboard-metrics article:nth-child(1) { --metric-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='%23000' stroke-width='2'/%3E%3Cpath d='M16 8h-6.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H8M12 18V6' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/%3E%3C/svg%3E"); }
 .dashboard-metrics article:nth-child(2) { --metric-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/%3E%3C/svg%3E"); }
@@ -1249,50 +1258,167 @@ table.table td .text-muted,
 .promo-table-head, .promo-row { align-items: center; display: grid; gap: .75rem; grid-template-columns: 55px minmax(180px, 1.5fr) minmax(150px, 1.3fr) minmax(105px, 1fr) 90px minmax(115px, 125px) 115px; min-width: 850px; }
 .promo-row > div { min-width: 0; }
 .promo-subtitulo-cell { color: var(--ink); display: block; font-size: .8rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head, .promo-table-head, .admin-cart-head, .vendor-sales-head, .admin-ventas-head, .admin-vendedor-summary-head, .camila-log-head { 
-  background: #f8fafc; 
-  color: #475569; 
-  font-size: .72rem; 
-  font-weight: 750; 
-  letter-spacing: .05em; 
-  padding: .9rem 1.15rem; 
-  text-transform: uppercase; 
-  border-bottom: 1px solid var(--line-hairline);
+
+/* Encabezados de tabla Modern ERP / B2B Commerce */
+.category-table-head, .product-table-head, .user-table-head, .customer-table-head, .admin-order-head, .credit-table-head, .admin-log-head, .order-history-head, .address-table-head, .promo-table-head, .admin-cart-head, .vendor-sales-head, .admin-ventas-head, .admin-vendedor-summary-head, .camila-log-head,
+table.table thead th,
+.table thead th { 
+  background: #f1f5f9 !important; 
+  color: #1e293b !important; 
+  font-size: .74rem !important; 
+  font-weight: 800 !important; 
+  letter-spacing: .06em !important; 
+  padding: .95rem 1.15rem !important; 
+  text-transform: uppercase !important; 
+  border-bottom: 2px solid #cbd5e1 !important;
   white-space: nowrap;
 }
-.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row, .promo-row, .admin-cart-row, .vendor-sales-row, .admin-ventas-row, .admin-vendedor-summary-row, .camila-log-row { 
+
+/* Filas con hover sutil y separación fina */
+.category-row, .product-row, .user-row, .customer-row, .admin-order-row, .credit-row, .admin-log-row, .order-history-row, .address-row, .promo-row, .admin-cart-row, .vendor-sales-row, .admin-ventas-row, .admin-vendedor-summary-row, .camila-log-row,
+table.table tbody tr { 
   align-items: center; 
-  border-top: 1px solid rgba(15, 23, 42, 0.05); 
+  border-top: 1px solid #eef2f6 !important; 
   color: var(--ink); 
   font-size: .86rem; 
-  padding: .9rem 1.15rem; 
-  transition: background-color var(--duration) ease; 
+  padding: .85rem 1.15rem; 
+  transition: background-color var(--duration) ease, box-shadow var(--duration) ease; 
 }
-.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover, .promo-row:hover, .admin-cart-row:hover, .vendor-sales-row:hover, .admin-ventas-row:hover, .admin-vendedor-summary-row:hover, .camila-log-row:hover { 
-  background: #f8fafc; 
+
+.category-row:hover, .product-row:hover, .user-row:hover, .customer-row:hover, .admin-order-row:hover, .credit-row:hover, .admin-log-row:hover, .order-history-row:hover, .promo-row:hover, .admin-cart-row:hover, .vendor-sales-row:hover, .admin-ventas-row:hover, .admin-vendedor-summary-row:hover, .camila-log-row:hover,
+table.table tbody tr:hover { 
+  background: #f8fafc !important; 
 }
+
 .promo-table-head span:last-child { text-align: center; }
 .promo-row > .customer-actions { justify-self: center; }
 .category-percentage { color: var(--muted); font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .category-commission { color: #059669; font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.category-order-badge { align-items: center; background: #e0f2fe; border-radius: 4px; color: #0369a1; display: inline-flex; font-size: .8rem; font-weight: 750; height: 26px; justify-content: center; min-width: 32px; padding: 0 .4rem; }
+
+/* Category Order Badge con acento Amarillo / Gold */
+.category-order-badge { 
+  align-items: center !important; 
+  background: #fef3c7 !important; 
+  border: 1px solid #fde68a !important; 
+  border-radius: 6px !important; 
+  color: #b45309 !important; 
+  display: inline-flex !important; 
+  font-size: .8rem !important; 
+  font-weight: 850 !important; 
+  height: 26px !important; 
+  justify-content: center !important; 
+  min-width: 32px !important; 
+  padding: 0 .45rem !important; 
+  box-shadow: 0 1px 2px rgba(217, 119, 6, 0.1) !important;
+}
+
 .category-name { align-items: center; display: flex; gap: .75rem; }
-.category-icon { align-items: center; background: var(--sky); border-radius: 6px; color: var(--blue); display: inline-flex; height: 32px; justify-content: center; width: 32px; }
-.status-active, .status-inactive { border-radius: 99px; font-size: .72rem !important; font-weight: 750; justify-self: start; line-height: 1; padding: .32rem .6rem; }
-.status-active { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-.status-inactive { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
-.category-edit { height: 34px; width: 34px; }
+.category-icon { 
+  align-items: center; 
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important; 
+  border: 1px solid #bfdbfe !important;
+  border-radius: 8px !important; 
+  color: var(--blue) !important; 
+  display: inline-flex; 
+  height: 32px; 
+  justify-content: center; 
+  width: 32px; 
+  box-shadow: 0 1px 3px rgba(20, 108, 206, 0.08);
+}
+
+/* Badges de estado con dot indicador luminoso */
+.status-active, .status-inactive { 
+  border-radius: 99px !important; 
+  font-size: .72rem !important; 
+  font-weight: 750 !important; 
+  justify-self: start; 
+  line-height: 1 !important; 
+  padding: .32rem .65rem !important; 
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: .35rem !important;
+  letter-spacing: .02em;
+}
+
+.status-active { 
+  background: #ecfdf5 !important; 
+  color: #047857 !important; 
+  border: 1px solid #a7f3d0 !important; 
+}
+.status-active::before {
+  content: "" !important;
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #10b981 !important;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6) !important;
+}
+
+.status-inactive { 
+  background: #fff1f2 !important; 
+  color: #e11d48 !important; 
+  border: 1px solid #fecdd3 !important; 
+}
+.status-inactive::before {
+  content: "" !important;
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #f43f5e !important;
+}
+
+/* Botones de acción en tablas con realce cromático ERP */
+.category-edit,
+.user-row > .icon-button,
+.product-row > .icon-button,
+.admin-order-row > .icon-button,
+.credit-row > .icon-button,
+.admin-log-row > .icon-button,
+.camila-log-row > .icon-button {
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 8px !important;
+  color: var(--blue) !important;
+  height: 32px !important;
+  width: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 1px 2px rgba(20, 108, 206, 0.06) !important;
+}
+
+.category-edit:hover,
+.user-row > .icon-button:hover,
+.product-row > .icon-button:hover,
+.admin-order-row > .icon-button:hover,
+.credit-row > .icon-button:hover,
+.admin-log-row > .icon-button:hover,
+.camila-log-row > .icon-button:hover {
+  background: var(--blue) !important;
+  border-color: var(--blue) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) scale(1.04) !important;
+  box-shadow: 0 4px 10px rgba(20, 108, 206, 0.25) !important;
+}
+
 .category-notice { align-items: center; display: flex; gap: .55rem; }
 .category-notice .btn-close { margin-left: auto; }
+
+/* ==========================================================================
+   MODALES MODERN ERP / B2B COMMERCE (Linear / Stripe / Enterprise SaaS)
+   ========================================================================== */
 .modal-backdrop-custom { 
   align-items: center; 
-  background: rgba(15, 23, 42, 0.58); 
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(11, 26, 44, 0.65) !important; 
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
   display: flex; 
   inset: 0; 
   justify-content: center; 
-  padding: 1rem; 
+  padding: 1.25rem; 
   position: fixed; 
   z-index: 1050; 
   overflow-y: auto; 
@@ -1302,53 +1428,227 @@ table.table td .text-muted,
 .admin-app:has(.modal-backdrop-custom) .admin-content .alert-success { left: 50%; max-width: min(650px, calc(100vw - 2rem)); position: fixed; top: 1rem; transform: translateX(-50%); width: 100%; z-index: 1051; }
 .admin-app:has(.order-detail-modal) .admin-content .alert-success, .admin-app:has(.order-detail-modal) .admin-content .alert-danger { display: none; }
 .order-detail-notice { align-items: center; display: flex; justify-content: space-between; margin-bottom: 1rem; }
-.category-modal { 
-  background: #ffffff; 
-  border: 1px solid var(--line-hairline);
-  border-radius: var(--radius-modal); 
-  box-shadow: 0 20px 45px -10px rgba(16, 42, 67, 0.28), 0 0 1px rgba(16, 42, 67, 0.2); 
-  display: flex; 
-  flex-direction: column; 
-  max-height: calc(100dvh - 2rem); 
-  max-height: calc(100vh - 2rem); 
-  max-width: 510px; 
-  overflow: hidden; 
+
+.category-modal,
+.product-modal,
+.stock-alert-modal,
+.stock-notice-modal,
+.focus-group-modal,
+.email-campaign-modal,
+.vendor-sale-modal { 
+  background: #ffffff !important; 
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 18px !important; 
+  box-shadow: 0 25px 60px -15px rgba(11, 26, 44, 0.35), 0 0 0 1px rgba(15, 23, 42, 0.05) !important; 
+  display: flex !important; 
+  flex-direction: column !important; 
+  max-height: calc(100dvh - 2.5rem); 
+  max-height: calc(100vh - 2.5rem); 
+  overflow: hidden !important; 
   width: 100%; 
+  animation: modalScaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@keyframes modalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 .category-modal > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; height: 100%; width: 100%; }
-.product-modal { max-width: 690px; }
+.product-modal { max-width: 720px !important; }
 .order-detail-modal { max-height: calc(100dvh - 2rem); }
-.category-modal header, .category-modal footer { align-items: center; display: flex; flex-shrink: 0; justify-content: space-between; padding: 1.15rem 1.4rem; }
-.category-modal header { border-bottom: 1px solid var(--line-hairline); }
-.category-modal header h2 { font-size: 1.1rem; font-weight: 750; margin: 0; color: var(--navy); }
-.category-modal .eyebrow { margin-bottom: .2rem; }
-.modal-body-custom { flex: 1 1 auto; min-height: 0; overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 1.4rem; }
-.category-modal .modal-body-custom p { color: var(--muted); font-size: .82rem; line-height: 1.45; }
-.category-modal .form-label { color: var(--navy); font-size: .82rem; font-weight: 650; margin-bottom: .25rem; }
-.category-modal .form-control, .category-modal .form-select { font-size: .86rem; border-radius: var(--radius-sm); }
+
+.category-modal header { 
+  align-items: center; 
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  display: flex; 
+  flex-shrink: 0; 
+  justify-content: space-between; 
+  padding: 1.25rem 1.6rem !important; 
+}
+
+.category-modal header h2 { 
+  font-size: 1.22rem !important; 
+  font-weight: 750 !important; 
+  margin: 0 !important; 
+  color: var(--navy) !important; 
+  letter-spacing: -0.025em !important;
+}
+
+.category-modal .eyebrow { 
+  color: var(--blue) !important;
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
+  margin-bottom: .25rem !important; 
+  text-transform: uppercase !important;
+}
+
+.category-modal header .icon-button {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #64748b;
+  height: 34px;
+  width: 34px;
+  transition: all 180ms ease;
+}
+
+.category-modal header .icon-button:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: rotate(90deg);
+}
+
+.modal-body-custom { 
+  flex: 1 1 auto; 
+  min-height: 0; 
+  overflow-y: auto !important; 
+  overscroll-behavior: contain; 
+  -webkit-overflow-scrolling: touch; 
+  padding: 1.6rem !important; 
+  scrollbar-width: thin;
+}
+
+.modal-body-custom::-webkit-scrollbar {
+  width: 5px;
+}
+.modal-body-custom::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.category-modal .modal-body-custom p { color: var(--muted); font-size: .84rem; line-height: 1.45; }
+
+.category-modal .form-label { 
+  color: #1e293b !important; 
+  font-size: .82rem !important; 
+  font-weight: 700 !important; 
+  letter-spacing: -0.01em !important;
+  margin-bottom: .35rem !important; 
+  display: block !important;
+}
+
+.category-modal .form-control, 
+.category-modal .form-select { 
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 9px !important;
+  min-height: 42px !important;
+  font-size: .9rem !important; 
+  padding: .55rem .85rem !important;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.category-modal .form-control:focus, 
+.category-modal .form-select:focus { 
+  border-color: var(--blue) !important;
+  box-shadow: 0 0 0 3px rgba(20, 108, 206, 0.18) !important;
+  outline: none !important;
+  background: #ffffff !important;
+}
+
 .category-modal .form-text { font-size: .76rem; color: var(--muted); }
-.vendor-sale-modal { max-width: 470px; }
-.vendor-sale-modal-desc { color: var(--muted); font-size: .8rem; line-height: 1.45; margin: 0 0 1rem; }
+.vendor-sale-modal { max-width: 480px !important; }
+.vendor-sale-modal-desc { color: var(--muted); font-size: .82rem; line-height: 1.45; margin: 0 0 1rem; }
+
 .status-toggle { 
   align-items: center; 
-  background: #f8fafc;
-  border: 1px solid var(--line-hairline); 
-  border-radius: var(--radius-sm); 
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important; 
+  border-left: 3.5px solid var(--blue) !important;
+  border-radius: 10px !important; 
   display: flex; 
   justify-content: space-between; 
-  margin-top: 1.25rem; 
-  padding: 1rem 1.15rem; 
+  margin-top: 1rem !important; 
+  padding: 0.95rem 1.2rem !important; 
+  transition: all 180ms ease !important;
 }
-.status-toggle strong, .status-toggle small { display: block; }
-.status-toggle strong { font-size: 0.88rem; font-weight: 650; color: var(--navy); }
-.status-toggle small { color: var(--muted); font-size: .78rem; margin-top: .2rem; }
-.switch { cursor: pointer; height: 25px; margin: 0; position: relative; width: 46px; }
+
+.status-toggle:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  border-left-color: var(--blue) !important;
+}
+
+.status-toggle strong { 
+  font-size: 0.88rem !important; 
+  font-weight: 700 !important; 
+  color: var(--navy) !important; 
+}
+
+.status-toggle small { 
+  color: #64748b !important; 
+  font-size: .78rem !important; 
+  margin-top: .15rem !important; 
+}
+
+.switch { 
+  cursor: pointer; 
+  height: 26px !important; 
+  margin: 0; 
+  position: relative; 
+  width: 48px !important; 
+  flex-shrink: 0;
+}
+
 .switch input { height: 0; opacity: 0; width: 0; }
-.switch span { background: #cbd5e1; border-radius: 20px; inset: 0; position: absolute; transition: .2s; }
-.switch span::before { background: #fff; border-radius: 50%; content: ""; height: 19px; left: 3px; position: absolute; top: 3px; transition: .2s; width: 19px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
-.switch input:checked + span { background: var(--blue); }
-.switch input:checked + span::before { transform: translateX(21px); }
-.category-modal footer { border-top: 1px solid var(--line-hairline); gap: .75rem; justify-content: flex-end; background: #fafbfc; }
+
+.switch span { 
+  background: #cbd5e1 !important; 
+  border-radius: 20px !important; 
+  inset: 0; 
+  position: absolute; 
+  transition: all .2s ease !important; 
+}
+
+.switch span::before { 
+  background: #ffffff !important; 
+  border-radius: 50% !important; 
+  content: "" !important; 
+  height: 20px !important; 
+  left: 3px !important; 
+  position: absolute; 
+  top: 3px !important; 
+  transition: all .2s ease !important; 
+  width: 20px !important; 
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important; 
+}
+
+.switch input:checked + span { 
+  background: linear-gradient(135deg, #1877e8 0%, #146cce 100%) !important; 
+  box-shadow: 0 2px 8px rgba(20, 108, 206, 0.35) !important;
+}
+
+.switch input:checked + span::before { 
+  transform: translateX(22px) !important; 
+}
+
+.category-modal footer { 
+  align-items: center; 
+  background: #fafbfc !important;
+  border-top: 1px solid #e2e8f0 !important; 
+  display: flex; 
+  flex-shrink: 0; 
+  gap: .75rem !important; 
+  justify-content: flex-end; 
+  padding: 1.1rem 1.6rem !important; 
+}
+
+.category-modal footer .btn {
+  border-radius: 9px !important;
+  font-size: .88rem !important;
+  padding: .55rem 1.15rem !important;
+  min-height: 42px !important;
+}
+
 .product-table { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .product-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.25rem; }
 .product-filters > select.form-select { flex: 1 1 180px; min-height: 42px; }
@@ -1597,7 +1897,7 @@ table.table td .text-muted,
 .account-address-form h3 { font-size: 1rem; font-weight: 750; margin: 0 0 1rem; }
 .account-password-panel { max-width: 560px; }
 .customer-profile { align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: .65rem; margin-top: auto; padding: 1rem .5rem .5rem; }
-.customer-profile > span { align-items: center; background: #2b5a88; border-radius: 50%; color: #fff; display: inline-flex; font-size: .72rem; font-weight: 800; height: 32px; justify-content: center; width: 32px; }
+/* consolidated avatar rule */
 .customer-profile strong, .customer-profile small { display: block; font-size: .8rem; }
 .customer-profile strong { color: #fff; font-weight: 600; }
 .customer-profile small { color: #9db5ce; font-size: .68rem; }
@@ -4585,3 +4885,172 @@ table.table td .text-muted,
   animation: pulseRecording 1.4s infinite !important;
 }
 
+/* ==========================================================================
+   MODERN ERP B2B COMMERCE: AMBER / YELLOW ACCENTS & WHOLESALE BADGES
+   ========================================================================== */
+
+/* 1. Indicador de empaque al por mayor (Caja x24) */
+.product .d-flex.flex-column small,
+.product-caja-badge {
+  background: #fef3c7 !important;
+  border: 1px solid #fde68a !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 2px rgba(217, 119, 6, 0.08) !important;
+  color: #92400e !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+  font-size: 0.76rem !important;
+  font-weight: 750 !important;
+  margin-top: 0.35rem !important;
+  padding: 0.2rem 0.55rem !important;
+  width: fit-content !important;
+}
+
+.cart-line .badge.bg-secondary {
+  background: #fef3c7 !important;
+  border: 1px solid #fde68a !important;
+  border-radius: 6px !important;
+  color: #92400e !important;
+  font-size: 0.72rem !important;
+  font-weight: 750 !important;
+  padding: 0.2rem 0.45rem !important;
+}
+
+/* 2. Botón y avisos de stock con realce ámbar */
+.btn-outline-warning,
+.product .btn-outline-warning {
+  background: #fffbeb !important;
+  border: 1.5px solid #f59e0b !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.15) !important;
+  color: #b45309 !important;
+  font-weight: 700 !important;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.btn-outline-warning:hover,
+.product .btn-outline-warning:hover {
+  background: #f59e0b !important;
+  border-color: #d97706 !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.stock-depleted-overlay-badge {
+  background: rgba(254, 243, 199, 0.96) !important;
+  border: 1.5px solid #f59e0b !important;
+  border-radius: 99px !important;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25) !important;
+  color: #92400e !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em !important;
+  padding: 0.3rem 0.8rem !important;
+}
+
+/* 3. Campana de alerta de stock en tono ámbar comercial */
+.stock-alert-bell-btn {
+  background: #fffbeb !important;
+  border: 1px solid #fde68a !important;
+  border-radius: 9px !important;
+  color: #b45309 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  height: 38px !important;
+  justify-content: center !important;
+  align-items: center !important;
+  position: relative !important;
+  transition: all var(--duration) var(--ease-spring) !important;
+  width: 38px !important;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.12) !important;
+}
+
+.stock-alert-bell-btn:hover {
+  background: #fef3c7 !important;
+  border-color: #f59e0b !important;
+  color: #92400e !important;
+  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.22) !important;
+  transform: translateY(-1px) !important;
+}
+
+.stock-alert-bell-btn.has-alerts .stock-alert-bell-icon {
+  color: #d97706 !important;
+}
+
+/* 4. Top 1 en Rankings Comerciales con baño Oro / Ámbar */
+.dashboard-ranking .ranking-list li:nth-child(1) {
+  background: linear-gradient(90deg, #fffbeb 0%, #ffffff 70%) !important;
+  border-color: #fde68a !important;
+}
+
+.dashboard-ranking .ranking-list li:nth-child(1) .ranking-position {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  color: #92400e !important;
+  box-shadow: 0 0 0 1.5px #f59e0b !important;
+  font-weight: 850 !important;
+}
+
+/* 5. Acento en estado 'En despacho / Preparación' */
+.order-despachado,
+.order-en_despacho,
+.order-en-despacho,
+.order-preparacion {
+  background: #fefce8 !important;
+  color: #a16207 !important;
+  border: 1px solid #fde047 !important;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.18) !important;
+}
+
+.order-despachado::before,
+.order-en_despacho::before,
+.order-en-despacho::before,
+.order-preparacion::before {
+  background: #eab308 !important;
+  box-shadow: 0 0 7px rgba(234, 179, 8, 0.8) !important;
+}
+
+/* Unified Avatar Centering - Rock Solid in all Views */
+.user-avatar,
+.customer-profile > span,
+.sidebar-user > span {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+  letter-spacing: normal !important;
+  text-indent: 0 !important;
+  font-size: .74rem !important;
+  font-weight: 800 !important;
+  user-select: none !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.user-avatar {
+  background: var(--sky) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 1px rgba(20, 108, 206, 0.15) !important;
+  color: var(--blue) !important;
+  height: 34px !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+}
+
+.customer-profile > span,
+.sidebar-user > span {
+  background: linear-gradient(135deg, #1877e8 0%, #146cce 100%) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 2px rgba(20, 108, 206, 0.35) !important;
+  color: #ffffff !important;
+  height: 32px !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+}

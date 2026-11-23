@@ -464,10 +464,13 @@ export default function AdminCarteraManager() {
                           {isAssigned ? (
                             <div className="d-flex align-items-center gap-2" style={{ maxWidth: "240px" }}>
                               <span
+                                className="user-avatar"
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",
                                   justifyContent: "center",
+                                  textAlign: "center",
+                                  lineHeight: 1,
                                   width: "28px",
                                   height: "28px",
                                   borderRadius: "50%",
@@ -476,6 +479,7 @@ export default function AdminCarteraManager() {
                                   fontWeight: "bold",
                                   fontSize: "0.75rem",
                                   flexShrink: 0,
+                                  userSelect: "none",
                                 }}
                               >
                                 {client.vendedor_nombre?.slice(0, 2).toUpperCase() || "VD"}
