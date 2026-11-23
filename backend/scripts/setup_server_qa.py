@@ -66,6 +66,12 @@ def setup_qa_system():
     print("CONFIGURACION AUTOMATICA DEL SERVIDOR QA")
     print("=" * 60)
 
+    # 0. Desactivar Apache2 si existe para liberar el puerto 80
+    if shutil.which("apache2") or Path("/etc/apache2").exists():
+        print("Desactivando Apache2 para liberar el puerto 80 para Nginx...")
+        subprocess.run(["systemctl", "stop", "apache2"], check=False)
+        subprocess.run(["systemctl", "disable", "apache2"], check=False)
+
     # 1. Asegurar instalación de Nginx
     if not shutil.which("nginx"):
         print("Instalando Nginx en el servidor de QA...")
@@ -114,10 +120,20 @@ def setup_qa_system():
         print("✓ Reglas de puerto 80/443 aplicadas en UFW.")
 
     # 7. Reiniciar y verificar Nginx
-    subprocess.run(["nginx", "-t"], check=False)
+    print("Verificando configuración de Nginx...")
+    t = subprocess.run(["nginx", "-t"], capture_output=True, text=True)
+    if t.stdout:
+        print(t.stdout.strip())
+    if t.stderr:
+        print(t.stderr.strip())
+
     subprocess.run(["systemctl", "enable", "nginx"], check=False)
-    subprocess.run(["systemctl", "restart", "nginx"], check=False)
-    print("✓ Servicio Nginx reiniciado y activo.")
+    r = subprocess.run(["systemctl", "restart", "nginx"], capture_output=True, text=True)
+    if r.returncode != 0:
+        print("ERROR al reiniciar Nginx:", r.stderr.strip())
+        subprocess.run(["journalctl", "-u", "nginx", "-n", "20", "--no-pager"], check=False)
+    else:
+        print("✓ Servicio Nginx reiniciado y activo.")
 
     # 8. Configurar SSL / HTTPS en puerto 443 con Certbot
     setup_ssl_certbot()
