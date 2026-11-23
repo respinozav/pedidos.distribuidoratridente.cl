@@ -209,33 +209,83 @@ button, input, select, textarea {
 .brand-mark img { display: block; height: 100%; object-fit: contain; width: 100%; }
 .brand-mark-fallback { background: #fff; border: 1px solid #d9e2ec; border-radius: 6px; color: var(--navy); font-size: 1rem; font-weight: 800; letter-spacing: .06rem; }
 .sidebar-brand .brand-mark, .customer-brand .brand-mark { height: 48px; width: 88px; }
-.access-shell { background: var(--page); display: grid; grid-template-columns: minmax(360px, .9fr) minmax(420px, 1.1fr); height: 100vh; height: 100dvh; max-height: 100dvh; overflow: hidden; }
-.access-brand { background: var(--navy); color: #fff; display: flex; flex-direction: column; justify-content: space-between; height: 100%; max-height: 100dvh; overflow: hidden; padding: clamp(1.5rem, 3.5vw, 3.5rem); }
-.access-brand-content { margin: auto 0; }
-.access-brand h1 { font-size: clamp(1.85rem, 3vw, 3rem); font-weight: 750; line-height: 1.1; margin: 1rem 0 0.75rem; }
-.access-brand-content p:last-child { color: #cbd8e6; font-size: 1rem; max-width: 380px; }
-.access-brand-footer { border-top: 1px solid rgb(255 255 255 / 15%); color: #9bb7d4; font-size: .8rem; margin-top: 1rem; padding-top: 1rem; }
-.access-brand-footer strong { color: #e2effd; font-weight: 600; }
-.access-brand-footer a { color: #e2effd; text-decoration: none; transition: color .15s ease, text-decoration .15s ease; }
+.access-shell { 
+  background: #071524; 
+  display: grid; 
+  grid-template-columns: minmax(380px, 1fr) minmax(440px, 1.15fr); 
+  height: 100vh; 
+  height: 100dvh; 
+  max-height: 100dvh; 
+  overflow: hidden; 
+}
+.access-brand { 
+  background: radial-gradient(circle at 15% 20%, rgba(20, 108, 206, 0.32) 0%, transparent 60%), radial-gradient(circle at 85% 80%, rgba(13, 90, 169, 0.35) 0%, transparent 50%), #071524; 
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff; 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: space-between; 
+  height: 100%; 
+  max-height: 100dvh; 
+  overflow: hidden; 
+  padding: clamp(1.75rem, 4vw, 4rem); 
+  position: relative;
+}
+.access-brand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.25;
+  pointer-events: none;
+}
+.access-brand-content { margin: auto 0; position: relative; z-index: 1; }
+.access-brand h1 { font-size: clamp(2rem, 3.2vw, 3.2rem); font-weight: 800; line-height: 1.1; margin: 1rem 0 0.85rem; letter-spacing: -0.03em; color: #ffffff; }
+.access-brand-content p:last-child { color: #94a3b8; font-size: 1.05rem; line-height: 1.5; max-width: 420px; }
+.access-brand-footer { border-top: 1px solid rgba(255, 255, 255, 0.1); color: #94a3b8; font-size: .82rem; margin-top: 1rem; padding-top: 1.1rem; position: relative; z-index: 1; }
+.access-brand-footer strong { color: #e2e8f0; font-weight: 600; }
+.access-brand-footer a { color: #93c5fd; text-decoration: none; transition: color .15s ease, text-decoration .15s ease; }
 .access-brand-footer a:hover { color: #ffffff; text-decoration: underline; }
-.access-form-container { align-items: center; display: flex; flex-direction: column; justify-content: center; height: 100%; max-height: 100dvh; overflow-y: auto; overflow-x: hidden; padding: clamp(0.5rem, 1.5vh, 1.25rem) 1.25rem; width: 100%; }
-.access-form { background: var(--surface); border: 1px solid var(--line-hairline); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); margin: auto; max-width: 430px; padding: clamp(1.2rem, 2.5vh, 1.8rem) clamp(1.2rem, 3vw, 2.2rem); width: 100%; }
-.access-form-heading { margin-bottom: clamp(0.6rem, 1.2vh, 1rem); text-align: center; }
+.access-form-container { 
+  align-items: center; 
+  background: #f8fafc;
+  display: flex; 
+  flex-direction: column; 
+  justify-content: center; 
+  height: 100%; 
+  max-height: 100dvh; 
+  overflow-y: auto; 
+  overflow-x: hidden; 
+  padding: clamp(0.75rem, 2vh, 1.5rem) 1.5rem; 
+  width: 100%; 
+}
+.access-form { 
+  background: #ffffff; 
+  border: 1px solid var(--line-hairline); 
+  border-radius: 20px; 
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 20px 45px -10px rgba(15, 23, 42, 0.12); 
+  margin: auto; 
+  max-width: 440px; 
+  padding: clamp(1.4rem, 2.8vh, 2.2rem) clamp(1.4rem, 3.5vw, 2.4rem); 
+  width: 100%; 
+}
+.access-form-heading { margin-bottom: clamp(0.75rem, 1.5vh, 1.25rem); text-align: center; }
 .access-form-heading .brand-mark { display: flex; height: clamp(75px, 10vh, 105px); margin: 0 auto clamp(0.35rem, 0.8vh, 0.65rem); width: auto; max-width: 220px; }
-.access-form-heading .eyebrow { font-size: .72rem; height: auto; line-height: 1; margin-bottom: .2rem; display: block; }
-.access-form-heading h2 { font-size: clamp(1.2rem, 2vw, 1.45rem); font-weight: 750; height: auto; line-height: 1.2; margin: 0 0 .2rem; }
-.access-subheading { color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: clamp(0.82rem, 1.4vw, 0.88rem); line-height: 1.25; min-height: 2.1rem; margin: 0 0 clamp(0.4rem, 1vh, 0.75rem); }
-.access-tabs { background: #eef3f9; border: 1px solid #d8e2ed; border-radius: 10px; display: flex; gap: 4px; height: clamp(38px, 4.8vh, 44px); margin: 0 auto; padding: 3px; width: 100%; box-sizing: border-box; }
-.access-tab { align-items: center; background: transparent; border: 0; border-radius: 7px; color: var(--muted); cursor: pointer; display: inline-flex; flex: 1 1 50%; font-size: clamp(0.82rem, 1.5vw, 0.9rem); font-weight: 650; gap: .45rem; height: 100%; justify-content: center; padding: 0 .5rem; transition: all .18s ease-in-out; user-select: none; box-sizing: border-box; }
-.access-tab:hover:not(.active) { background: rgba(255, 255, 255, 0.6); color: var(--navy); }
-.access-tab.active { background: #ffffff; color: var(--blue); box-shadow: 0 2px 8px rgba(16, 42, 67, 0.08), 0 1px 2px rgba(16, 42, 67, 0.04); }
+.access-form-heading .eyebrow { font-size: .72rem; height: auto; line-height: 1; margin-bottom: .25rem; display: block; letter-spacing: 0.08em; }
+.access-form-heading h2 { font-size: clamp(1.3rem, 2.1vw, 1.6rem); font-weight: 750; height: auto; line-height: 1.2; margin: 0 0 .25rem; letter-spacing: -0.025em; color: #0f172a; }
+.access-subheading { color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: clamp(0.84rem, 1.4vw, 0.9rem); line-height: 1.35; min-height: 2.1rem; margin: 0 0 clamp(0.5rem, 1.2vh, 0.85rem); }
+.access-tabs { background: #f1f5f9; border: 1px solid rgba(15, 23, 42, 0.06); border-radius: 12px; display: flex; gap: 4px; height: 44px; margin: 0 auto; padding: 4px; width: 100%; box-sizing: border-box; }
+.access-tab { align-items: center; background: transparent; border: 0; border-radius: 9px; color: #64748b; cursor: pointer; display: inline-flex; flex: 1 1 50%; font-size: clamp(0.82rem, 1.5vw, 0.88rem); font-weight: 650; gap: .45rem; height: 100%; justify-content: center; padding: 0 .5rem; transition: all .18s ease-in-out; user-select: none; box-sizing: border-box; }
+.access-tab:hover:not(.active) { background: rgba(255, 255, 255, 0.65); color: var(--navy); }
+.access-tab.active { background: #ffffff; color: var(--blue); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04); font-weight: 700; }
 .access-fields { display: flex; flex-direction: column; }
-.access-form .form-label { color: var(--navy); font-size: clamp(0.82rem, 1.4vw, 0.88rem); font-weight: 650; margin-bottom: .2rem; }
-.access-form .form-control { background: #f8fafc; border: 1px solid #d9e2ec; border-radius: 8px; font-size: clamp(0.88rem, 1.5vw, 0.98rem); padding: clamp(0.42rem, 0.8vh, 0.52rem) .85rem; }
-.access-form .form-control:focus { background: #ffffff; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(20, 108, 206, 0.12); }
-.access-form .form-control::placeholder { color: #94a3b8; font-size: clamp(0.82rem, 1.4vw, 0.92rem); font-weight: 400; }
-.access-error-slot { min-height: 1.2rem; display: flex; align-items: center; justify-content: center; font-size: .82rem; margin: .2rem 0; }
-.access-form .btn-primary { border-radius: 8px; font-size: clamp(0.9rem, 1.5vw, 0.98rem); padding: clamp(0.48rem, 1vh, 0.62rem) 1rem; }
+.access-form .form-label { color: #0f172a; font-size: clamp(0.82rem, 1.4vw, 0.88rem); font-weight: 650; margin-bottom: .3rem; }
+.access-form .form-control { background: #f8fafc; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 10px; font-size: clamp(0.88rem, 1.5vw, 0.95rem); height: 44px; padding: 0.55rem .95rem; transition: all var(--duration) ease; }
+.access-form .form-control:focus { background: #ffffff; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(20, 108, 206, 0.18); }
+.access-form .form-control::placeholder { color: #94a3b8; font-size: clamp(0.82rem, 1.4vw, 0.9rem); font-weight: 400; }
+.access-error-slot { min-height: 1.2rem; display: flex; align-items: center; justify-content: center; font-size: .82rem; margin: .25rem 0; }
+.access-form .btn-primary { border-radius: 10px; font-size: clamp(0.92rem, 1.5vw, 1rem); font-weight: 700; height: 48px; padding: 0 1rem; background: linear-gradient(180deg, #1877e8 0%, #146cce 100%); box-shadow: 0 4px 16px rgba(20, 108, 206, 0.32); }
 .access-mobile-footer { color: var(--muted); display: none; font-size: clamp(0.72rem, 1.3vw, 0.78rem); margin-top: clamp(0.35rem, 0.8vh, 0.65rem); max-width: 430px; padding: 0 .5rem; text-align: center; width: 100%; }
 .access-mobile-footer strong { color: var(--ink); font-weight: 600; }
 .access-mobile-footer a { color: var(--blue); font-weight: 600; text-decoration: none; transition: color .15s ease, text-decoration .15s ease; }
@@ -1267,17 +1317,17 @@ button, input, select, textarea {
 .customer-product-pagination { margin-bottom: 1rem; }
 .product {
   background: #ffffff;
-  border: 1px solid var(--line-hairline);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 16px -2px rgba(16, 42, 67, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 6px 20px -4px rgba(16, 42, 67, 0.04);
   display: flex;
   flex-direction: column;
-  padding: 1.15rem;
+  padding: 1.2rem;
   transition: transform var(--duration) var(--ease-spring), box-shadow var(--duration) var(--ease-spring), border-color var(--duration) ease;
 }
 .product:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 30px -8px rgba(16, 42, 67, 0.10);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px -8px rgba(16, 42, 67, 0.12), 0 0 0 1px rgba(20, 108, 206, 0.25);
   border-color: rgba(20, 108, 206, 0.35);
 }
 .product-meta {
@@ -1288,23 +1338,23 @@ button, input, select, textarea {
   margin-bottom: 0.45rem;
 }
 .product-category-badge {
-  background: #f1f5f9;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 9999px;
-  color: #475569;
+  color: var(--blue);
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 700;
   max-width: 65%;
   overflow: hidden;
-  padding: 0.2rem 0.55rem;
+  padding: 0.2rem 0.6rem;
   text-overflow: ellipsis;
   white-space: nowrap;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
 }
 .product h2 {
-  font-size: 0.95rem;
+  font-size: 0.96rem;
   font-weight: 650;
-  margin: 0.3rem 0 0.55rem 0;
+  margin: 0.35rem 0 0.55rem 0;
   line-height: 1.35;
   color: #0f172a;
   letter-spacing: -0.02em;
@@ -1316,17 +1366,18 @@ button, input, select, textarea {
 }
 .product-image {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.05);
-  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 12px;
   color: var(--blue);
   display: flex;
-  height: 155px;
+  height: 160px;
   justify-content: center;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.9rem;
   overflow: hidden;
-  padding: 10px;
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.02);
+  padding: 12px;
+  position: relative;
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.03);
   transition: border-color var(--duration) ease;
 }
 /* Capa de visualización estilo dibujo animado / ilustración clara y nítida */
@@ -1343,7 +1394,7 @@ button, input, select, textarea {
   transition: transform var(--duration) var(--ease-spring), filter var(--duration) ease;
 }
 .product:hover .product-image img {
-  transform: scale(1.05) translateY(-2px);
+  transform: scale(1.06) translateY(-2px);
   filter: brightness(1.11) contrast(1.08) saturate(1.28) drop-shadow(0 6px 14px rgba(15, 23, 42, 0.08));
 }
 .product small {
@@ -1359,20 +1410,35 @@ button, input, select, textarea {
   font-variant-numeric: tabular-nums;
 }
 .product .btn {
-  border-radius: var(--radius-btn);
+  border-radius: 10px;
   font-size: 0.88rem;
   font-weight: 650;
   height: 40px;
   margin-top: 0.75rem;
   width: 100%;
 }
+.product .btn-outline-primary {
+  background: #eff6ff;
+  border: 1px solid rgba(20, 108, 206, 0.24);
+  color: var(--blue);
+  font-weight: 650;
+  transition: all var(--duration) var(--ease-spring);
+}
+.product:hover .btn-outline-primary,
+.product .btn-outline-primary:hover {
+  background: linear-gradient(180deg, #1877e8 0%, #146cce 100%);
+  border-color: #1059ab;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(20, 108, 206, 0.35);
+  transform: translateY(-1px);
+}
 
 .cart {
   background: #ffffff;
-  border: 1px solid var(--line-hairline);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 24px -2px rgba(16, 42, 67, 0.08), 0 2px 6px -1px rgba(16, 42, 67, 0.04);
-  padding: 1.4rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 4px 28px -4px rgba(16, 42, 67, 0.10), 0 1px 3px rgba(0, 0, 0, 0.03);
+  padding: 1.5rem;
   position: sticky;
   top: 1.25rem;
 }
