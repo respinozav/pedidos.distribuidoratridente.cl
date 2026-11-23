@@ -4739,6 +4739,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                 setError("");
               }}
             >
+              <User size={17} />
               Mis datos
             </button>
             <button
