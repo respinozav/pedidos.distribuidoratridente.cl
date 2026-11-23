@@ -4803,22 +4803,9 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
             )}
             <FocusGroupButton onClick={() => setSuggestionModalOpen(true)} />
             <span className="customer-welcome d-none d-md-inline">Hola, {customer.nombre || customer.rut || customer.celular}</span>
-            {section === "create" && (
-              <button
-                type="button"
-                className={`customer-header-cart-btn ${totalItems > 0 ? "has-items" : ""}`}
-                onClick={() => setCartDrawerOpen((prev) => !prev)}
-                title="Abrir tu pedido"
-                aria-label={`Abrir carrito con ${totalItems} productos`}
-              >
-                <ShoppingBag size={18} />
-                <span className="customer-header-cart-label d-none d-sm-inline">Tu Pedido</span>
-                <span className="customer-header-cart-badge">{totalItems}</span>
-              </button>
-            )}
             <button
               type="button"
-              className="customer-header-logout-btn"
+              className="customer-header-logout-btn d-lg-none"
               onClick={vendorSession ? () => onExitVendorMode && onExitVendorMode() : onLogout}
               title={vendorSession ? "Volver a Panel" : "Cerrar sesión"}
               aria-label="Cerrar sesión"
