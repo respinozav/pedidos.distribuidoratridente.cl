@@ -414,6 +414,9 @@ button, input, select, textarea {
   justify-content: center; 
   width: 32px; 
   box-shadow: 0 0 0 2px rgba(20, 108, 206, 0.35);
+  line-height: 1;
+  text-align: center;
+  user-select: none;
 }
 .sidebar-user strong, .sidebar-user small { display: block; font-size: .8rem; }
 .sidebar-user strong { color: #fff; font-weight: 600; }
@@ -1104,7 +1107,7 @@ table.table td .text-muted,
 .product-row span:not(.status-active):not(.status-inactive):not(.stock-critical),
 .product-row small,
 .user-row strong,
-.user-row span:not(.status-active):not(.status-inactive):not(.camila-badge),
+.user-row span:not(.status-active):not(.status-inactive):not(.camila-badge):not(.user-avatar),
 .user-row small,
 .customer-row strong,
 .customer-row span:not(.status-active):not(.status-inactive):not(.customer-alias-tag),
@@ -1140,7 +1143,7 @@ table.table td .text-muted,
 .admin-vendedor-summary-row span,
 .admin-vendedor-summary-row small,
 .camila-log-row strong,
-.camila-log-row span:not(.camila-badge):not(.status-active):not(.status-inactive),
+.camila-log-row span:not(.camila-badge):not(.status-active):not(.status-inactive):not(.user-avatar),
 .camila-log-row small {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1191,11 +1194,36 @@ table.table td .text-muted,
 .category-edit,
 .switch,
 .btn-defontana-toggle,
-.product-thumb,
-.user-avatar {
+.product-thumb {
   overflow: visible !important;
   white-space: nowrap !important;
   flex-shrink: 0 !important;
+}
+
+.user-avatar {
+  align-items: center !important;
+  background: var(--sky) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 1px rgba(20, 108, 206, 0.15) !important;
+  box-sizing: border-box !important;
+  color: var(--blue) !important;
+  display: inline-flex !important;
+  flex: 0 0 34px !important;
+  flex-shrink: 0 !important;
+  font-size: .72rem !important;
+  font-weight: 800 !important;
+  height: 34px !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  max-width: 34px !important;
+  min-width: 34px !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  text-align: center !important;
+  user-select: none;
+  white-space: nowrap !important;
+  width: 34px !important;
 }
 
 .status-active,
@@ -1369,7 +1397,30 @@ table.table td .text-muted,
 .user-name { align-items: center; display: flex; gap: .65rem; min-width: 0; }
 .user-name strong, .user-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-name small, .user-role { color: var(--muted); font-size: .78rem; }
-.user-avatar { align-items: center; background: var(--sky); border-radius: 50%; color: var(--blue); display: inline-flex; flex: 0 0 34px; font-size: .72rem; font-weight: 800; height: 34px; justify-content: center; width: 34px; }
+.user-avatar { 
+  align-items: center !important; 
+  background: var(--sky) !important; 
+  border-radius: 50% !important; 
+  box-shadow: 0 0 0 1px rgba(20, 108, 206, 0.15) !important;
+  box-sizing: border-box !important;
+  color: var(--blue) !important; 
+  display: inline-flex !important; 
+  flex: 0 0 34px !important; 
+  flex-shrink: 0 !important;
+  font-size: .72rem !important; 
+  font-weight: 800 !important; 
+  height: 34px !important; 
+  justify-content: center !important; 
+  line-height: 1 !important;
+  margin: 0 !important;
+  max-width: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+  text-align: center !important;
+  user-select: none;
+  white-space: nowrap !important;
+  width: 34px !important; 
+}
 .sidebar-backdrop { background: rgb(16 42 67 / 48%); inset: 0; position: fixed; z-index: 90; }
 .customer-app { min-height: 100vh; }
 /* ==========================================================================
