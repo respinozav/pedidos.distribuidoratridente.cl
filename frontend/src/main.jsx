@@ -3944,6 +3944,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   const [pendingStockNotices, setPendingStockNotices] = useState([]);
   const [lightboxProduct, setLightboxProduct] = useState(null);
   const [isListening, setIsListening] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const recognitionRef = useRef(null);
 
   useEffect(() => {
@@ -4633,6 +4634,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       });
       const orderCode = response?.data?.id?.slice(0, 8).toUpperCase() ?? "N/D";
       setCart([]);
+      setCartDrawerOpen(false);
       setError("");
       setSection("history");
       window.dispatchEvent(new CustomEvent("stock-alert-refresh"));
@@ -4678,6 +4680,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
 
 
   const total = cart.reduce((sum, item) => sum + Number(item.unit_price ?? item.precio_cliente ?? item.precio) * item.quantity, 0);
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const activeAddresses = customer.direcciones?.filter((address) => address.activo) ?? [];
   return (
     <>
@@ -4793,8 +4796,43 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
             )}
             <FocusGroupButton onClick={() => setSuggestionModalOpen(true)} />
             <span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span>
+            {section === "create" && (
+              <button
+                type="button"
+                className={`customer-header-cart-btn ${totalItems > 0 ? "has-items" : ""}`}
+                onClick={() => setCartDrawerOpen((prev) => !prev)}
+                title="Abrir tu pedido"
+                aria-label={`Abrir carrito con ${totalItems} productos`}
+              >
+                <ShoppingBag size={18} />
+                <span className="customer-header-cart-label">Tu Pedido</span>
+                <span className="customer-header-cart-badge">{totalItems}</span>
+              </button>
+            )}
           </div>
         </header>
+
+        {/* Botón flotante de carrito fijo arriba a la derecha, inamovible al hacer scroll */}
+        {section === "create" && (
+          <button
+            type="button"
+            className={`floating-cart-trigger ${cartDrawerOpen ? "is-active" : ""} ${totalItems > 0 ? "has-items" : ""}`}
+            onClick={() => setCartDrawerOpen((prev) => !prev)}
+            title="Ver tu pedido y finalizar compra"
+            aria-label={`Ver carrito con ${totalItems} productos`}
+          >
+            <div className="floating-cart-icon-box">
+              <ShoppingBag size={21} />
+              {totalItems > 0 && (
+                <span className="floating-cart-badge">{totalItems}</span>
+              )}
+            </div>
+            <div className="floating-cart-label d-none d-sm-flex">
+              <span className="floating-cart-title">Mi Pedido</span>
+              <span className="floating-cart-total">{money.format(total)}</span>
+            </div>
+          </button>
+        )}
         <div className="customer-content">
           {error && <div className="alert alert-danger">{error}</div>}
           {section === "profile" ? (
@@ -4835,8 +4873,8 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                   Sugerir producto →
                 </button>
               </div>
-              <div className="row g-4">
-                <section className="col-xl-8">
+              <div className="catalog-full-layout">
+                <section className="catalog-products-full">
                   <div className="row g-2 align-items-center mb-3">
                     <div className="col-12 col-md-5 col-lg-4">
                       <select
@@ -5006,100 +5044,159 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
 
                   {!products.length && <p className="text-secondary mt-4">No se encontraron productos.</p>}
                 </section>
-              <aside className="col-xl-4">
-                <div className="cart">
-                  <div className="cart-title">
-                    <ShoppingBag size={20} />
-                    <h2>Tu pedido</h2>
+              </div>
+
+              {/* Cart Drawer Backdrop */}
+              <div
+                className={`cart-drawer-backdrop ${cartDrawerOpen ? "is-open" : ""}`}
+                onClick={() => setCartDrawerOpen(false)}
+                aria-hidden="true"
+              />
+
+              {/* Cart Drawer Lateral Desplegable */}
+              <aside
+                className={`cart-drawer ${cartDrawerOpen ? "is-open" : ""}`}
+                aria-label="Panel de pedido y carrito"
+              >
+                <div className="cart-drawer-header">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="cart-drawer-icon-wrap">
+                      <ShoppingBag size={20} />
+                    </div>
+                    <div>
+                      <h2 className="cart-drawer-title mb-0">Tu Pedido</h2>
+                      <span className="cart-drawer-subtitle">{totalItems} {totalItems === 1 ? "ítem" : "ítems"} seleccionados</span>
+                    </div>
                   </div>
-                  <label className="form-label" htmlFor="delivery-address">
-                    Dirección de despacho
-                  </label>
-                  <select
-                    id="delivery-address"
-                    className="form-select"
-                    value={selectedAddress}
-                    onChange={(event) => setSelectedAddress(event.target.value)}
+                  <button
+                    type="button"
+                    className="cart-drawer-close-btn"
+                    onClick={() => setCartDrawerOpen(false)}
+                    aria-label="Cerrar panel de pedido"
                   >
-                    <option value="">Selecciona una dirección</option>
-                    {activeAddresses.map((address) => (
-                      <option value={address.id} key={address.id}>
-                        {address.direccion}
-                        {address.comuna ? `, ${address.comuna}` : ""}
-                        {address.principal ? " (Principal)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {!activeAddresses.length && (
-                    <small className="form-text">No tienes direcciones activas registradas.</small>
-                  )}
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="cart-drawer-body">
+                  <div className="cart-drawer-section">
+                    <label className="form-label fw-bold mb-1" htmlFor="delivery-address">
+                      Dirección de despacho
+                    </label>
+                    <select
+                      id="delivery-address"
+                      className="form-select"
+                      value={selectedAddress}
+                      onChange={(event) => setSelectedAddress(event.target.value)}
+                    >
+                      <option value="">Selecciona una dirección</option>
+                      {activeAddresses.map((address) => (
+                        <option value={address.id} key={address.id}>
+                          {address.direccion}
+                          {address.comuna ? `, ${address.comuna}` : ""}
+                          {address.principal ? " (Principal)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {!activeAddresses.length && (
+                      <small className="form-text text-danger">No tienes direcciones activas registradas.</small>
+                    )}
+                  </div>
+
                   {cart.length ? (
-                    <>
-                      <div className="cart-items">
-                        {cart.map((item) => {
-                          const itemPrice = Number(item.unit_price ?? item.precio_cliente ?? item.precio);
-                          const itemSubtotal = itemPrice * item.quantity;
-                          const key = item.cart_key || item.id;
-                          const isCaja = item.tipo_empaque === "caja";
-                          return (
-                            <div className="cart-line" key={key}>
-                              <div className="cart-item-info">
-                                <span className="cart-item-name" title={item.nombre}>
-                                  {item.nombre}
-                                  {isCaja ? (
-                                    <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>
-                                      Caja{item.cantidad_caja ? ` x${item.cantidad_caja}` : ""}
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <small className="cart-item-price">
-                                  {money.format(itemPrice)} {isCaja ? "c/caja" : "c/u"} · <strong className="text-primary">{money.format(itemSubtotal)}</strong>
-                                </small>
+                    <div className="cart-items mt-3">
+                      {cart.map((item) => {
+                        const itemPrice = Number(item.unit_price ?? item.precio_cliente ?? item.precio);
+                        const itemSubtotal = itemPrice * item.quantity;
+                        const key = item.cart_key || item.id;
+                        const isCaja = item.tipo_empaque === "caja";
+                        return (
+                          <div className="cart-line" key={key}>
+                            {item.imagen_url && (
+                              <div className="cart-item-thumb">
+                                <img src={item.imagen_url} alt="" />
                               </div>
-                              <div className="cart-stepper">
-                                <button
-                                  type="button"
-                                  className={`cart-stepper-btn minus ${item.quantity === 1 ? "is-trash" : ""}`}
-                                  onClick={() => updateQuantity(key, item.quantity - 1)}
-                                  title={item.quantity === 1 ? "Eliminar del pedido" : "Restar 1"}
-                                  aria-label="Quitar unidad"
-                                >
-                                  {item.quantity === 1 ? <Trash2 size={14} strokeWidth={2.2} /> : <Minus size={14} strokeWidth={2.5} />}
-                                </button>
-                                <span className="cart-stepper-val">{item.quantity}</span>
-                                <button
-                                  type="button"
-                                  className="cart-stepper-btn plus"
-                                  onClick={() => updateQuantity(key, item.quantity + 1)}
-                                  title="Sumar 1"
-                                  aria-label="Agregar unidad"
-                                >
-                                  <Plus size={14} strokeWidth={2.5} />
-                                </button>
-                              </div>
+                            )}
+                            <div className="cart-item-info">
+                              <span className="cart-item-name" title={item.nombre}>
+                                {item.nombre}
+                                {isCaja ? (
+                                  <span className="badge product-caja-badge ms-1">
+                                    Caja{item.cantidad_caja ? ` x${item.cantidad_caja}` : ""}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <small className="cart-item-price">
+                                {money.format(itemPrice)} {isCaja ? "c/caja" : "c/u"} · <strong className="text-primary">{money.format(itemSubtotal)}</strong>
+                              </small>
                             </div>
-                          );
-                        })}
-                      </div>
-                      <hr />
-                      <div className="d-flex justify-content-between">
-                        <strong>Total</strong>
-                        <strong>{money.format(total)}</strong>
-                      </div>
-                      <button
-                        className="btn btn-primary w-100 mt-3"
-                        onClick={createOrder}
-                        disabled={submitting || !selectedAddress}
-                      >
-                        {submitting ? "Enviando..." : "Enviar pedido"}
-                      </button>
-                    </>
+                            <div className="cart-stepper">
+                              <button
+                                type="button"
+                                className={`cart-stepper-btn minus ${item.quantity === 1 ? "is-trash" : ""}`}
+                                onClick={() => updateQuantity(key, item.quantity - 1)}
+                                title={item.quantity === 1 ? "Eliminar del pedido" : "Restar 1"}
+                                aria-label="Quitar unidad"
+                              >
+                                {item.quantity === 1 ? <Trash2 size={14} strokeWidth={2.2} /> : <Minus size={14} strokeWidth={2.5} />}
+                              </button>
+                              <span className="cart-stepper-val">{item.quantity}</span>
+                              <button
+                                type="button"
+                                className="cart-stepper-btn plus"
+                                onClick={() => updateQuantity(key, item.quantity + 1)}
+                                title="Sumar 1"
+                                aria-label="Agregar unidad"
+                              >
+                                <Plus size={14} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
-                    <p className="text-secondary mt-3 mb-0">Agrega productos para comenzar.</p>
+                    <div className="cart-empty-state">
+                      <div className="cart-empty-icon">
+                        <ShoppingBag size={38} />
+                      </div>
+                      <h5>Tu pedido está vacío</h5>
+                      <p className="text-secondary small mb-0">Agrega productos desde el catálogo para realizar tu pedido mayorista.</p>
+                    </div>
                   )}
                 </div>
+
+                {cart.length > 0 && (
+                  <div className="cart-drawer-footer">
+                    <div className="cart-summary-breakdown">
+                      <div className="cart-summary-line">
+                        <span>Neto estimado</span>
+                        <span>{money.format(Math.round(total / 1.19))}</span>
+                      </div>
+                      <div className="cart-summary-line">
+                        <span>IVA (19%)</span>
+                        <span>{money.format(total - Math.round(total / 1.19))}</span>
+                      </div>
+                      <div className="cart-summary-total">
+                        <strong>Total a pagar</strong>
+                        <strong className="cart-total-amount">{money.format(total)}</strong>
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-primary w-100 cart-checkout-btn"
+                      onClick={createOrder}
+                      disabled={submitting || !selectedAddress}
+                    >
+                      {submitting ? "Enviando..." : "Enviar pedido"}
+                    </button>
+                    {!selectedAddress && (
+                      <small className="text-danger text-center d-block mt-2" style={{ fontSize: "0.78rem" }}>
+                        Selecciona una dirección de despacho para enviar el pedido.
+                      </small>
+                    )}
+                  </div>
+                )}
               </aside>
-            </div>
             </>
           ) : (
             <section className="content-panel">

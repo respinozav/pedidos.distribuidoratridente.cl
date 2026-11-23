@@ -5054,3 +5054,410 @@ table.table tbody tr:hover {
   min-width: 32px !important;
   max-width: 32px !important;
 }
+
+/* ==========================================================================
+   MODERN ERP B2B: FLOATING CART BUTTON & FULL-WIDTH PRODUCT CATALOG DRAWER
+   ========================================================================== */
+
+/* 1. Botón Flotante de Carrito: Inmóvil arriba a la derecha al hacer scroll */
+.floating-cart-trigger {
+  position: fixed !important;
+  top: 1rem !important;
+  right: 1.5rem !important;
+  z-index: 1045 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  background: linear-gradient(135deg, #102a43 0%, #0b1a2c 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 99px !important;
+  padding: 0.45rem 1.15rem 0.45rem 0.85rem !important;
+  box-shadow: 0 8px 24px -4px rgba(11, 26, 44, 0.35), 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+  cursor: pointer !important;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  user-select: none !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.floating-cart-trigger:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  background: linear-gradient(135deg, #146cce 0%, #102a43 100%) !important;
+  border-color: rgba(20, 108, 206, 0.5) !important;
+  box-shadow: 0 10px 28px rgba(20, 108, 206, 0.4), 0 0 0 2px rgba(20, 108, 206, 0.25) !important;
+  color: #ffffff !important;
+}
+
+.floating-cart-trigger:active {
+  transform: scale(0.96) !important;
+}
+
+.floating-cart-trigger.is-active {
+  background: var(--blue) !important;
+  box-shadow: 0 0 0 3px rgba(20, 108, 206, 0.35) !important;
+}
+
+.floating-cart-icon-box {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  flex-shrink: 0 !important;
+}
+
+.floating-cart-badge {
+  position: absolute !important;
+  top: -5px !important;
+  right: -7px !important;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
+  font-size: 0.72rem !important;
+  font-weight: 850 !important;
+  border-radius: 99px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 4px !important;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.5), 0 0 0 2px #102a43 !important;
+  animation: badgePop 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+@keyframes badgePop {
+  0% { transform: scale(0.6); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.floating-cart-label {
+  display: flex !important;
+  flex-direction: column !important;
+  text-align: left !important;
+  line-height: 1.15 !important;
+}
+
+.floating-cart-title {
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.floating-cart-total {
+  font-size: 0.92rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Botón complementario en el Header del cliente */
+.customer-header-cart-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 8px !important;
+  color: var(--blue) !important;
+  font-size: 0.84rem !important;
+  font-weight: 700 !important;
+  height: 38px !important;
+  padding: 0 0.85rem !important;
+  cursor: pointer !important;
+  transition: all 180ms ease !important;
+}
+
+.customer-header-cart-btn:hover {
+  background: var(--blue) !important;
+  border-color: var(--blue) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.customer-header-cart-badge {
+  background: #f59e0b !important;
+  color: #ffffff !important;
+  font-size: 0.7rem !important;
+  font-weight: 850 !important;
+  border-radius: 99px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 4px !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* 2. Slide-Over Drawer Lateral */
+.cart-drawer-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(11, 26, 44, 0.5) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+  z-index: 1055 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.25s ease, visibility 0.25s ease !important;
+}
+
+.cart-drawer-backdrop.is-open {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.cart-drawer {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: min(450px, 100vw) !important;
+  background: #ffffff !important;
+  z-index: 1060 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: -14px 0 45px rgba(11, 26, 44, 0.28) !important;
+  transform: translateX(100%) !important;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  overflow: hidden !important;
+}
+
+.cart-drawer.is-open {
+  transform: translateX(0) !important;
+}
+
+.cart-drawer-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 1.25rem 1.4rem !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  flex-shrink: 0 !important;
+}
+
+.cart-drawer-icon-wrap {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 10px !important;
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  color: var(--blue) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.cart-drawer-title {
+  font-size: 1.18rem !important;
+  font-weight: 750 !important;
+  color: var(--navy) !important;
+  letter-spacing: -0.02em !important;
+}
+
+.cart-drawer-subtitle {
+  font-size: 0.78rem !important;
+  color: #64748b !important;
+  font-weight: 600 !important;
+}
+
+.cart-drawer-close-btn {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  color: #64748b !important;
+  width: 34px !important;
+  height: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 180ms ease !important;
+}
+
+.cart-drawer-close-btn:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+  transform: rotate(90deg) !important;
+}
+
+.cart-drawer-body {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  padding: 1.4rem !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.cart-drawer-section {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  padding: 0.9rem 1.1rem !important;
+}
+
+.cart-drawer-section .form-label {
+  font-size: 0.82rem !important;
+  color: #1e293b !important;
+}
+
+.cart-drawer-section .form-select {
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  font-size: 0.88rem !important;
+  min-height: 40px !important;
+}
+
+.cart-item-thumb {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  padding: 2px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  overflow: hidden !important;
+}
+
+.cart-item-thumb img {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+}
+
+.cart-empty-state {
+  text-align: center !important;
+  padding: 3rem 1rem !important;
+  color: #64748b !important;
+}
+
+.cart-empty-icon {
+  width: 72px !important;
+  height: 72px !important;
+  border-radius: 50% !important;
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  color: var(--blue) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-bottom: 1rem !important;
+}
+
+.cart-empty-state h5 {
+  font-weight: 700 !important;
+  color: var(--navy) !important;
+  margin-bottom: 0.35rem !important;
+}
+
+.cart-drawer-footer {
+  border-top: 1px solid #e2e8f0 !important;
+  background: #fafbfc !important;
+  padding: 1.25rem 1.4rem !important;
+  flex-shrink: 0 !important;
+}
+
+.cart-summary-breakdown {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.35rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.cart-summary-line {
+  display: flex !important;
+  justify-content: space-between !important;
+  font-size: 0.84rem !important;
+  color: #64748b !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.cart-summary-total {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: baseline !important;
+  border-top: 1px dashed #cbd5e1 !important;
+  padding-top: 0.65rem !important;
+  margin-top: 0.35rem !important;
+  font-size: 0.95rem !important;
+  color: var(--navy) !important;
+}
+
+.cart-total-amount {
+  font-size: 1.35rem !important;
+  font-weight: 850 !important;
+  color: var(--blue) !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.cart-checkout-btn {
+  border-radius: 10px !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  min-height: 46px !important;
+  box-shadow: 0 4px 14px rgba(20, 108, 206, 0.3) !important;
+  transition: all 180ms ease !important;
+}
+
+.cart-checkout-btn:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(20, 108, 206, 0.45) !important;
+}
+
+/* 3. Catálogo Full-Width: Espacio masivo para los productos */
+.catalog-full-layout {
+  width: 100% !important;
+  margin-bottom: 2rem !important;
+}
+
+.catalog-products-full {
+  width: 100% !important;
+}
+
+.product-grid {
+  display: grid !important;
+  gap: 1.25rem !important;
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)) !important;
+  width: 100% !important;
+}
+
+@media (max-width: 991px) {
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+    gap: 0.9rem !important;
+  }
+  .customer-header-right {
+    padding-right: 60px !important;
+  }
+  .floating-cart-trigger {
+    padding: 0.45rem !important;
+    border-radius: 50% !important;
+    top: 0.75rem !important;
+    right: 0.85rem !important;
+  }
+  .floating-cart-label {
+    display: none !important;
+  }
+}
+
+@media (max-width: 575px) {
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+  .cart-drawer {
+    width: 100vw !important;
+  }
+}
