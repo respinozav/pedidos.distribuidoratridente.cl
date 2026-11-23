@@ -79,8 +79,14 @@ jobs:
 
             echo "--- LOCALIZANDO DIRECTORIO DEL PROYECTO ---" >> "$REPORT_FILE" 2>&1
             TARGET_APP_DIR="/var/www/pedidos.distribuidoratridente.cl"
-            if [ ! -d "$TARGET_APP_DIR" ]; then
-              for CANDIDATE in "/var/www/distribuidoratridente.cl" "/var/www/qa.distribuidoratridente.cl" "/var/www/pedidos-qa.distribuidoratridente.cl" "/var/www/pedidos"; do
+            if [ "$DEPLOY_ENV" = "qa" ]; then
+              if [ -d "/var/www/pedidos-qa.distribuidoratridente.cl" ]; then
+                TARGET_APP_DIR="/var/www/pedidos-qa.distribuidoratridente.cl"
+              elif [ -d "/var/www/qa.distribuidoratridente.cl" ]; then
+                TARGET_APP_DIR="/var/www/qa.distribuidoratridente.cl"
+              fi
+            elif [ ! -d "$TARGET_APP_DIR" ]; then
+              for CANDIDATE in "/var/www/pedidos-qa.distribuidoratridente.cl" "/var/www/distribuidoratridente.cl" "/var/www/qa.distribuidoratridente.cl" "/var/www/pedidos"; do
                 if [ -d "$CANDIDATE" ]; then
                   TARGET_APP_DIR="$CANDIDATE"
                   break
@@ -132,13 +138,21 @@ jobs:
 
             echo "--- REINICIANDO SERVICIOS DE FORMA LIMPIA ---" >> "$REPORT_FILE" 2>&1
             sudo systemctl daemon-reload >> "$REPORT_FILE" 2>&1 || true
-            sudo systemctl restart pedidos-tridente >> "$REPORT_FILE" 2>&1 || true
-            sudo systemctl restart distribuidoratridente-api >> "$REPORT_FILE" 2>&1 || true
+            if [ "$DEPLOY_ENV" = "qa" ]; then
+              sudo systemctl restart pedidos-tridente-qa 2>/dev/null || sudo systemctl restart pedidos-qa 2>/dev/null || sudo systemctl restart pedidos-tridente 2>/dev/null || true
+            else
+              sudo systemctl restart pedidos-tridente >> "$REPORT_FILE" 2>&1 || true
+              sudo systemctl restart distribuidoratridente-api >> "$REPORT_FILE" 2>&1 || true
+            fi
             sudo systemctl reload nginx >> "$REPORT_FILE" 2>&1 || sudo systemctl restart nginx >> "$REPORT_FILE" 2>&1 || true
             sleep 4
 
             echo "--- ESTADO DE SERVICIOS ---" >> "$REPORT_FILE" 2>&1
-            sudo systemctl status pedidos-tridente --no-pager >> "$REPORT_FILE" 2>&1 || true
+            if [ "$DEPLOY_ENV" = "qa" ]; then
+              sudo systemctl status pedidos-tridente-qa --no-pager 2>/dev/null || sudo systemctl status pedidos-tridente --no-pager 2>/dev/null || true
+            else
+              sudo systemctl status pedidos-tridente --no-pager >> "$REPORT_FILE" 2>&1 || true
+            fi
 
             echo "--- PROBANDO PUERTOS INTERNOS ---" >> "$REPORT_FILE" 2>&1
             for PORT in 8002 8003 8001 8000; do
@@ -155,7 +169,7 @@ jobs:
             cat "$REPORT_FILE"
 
             # Publicar archivo en los directorios web para consulta directa via HTTPS
-            for WEB_DIR in /var/www/html/pedidos.distribuidoratridente.cl /var/www/distribuidoratridente.cl/frontend/dist /var/www/pedidos.distribuidoratridente.cl/frontend/dist /var/www/html/distribuidoratridente.cl; do
+            for WEB_DIR in "/var/www/html/pedidos-qa.distribuidoratridente.cl" "/var/www/html/pedidos.distribuidoratridente.cl" "/var/www/distribuidoratridente.cl/frontend/dist" "/var/www/pedidos.distribuidoratridente.cl/frontend/dist" "/var/www/html/distribuidoratridente.cl" "$TARGET_APP_DIR/frontend/dist"; do
               if [ -d "$WEB_DIR" ]; then
                 sudo cp "$REPORT_FILE" "$WEB_DIR/status_diag.txt" 2>/dev/null || true
                 sudo chmod 644 "$WEB_DIR/status_diag.txt" 2>/dev/null || true

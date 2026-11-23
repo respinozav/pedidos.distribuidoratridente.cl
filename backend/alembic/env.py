@@ -29,17 +29,18 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     is_local = settings.database_host in ("localhost", "127.0.0.1", "::1")
+    clean_schema = settings.database_schema.strip('\"\'')
     connectable = create_engine(
         settings.database_url,
         poolclass=pool.NullPool,
         connect_args={
-            "options": f"-csearch_path={settings.database_schema}",
+            "options": f'-csearch_path="{clean_schema}"',
             "sslmode": "prefer" if is_local else "require",
         },
     )
     with connectable.connect() as connection:
         try:
-            connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.database_schema}"'))
+            connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{clean_schema}"'))
             connection.commit()
         except Exception:
             connection.rollback()
@@ -47,7 +48,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             include_schemas=True,
-            version_table_schema=settings.database_schema,
+            version_table_schema=clean_schema,
         )
         with context.begin_transaction():
             context.run_migrations()

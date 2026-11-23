@@ -100,6 +100,10 @@ case "$PROJECT_NAME" in
         SERVICE_NAME="pedidos-tridente"
         ;;
 
+    pedidos-qa.distribuidoratridente.cl)
+        SERVICE_NAME="pedidos-tridente-qa"
+        ;;
+
 esac
 
 ############################################
@@ -257,7 +261,7 @@ if [ "$IS_BACKEND" = true ]; then
     # Detectar archivos de servicio en /etc/systemd/system relacionados
     DETECTED_SERVICES=()
     if [ -d "/etc/systemd/system" ]; then
-        for svc_file in $(grep -slE "distribuidoratridente|pedidos-tridente|pedidos\.distribuidoratridente" /etc/systemd/system/*.service 2>/dev/null || true); do
+        for svc_file in $(grep -slE "distribuidoratridente|pedidos-tridente|pedidos-qa|pedidos\.distribuidoratridente" /etc/systemd/system/*.service 2>/dev/null || true); do
             svc_name=$(basename "$svc_file" .service)
             DETECTED_SERVICES+=("$svc_name")
             echo "Servicio encontrado en systemd: $svc_name ($svc_file)"

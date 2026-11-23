@@ -1,0 +1,76 @@
+name: Clonar BD Producción a QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribe "SI" para confirmar el clonado de Prod a QA'
+        required: true
+        default: 'SI'
+
+concurrency:
+  group: clone-db-prod-to-qa
+  cancel-in-progress: false
+
+jobs:
+  clone-database:
+    name: Clonar Esquema y Datos (bdtridente -> bdtridente-qa)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validar confirmación
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "SI" ]; then
+            echo "Operación cancelada. Debes escribir 'SI' para proceder."
+            exit 1
+          fi
+
+      - name: Ejecutar script de clonación vía SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          AWS_HOST_BD: ${{ vars.AWS_HOST_BD || secrets.AWS_HOST_BD }}
+          AWS_USER_BD: ${{ vars.AWS_USER_BD || secrets.AWS_USER_BD }}
+          AWS_PASSWORD_BD: ${{ secrets.AWS_PASSWORD_BD || vars.AWS_PASSWORD_BD }}
+          AWS_SCHEME_BD: ${{ vars.AWS_SCHEME_BD || secrets.AWS_SCHEME_BD || 'bdtridente' }}
+        with:
+          host: ${{ vars.AWS_HOST || secrets.AWS_HOST }}
+          username: ${{ vars.AWS_USERNAME || secrets.AWS_USERNAME }}
+          key: ${{ secrets.AWS_PRIVATE_KEY }}
+          envs: AWS_HOST_BD,AWS_USER_BD,AWS_PASSWORD_BD,AWS_SCHEME_BD
+          script: |
+            set -e
+            echo "=========================================="
+            echo "INICIANDO CLONADO DE BD PROD A QA: $(date)"
+            echo "=========================================="
+
+            APP_DIR="/var/www/pedidos.distribuidoratridente.cl"
+            if [ ! -d "$APP_DIR" ]; then
+              for CANDIDATE in "/var/www/distribuidoratridente.cl" "/var/www/pedidos-qa.distribuidoratridente.cl" "/var/www/pedidos"; do
+                if [ -d "$CANDIDATE" ]; then
+                  APP_DIR="$CANDIDATE"
+                  break
+                fi
+              done
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin main || true
+            git checkout main || true
+            git reset --hard origin/main || true
+
+            PYTHON_EXEC="$APP_DIR/backend/venv/bin/python3"
+            if [ ! -x "$PYTHON_EXEC" ]; then
+              PYTHON_EXEC="python3"
+            fi
+
+            echo "Ejecutando setup_and_clone_qa_db.py..."
+            sudo DATABASE_HOST="${AWS_HOST_BD:-localhost}" \
+                 DATABASE_USER="${AWS_USER_BD:-postgres}" \
+                 DATABASE_PASSWORD="${AWS_PASSWORD_BD}" \
+                 DATABASE_NAME="postgres" \
+                 DATABASE_SCHEMA="${AWS_SCHEME_BD:-bdtridente}" \
+                 "$PYTHON_EXEC" "$APP_DIR/backend/scripts/setup_and_clone_qa_db.py"
+
+            echo "=========================================="
+            echo "CLONADO FINALIZADO EXITOSAMENTE"
+            echo "=========================================="
