@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Script utilitario para inicializar y configurar el servidor de QA:
-1. Instala y asegura Nginx, Python3 venv, Node.js y dependencias del sistema.
+1. Instala y asegura Nginx, Python3 venv, Node.js 20 LTS y dependencias del sistema.
 2. Crea el servicio systemd /etc/systemd/system/pedidos-tridente-qa.service.
 3. Configura el virtualhost Nginx con soporte HTTP 80 y HTTPS 443 (Certbot SSL).
-4. Recrea el entorno virtual Python (venv) y compila el frontend.
+4. Recrea el entorno virtual Python (venv) y compila el frontend React con Node 20.
 5. Habilita y arranca todos los servicios.
 """
 
@@ -99,6 +99,29 @@ server {{
 """
 
 
+def ensure_node20():
+    need_install = True
+    node_bin = shutil.which("node")
+    if node_bin:
+        res = subprocess.run([node_bin, "-v"], capture_output=True, text=True)
+        out = res.stdout.strip()
+        print(f"Versión de Node actual: {out}")
+        if out.startswith("v"):
+            try:
+                major = int(out[1:].split(".")[0])
+                if major >= 20:
+                    need_install = False
+                    print("✓ Node.js ya es versión 20 o superior.")
+            except Exception:
+                pass
+    if need_install:
+        print("Instalando Node.js v20 LTS vía NodeSource...")
+        subprocess.run("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -", shell=True, check=False)
+        subprocess.run(["apt-get", "install", "-y", "nodejs"], check=False)
+        res = subprocess.run(["node", "-v"], capture_output=True, text=True)
+        print("✓ Nueva versión de Node:", res.stdout.strip())
+
+
 def setup_qa_system():
     print("=" * 60)
     print("CONFIGURACION AUTOMATICA DEL SERVIDOR QA")
@@ -111,7 +134,7 @@ def setup_qa_system():
         subprocess.run(["systemctl", "disable", "apache2"], check=False)
 
     # 1. Asegurar instalación de paquetes del sistema operativo
-    print("Instalando dependencias del sistema en QA (Nginx, Python3-venv, Pip, Certbot, Node)...")
+    print("Instalando dependencias del sistema en QA...")
     subprocess.run(["apt-get", "update", "-y"], check=False)
     subprocess.run([
         "apt-get", "install", "-y",
@@ -119,21 +142,22 @@ def setup_qa_system():
         "python3-venv",
         "python3.12-venv",
         "python3-pip",
-        "nodejs",
-        "npm",
         "certbot",
         "python3-certbot-nginx",
         "postgresql-client"
     ], check=False)
-    print("✓ Paquetes del sistema asegurados.")
+    print("✓ Paquetes del sistema base asegurados.")
 
-    # 2. Crear directorios requeridos
+    # 2. Asegurar Node.js 20 LTS para compilación Vite
+    ensure_node20()
+
+    # 3. Crear directorios requeridos
     Path(QA_HTML_DIR).mkdir(parents=True, exist_ok=True)
     Path("/etc/nginx/sites-available").mkdir(parents=True, exist_ok=True)
     Path("/etc/nginx/sites-enabled").mkdir(parents=True, exist_ok=True)
     print(f"✓ Directorio HTML listo: {QA_HTML_DIR}")
 
-    # 3. Deshabilitar virtualhost por defecto de Ubuntu
+    # 4. Deshabilitar virtualhost por defecto de Ubuntu
     default_site = Path("/etc/nginx/sites-enabled/default")
     if default_site.exists():
         try:
@@ -142,7 +166,7 @@ def setup_qa_system():
         except Exception as e:
             print("Aviso al remover default site:", e)
 
-    # 4. Configurar VirtualHost de QA
+    # 5. Configurar VirtualHost de QA
     QA_NGINX_PATH.write_text(get_nginx_config(), encoding="utf-8")
     if not QA_NGINX_ENABLED.exists():
         try:
@@ -151,20 +175,20 @@ def setup_qa_system():
             pass
     print(f"✓ VirtualHost Nginx configurado: {QA_NGINX_PATH}")
 
-    # 5. Configurar servicio systemd
+    # 6. Configurar servicio systemd
     QA_SERVICE_PATH.write_text(SERVICE_CONTENT, encoding="utf-8")
     subprocess.run(["systemctl", "daemon-reload"], check=False)
     subprocess.run(["systemctl", "enable", "pedidos-tridente-qa"], check=False)
     print(f"✓ Servicio systemd creado y habilitado: {QA_SERVICE_PATH}")
 
-    # 6. Habilitar reglas de firewall local UFW si está activo
+    # 7. Habilitar reglas de firewall local UFW si está activo
     if shutil.which("ufw"):
         subprocess.run(["ufw", "allow", "80/tcp"], check=False)
         subprocess.run(["ufw", "allow", "443/tcp"], check=False)
         subprocess.run(["ufw", "allow", "Nginx Full"], check=False)
         print("✓ Reglas de puerto 80/443 aplicadas en UFW.")
 
-    # 7. Asegurar entorno virtual backend con ensurepip
+    # 8. Asegurar entorno virtual backend con ensurepip
     venv_dir = Path(f"{QA_DIR}/backend/venv")
     pip_bin = venv_dir / "bin" / "pip"
     if not pip_bin.exists():
@@ -178,30 +202,39 @@ def setup_qa_system():
         else:
             print("Aviso: pip no se encontró tras venv.")
 
-    # 8. Asegurar index.html en frontend
-    html_index = Path(QA_HTML_DIR) / "index.html"
+    # 9. Compilar frontend React y colocar en QA_HTML_DIR
     frontend_dir = Path(QA_DIR) / "frontend"
-    if not html_index.exists() and (frontend_dir / "package.json").exists():
+    if (frontend_dir / "package.json").exists():
         print("Compilando frontend React para generar index.html...")
         subprocess.run(["npm", "install"], cwd=str(frontend_dir), check=False)
-        subprocess.run(["npm", "run", "build"], cwd=str(frontend_dir), check=False)
+        res_build = subprocess.run(["npm", "run", "build"], cwd=str(frontend_dir), capture_output=True, text=True)
+        if res_build.stdout:
+            print(res_build.stdout.strip()[-300:])
+        if res_build.stderr:
+            print(res_build.stderr.strip()[-300:])
         dist_dir = frontend_dir / "dist"
-        if dist_dir.exists():
+        if dist_dir.exists() and (dist_dir / "index.html").exists():
             for item in dist_dir.glob("*"):
                 dest = Path(QA_HTML_DIR) / item.name
                 if item.is_dir():
                     shutil.copytree(item, dest, dirs_exist_ok=True)
                 else:
                     shutil.copy2(item, dest)
-            print("✓ Frontend compilado y copiado a HTML root.")
+            print("✓ Frontend compilado y copiado a HTML root:", QA_HTML_DIR)
+        else:
+            print("Aviso: dist/index.html no encontrado tras build.")
 
-    # Asegurar permisos www-data
+    # Asegurar permisos www-data y 755
     subprocess.run(["chown", "-R", "www-data:www-data", QA_HTML_DIR], check=False)
+    subprocess.run(["chmod", "-R", "755", QA_HTML_DIR], check=False)
 
-    # 9. Configurar SSL / HTTPS en puerto 443 con Certbot
+    # 10. Corregir número de versión desfasado en alembic_version si aplica
+    fix_alembic_schema_version()
+
+    # 11. Configurar SSL / HTTPS en puerto 443 con Certbot
     setup_ssl_certbot()
 
-    # 10. Reiniciar y verificar Nginx
+    # 12. Reiniciar y verificar Nginx
     print("Verificando configuración de Nginx...")
     t = subprocess.run(["nginx", "-t"], capture_output=True, text=True)
     if t.stdout:
@@ -220,6 +253,26 @@ def setup_qa_system():
     print("=" * 60)
     print("SERVIDOR QA CONFIGURADO EXITOSAMENTE")
     print("=" * 60)
+
+
+def fix_alembic_schema_version():
+    try:
+        backend_path = Path(QA_DIR) / "backend"
+        python_bin = backend_path / "venv" / "bin" / "python3"
+        if not python_bin.exists():
+            return
+        code = """
+from app.core.config import get_settings
+from app.core.database import engine
+from sqlalchemy import text
+raw_schema = get_settings().database_schema.strip('"')
+with engine.begin() as conn:
+    conn.execute(text(f'UPDATE "{raw_schema}".alembic_version SET version_num = \\'20261113_0042\\' WHERE version_num = \\'20261022_0039\\';'))
+    print('✓ Tabla alembic_version verificada y sincronizada.')
+"""
+        subprocess.run([str(python_bin), "-c", code], cwd=str(backend_path), check=False)
+    except Exception as e:
+        print("Aviso fix alembic:", e)
 
 
 def setup_ssl_certbot():

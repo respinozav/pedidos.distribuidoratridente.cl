@@ -17,7 +17,8 @@ async def lifespan(app: FastAPI):
     try:
         from app.core.database import engine
         from sqlalchemy import text
-        schema = settings.database_schema
+        raw_schema = settings.database_schema.strip('"')
+        schema = f'"{raw_schema}"'
         with engine.begin() as conn:
             conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_whatsapp BOOLEAN NOT NULL DEFAULT false;"))
             conn.execute(text(f"ALTER TABLE {schema}.usuarios ADD COLUMN IF NOT EXISTS recibe_camila_email BOOLEAN NOT NULL DEFAULT false;"))

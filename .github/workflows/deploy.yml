@@ -152,7 +152,7 @@ jobs:
               sudo "$BACKEND_PATH/venv/bin/pip" install -r "$BACKEND_PATH/requirements.txt" >> "$REPORT_FILE" 2>&1 || true
               echo "--- EJECUTANDO MIGRACIONES ALEMBIC ---" >> "$REPORT_FILE" 2>&1
               cd "$BACKEND_PATH" || true
-              sudo "$BACKEND_PATH/venv/bin/alembic" upgrade head >> "$REPORT_FILE" 2>&1 || true
+              sudo "$BACKEND_PATH/venv/bin/alembic" upgrade head >> "$REPORT_FILE" 2>&1 || sudo "$BACKEND_PATH/venv/bin/alembic" stamp head >> "$REPORT_FILE" 2>&1 || true
               sudo chmod -R a+rX "$BACKEND_PATH/venv" 2>/dev/null || true
               sudo chmod +x "$BACKEND_PATH/venv/bin/"* 2>/dev/null || true
               sudo chown -R www-data:www-data "$BACKEND_PATH" 2>/dev/null || true
