@@ -1086,7 +1086,7 @@ function UserManager() {
     }
   }
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CONFIGURACION</p><h1>Usuarios</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de usuarios</span><button className="btn btn-primary" onClick={() => openUser()}><Plus size={18} />Nuevo usuario</button><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">ACCESOS</p><h2>Administra tus usuarios</h2><p>Controla los accesos, roles y estado de cada cuenta.</p></div><div className="summary-metric"><span>{users.length}</span><small>Usuarios registrados</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de usuarios</h2><p>Usuarios activos e inactivos de la plataforma.</p></div><span className="panel-count">{users.length} registros</span></div>{error && <div className="alert alert-danger mt-3">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando usuarios...</p> : <div className="user-table mt-4"><div className="user-table-head"><span>Usuario</span><span>Celular</span><span>Rol</span><span>Recibe pedidos</span><span>Envío de Camila</span><span>Estado</span><span>Acciones</span></div>{users.length ? users.map((item) => <div className="user-row" key={item.id}><div className="user-name"><span className="user-avatar">{item.nombre.slice(0, 2).toUpperCase()}</span><div><strong>{item.nombre}</strong><small>{item.correo}</small></div></div><span className="user-phone">{item.celular || "-"}</span><span className="user-role">{item.rol.nombre}</span><span className={item.recibe_pedido ? "status-active" : "status-inactive"}>{item.recibe_pedido ? "Sí" : "No"}</span><div className="camila-channels">{item.recibe_camila_whatsapp && <span className="camila-badge camila-badge-wsp">WhatsApp</span>}{item.recibe_camila_email && <span className="camila-badge camila-badge-mail">Correo</span>}{!item.recibe_camila_whatsapp && !item.recibe_camila_email && <span className="status-inactive">No</span>}</div><span className={item.activo ? "status-active" : "status-inactive"}>{item.activo ? "Activo" : "Inactivo"}</span><button className="icon-button category-edit" onClick={() => openUser(item)} aria-label={`Editar ${item.nombre}`}><Pencil size={16} /></button></div>) : <p className="text-secondary p-4 mb-0">Aún no hay usuarios registrados.</p>}</div>}</section></div>{(user || form.rol_id) && <div className="modal-backdrop-custom"><form className="category-modal" onSubmit={saveUser}><header><div><p className="eyebrow">CONFIGURACION</p><h2>{user ? "Editar usuario" : "Nuevo usuario"}</h2></div><button type="button" className="icon-button" onClick={() => { setUser(null); setForm(blankUser); }} aria-label="Cerrar formulario"><X size={19} /></button></header><div className="modal-body-custom"><label className="form-label" htmlFor="user-name">Nombre</label><input id="user-name" className="form-control" value={form.nombre} onChange={(event) => setField("nombre", event.target.value)} maxLength="150" required autoFocus /><label className="form-label mt-3" htmlFor="user-email">Correo</label><input id="user-email" className="form-control" type="email" value={form.correo} onChange={(event) => setField("correo", event.target.value)} required /><label className="form-label mt-3" htmlFor="user-phone">Celular</label><input id="user-phone" className="form-control" value={form.celular} onChange={(event) => setField("celular", event.target.value)} placeholder="+56 9 1234 5678" maxLength="30" /><label className="form-label mt-3" htmlFor="user-password">{user ? "Nueva clave" : "Clave"}</label><input id="user-password" className="form-control" type="password" value={form.password} onChange={(event) => setField("password", event.target.value)} minLength="8" required={!user} />{user && <small className="form-text">Déjala vacía para mantener la clave actual.</small>}<label className="form-label mt-3" htmlFor="user-role">Rol</label><select id="user-role" className="form-select" value={form.rol_id} onChange={(event) => setField("rol_id", event.target.value)} required><option value="">Selecciona un rol</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.nombre}</option>)}</select><div className="status-toggle"><div className="status-toggle-info"><strong>Usuario activo</strong><small>Los usuarios inactivos no pueden iniciar sesión.</small></div><label className="switch"><input type="checkbox" checked={form.activo} onChange={(event) => setField("activo", event.target.checked)} /><span /></label></div><div className="status-toggle"><div className="status-toggle-info"><strong>Recibe pedidos</strong><small>Recibe notificaciones por correo de nuevos pedidos.</small></div><label className="switch"><input type="checkbox" checked={form.recibe_pedido} onChange={(event) => setField("recibe_pedido", event.target.checked)} /><span /></label></div><div className="status-toggle"><div className="status-toggle-info"><strong>Recibe venta de camila por wathsapp</strong><small>Recibe notificaciones por WhatsApp cuando Camila captura un prospecto o venta.</small></div><label className="switch"><input type="checkbox" checked={form.recibe_camila_whatsapp} onChange={(event) => setField("recibe_camila_whatsapp", event.target.checked)} /><span /></label></div><div className="status-toggle"><div className="status-toggle-info"><strong>Recibe venta de camila por mail</strong><small>Recibe notificaciones por correo cuando Camila captura un prospecto o venta.</small></div><label className="switch"><input type="checkbox" checked={form.recibe_camila_email} onChange={(event) => setField("recibe_camila_email", event.target.checked)} /><span /></label></div></div><footer><button className="btn btn-light" type="button" onClick={() => { setUser(null); setForm(blankUser); }}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar usuario</>}</button></footer></form></div>}</>;
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">CONFIGURACION</p><h1>Usuarios</h1></div><div className="topbar-actions"><span className="topbar-date d-none d-sm-inline">Gestión de usuarios</span><button className="btn btn-primary" onClick={() => openUser()}><Plus size={18} />Nuevo usuario</button><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">ACCESOS</p><h2>Administra tus usuarios</h2><p>Controla los accesos, roles y estado de cada cuenta.</p></div><div className="summary-metric"><span>{users.length}</span><small>Usuarios registrados</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de usuarios</h2><p>Usuarios activos e inactivos de la plataforma.</p></div><span className="panel-count">{users.length} registros</span></div>{error && <div className="alert alert-danger mt-3">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando usuarios...</p> : <div className="user-table mt-4"><div className="user-table-head"><span>Usuario</span><span>Celular</span><span>Rol</span><span>Recibe pedidos</span><span>Envío de Camila</span><span>Estado</span><span>Acciones</span></div>{users.length ? users.map((item) => <div className="user-row" key={item.id}><div className="user-name"><span className="user-avatar">{(item.nombre || "US").trim().slice(0, 2).toUpperCase()}</span><div><strong>{item.nombre}</strong><small>{item.correo}</small></div></div><span className="user-phone">{item.celular || "-"}</span><span className="user-role">{item.rol.nombre}</span><span className={item.recibe_pedido ? "status-active" : "status-inactive"}>{item.recibe_pedido ? "Sí" : "No"}</span><div className="camila-channels">{item.recibe_camila_whatsapp && <span className="camila-badge camila-badge-wsp">WhatsApp</span>}{item.recibe_camila_email && <span className="camila-badge camila-badge-mail">Correo</span>}{!item.recibe_camila_whatsapp && !item.recibe_camila_email && <span className="status-inactive">No</span>}</div><span className={item.activo ? "status-active" : "status-inactive"}>{item.activo ? "Activo" : "Inactivo"}</span><button className="icon-button category-edit" onClick={() => openUser(item)} aria-label={`Editar ${item.nombre}`}><Pencil size={16} /></button></div>) : <p className="text-secondary p-4 mb-0">Aún no hay usuarios registrados.</p>}</div>}</section></div>{(user || form.rol_id) && <div className="modal-backdrop-custom"><form className="category-modal" onSubmit={saveUser}><header><div><p className="eyebrow">CONFIGURACION</p><h2>{user ? "Editar usuario" : "Nuevo usuario"}</h2></div><button type="button" className="icon-button" onClick={() => { setUser(null); setForm(blankUser); }} aria-label="Cerrar formulario"><X size={19} /></button></header><div className="modal-body-custom"><label className="form-label" htmlFor="user-name">Nombre</label><input id="user-name" className="form-control" value={form.nombre} onChange={(event) => setField("nombre", event.target.value)} maxLength="150" required autoFocus /><label className="form-label mt-3" htmlFor="user-email">Correo</label><input id="user-email" className="form-control" type="email" value={form.correo} onChange={(event) => setField("correo", event.target.value)} required /><label className="form-label mt-3" htmlFor="user-phone">Celular</label><input id="user-phone" className="form-control" value={form.celular} onChange={(event) => setField("celular", event.target.value)} placeholder="+56 9 1234 5678" maxLength="30" /><label className="form-label mt-3" htmlFor="user-password">{user ? "Nueva clave" : "Clave"}</label><input id="user-password" className="form-control" type="password" value={form.password} onChange={(event) => setField("password", event.target.value)} minLength="8" required={!user} />{user && <small className="form-text">Déjala vacía para mantener la clave actual.</small>}<label className="form-label mt-3" htmlFor="user-role">Rol</label><select id="user-role" className="form-select" value={form.rol_id} onChange={(event) => setField("rol_id", event.target.value)} required><option value="">Selecciona un rol</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.nombre}</option>)}</select><div className="status-toggle"><div className="status-toggle-info"><strong>Usuario activo</strong><small>Los usuarios inactivos no pueden iniciar sesión.</small></div><label className="switch"><input type="checkbox" checked={form.activo} onChange={(event) => setField("activo", event.target.checked)} /><span /></label></div><div className="status-toggle"><div className="status-toggle-info"><strong>Recibe pedidos</strong><small>Recibe notificaciones por correo de nuevos pedidos.</small></div><label className="switch"><input type="checkbox" checked={form.recibe_pedido} onChange={(event) => setField("recibe_pedido", event.target.checked)} /><span /></label></div><div className="status-toggle"><div className="status-toggle-info"><strong>Recibe venta de camila por wathsapp</strong><small>Recibe notificaciones por WhatsApp cuando Camila captura un prospecto o venta.</small></div><label className="switch"><input type="checkbox" checked={form.recibe_camila_whatsapp} onChange={(event) => setField("recibe_camila_whatsapp", event.target.checked)} /><span /></label></div><div className="status-toggle"><div className="status-toggle-info"><strong>Recibe venta de camila por mail</strong><small>Recibe notificaciones por correo cuando Camila captura un prospecto o venta.</small></div><label className="switch"><input type="checkbox" checked={form.recibe_camila_email} onChange={(event) => setField("recibe_camila_email", event.target.checked)} /><span /></label></div></div><footer><button className="btn btn-light" type="button" onClick={() => { setUser(null); setForm(blankUser); }}>Cancelar</button><button className="btn btn-primary" disabled={saving}>{saving ? "Guardando..." : <><Save size={17} />Guardar usuario</>}</button></footer></form></div>}</>;
 }
 
 function CustomerManagerLegacy() {
@@ -4769,22 +4769,28 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         </aside>
       <section className="customer-workspace">
         <header className="customer-portal-header">
-          <div>
-            <p className="eyebrow">{section === "profile" ? "CUENTA" : "PEDIDOS"}</p>
-            <h1>
-              {section === "create"
-                ? "Realizar pedido"
-                : section === "history"
-                ? "Pedidos"
-                : section === "profile"
-                ? "Mis datos"
-                : "Tutoriales y FAQ"}
-            </h1>
+          <div className="customer-header-left">
+            <div className="customer-mobile-brand d-lg-none">
+              <span className="brand-mark">DT</span>
+              <strong>Tridente</strong>
+            </div>
+            <div>
+              <p className="eyebrow d-none d-sm-block">{section === "profile" ? "CUENTA" : section === "history" ? "HISTORIAL" : "PEDIDOS"}</p>
+              <h1>
+                {section === "create"
+                  ? "Realizar pedido"
+                  : section === "history"
+                  ? "Pedidos"
+                  : section === "profile"
+                  ? "Mis datos"
+                  : "Tutoriales y FAQ"}
+              </h1>
+            </div>
           </div>
           <div className="customer-header-right">
             {section === "profile" && (
               <button
-                className="btn btn-light me-2"
+                className="btn btn-light btn-sm me-2 d-none d-md-inline-flex"
                 type="button"
                 onClick={() => {
                   setSection("create");
@@ -4795,7 +4801,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
               </button>
             )}
             <FocusGroupButton onClick={() => setSuggestionModalOpen(true)} />
-            <span className="customer-welcome">Hola, {customer.nombre || customer.rut || customer.celular}</span>
+            <span className="customer-welcome d-none d-md-inline">Hola, {customer.nombre || customer.rut || customer.celular}</span>
             {section === "create" && (
               <button
                 type="button"
@@ -4805,10 +4811,19 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                 aria-label={`Abrir carrito con ${totalItems} productos`}
               >
                 <ShoppingBag size={18} />
-                <span className="customer-header-cart-label">Tu Pedido</span>
+                <span className="customer-header-cart-label d-none d-sm-inline">Tu Pedido</span>
                 <span className="customer-header-cart-badge">{totalItems}</span>
               </button>
             )}
+            <button
+              type="button"
+              className="customer-header-logout-btn"
+              onClick={vendorSession ? () => onExitVendorMode && onExitVendorMode() : onLogout}
+              title={vendorSession ? "Volver a Panel" : "Cerrar sesión"}
+              aria-label="Cerrar sesión"
+            >
+              <LogOut size={17} />
+            </button>
           </div>
         </header>
 
@@ -5229,6 +5244,71 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
           )}
         </div>
       </section>
+      <nav className="customer-bottom-bar" aria-label="Navegación móvil">
+        <button
+          type="button"
+          className={`customer-bottom-tab ${section === "create" && !cartDrawerOpen ? "active" : ""}`}
+          onClick={() => {
+            setSection("create");
+            setCartDrawerOpen(false);
+            setError("");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
+          <ShoppingBag size={20} />
+          <span>Comprar</span>
+        </button>
+        <button
+          type="button"
+          className={`customer-bottom-tab ${section === "history" ? "active" : ""}`}
+          onClick={() => {
+            openHistory();
+            setCartDrawerOpen(false);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
+          <ClipboardList size={20} />
+          <span>Pedidos</span>
+        </button>
+        <button
+          type="button"
+          className={`customer-bottom-tab cart-tab ${cartDrawerOpen ? "active" : ""}`}
+          onClick={() => setCartDrawerOpen((prev) => !prev)}
+          aria-label={`Ver pedido actual con ${totalItems} productos`}
+        >
+          <div className="bottom-cart-icon-wrap">
+            <ShoppingBag size={21} />
+            {totalItems > 0 && <span className="bottom-cart-badge">{totalItems}</span>}
+          </div>
+          <span>Mi Pedido</span>
+        </button>
+        <button
+          type="button"
+          className={`customer-bottom-tab ${section === "profile" ? "active" : ""}`}
+          onClick={() => {
+            setSection("profile");
+            setCartDrawerOpen(false);
+            setError("");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
+          <User size={20} />
+          <span>Mi Cuenta</span>
+        </button>
+        <button
+          type="button"
+          className={`customer-bottom-tab ${section === "faq" ? "active" : ""}`}
+          onClick={() => {
+            setSection("faq");
+            setCartDrawerOpen(false);
+            setError("");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
+          <HelpCircle size={20} />
+          <span>Ayuda</span>
+        </button>
+      </nav>
     </main>
     {suggestionModalOpen && (
       <FocusGroupModal
