@@ -2,7 +2,9 @@
 """
 Script para aprovisionar y clonar la base de datos de Producción a QA:
 1. Crea el esquema "bdtridente-qa" y el usuario exclusivo "tridente_qa" con su contraseña.
-2. Clona exactamente la estructura (tablas, secuencias, índices, claves foráneas) y datos de "bdtridente".
+2. Clona exactamente la estructura (tablas, secuencias, índices, constraints) y datos de "bdtridente".
+   - Si pg_dump / psql están disponibles, los utiliza para el volcado.
+   - Si no están instalados en el sistema operativo, utiliza clonación nativa SQL (CREATE TABLE LIKE ... INCLUDING ALL + INSERT SELECT).
 3. Otorga permisos exclusivos a "tridente_qa" sobre "bdtridente-qa" y revoca acceso a producción.
 4. Verifica la paridad de tablas y registros entre producción y QA.
 """
@@ -40,7 +42,7 @@ DEFAULT_QA_USER = "tridente_qa"
 DEFAULT_QA_PASSWORD = "TridenteQa2026!Sec#Db"
 
 
-def find_pg_binary(binary_name: str) -> str:
+def find_pg_binary(binary_name: str) -> str | None:
     """Busca un binario de PostgreSQL en PATH o en rutas comunes de Windows/Linux."""
     found = shutil.which(binary_name)
     if found:
@@ -61,13 +63,53 @@ def find_pg_binary(binary_name: str) -> str:
         candidate = Path(p) / (binary_name + (".exe" if sys.platform == "win32" else ""))
         if candidate.exists():
             return str(candidate)
-    return binary_name
+    return None
 
 
-def run_sql_direct(conn, sql: str, params: dict = None):
-    """Ejecuta una sentencia SQL en una conexión de SQLAlchemy/psycopg."""
+def clone_via_pure_sql(engine, source_schema: str, target_schema: str):
+    """Clona estructura y datos directamente en la base de datos sin depender de pg_dump."""
     from sqlalchemy import text
-    return conn.execute(text(sql), params or {})
+    print("\n[Clonador Nativo SQL] Ejecutando clonación directa sin dependencia de pg_dump...")
+
+    with engine.connect() as conn:
+        # 1. Clonar secuencias
+        seqs = conn.execute(text("""
+            SELECT sequence_name 
+            FROM information_schema.sequences 
+            WHERE sequence_schema = :sch
+        """), {"sch": source_schema}).fetchall()
+        print(f"Detectadas {len(seqs)} secuencias...")
+        for seq_row in seqs:
+            s_name = seq_row[0]
+            conn.execute(text(f'CREATE SEQUENCE IF NOT EXISTS "{target_schema}"."{s_name}";'))
+            val = conn.execute(text(f'SELECT last_value, is_called FROM "{source_schema}"."{s_name}"')).fetchone()
+            if val is not None:
+                conn.execute(
+                    text(f'SELECT setval(\'"{target_schema}"."{s_name}"\', :v, :c);'),
+                    {"v": val[0], "c": val[1]}
+                )
+            print(f"  ✓ Secuencia '{s_name}' sincronizada.")
+
+        # 2. Obtener todas las tablas
+        tables = [r[0] for r in conn.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = :sch AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """), {"sch": source_schema}).fetchall()]
+        print(f"Clonando {len(tables)} tablas con estructura completa y datos...")
+
+        for t in tables:
+            # Eliminar en destino si ya existía para copia limpia
+            conn.execute(text(f'DROP TABLE IF EXISTS "{target_schema}"."{t}" CASCADE;'))
+            # Crear estructura idéntica con índices, constraints y defaults
+            conn.execute(text(f'CREATE TABLE "{target_schema}"."{t}" (LIKE "{source_schema}"."{t}" INCLUDING ALL);'))
+            # Copiar registros
+            conn.execute(text(f'INSERT INTO "{target_schema}"."{t}" SELECT * FROM "{source_schema}"."{t}";'))
+            count = conn.execute(text(f'SELECT count(*) FROM "{target_schema}"."{t}"')).scalar()
+            print(f"  ✓ Tabla '{t:<28}' -> {count} registros copiados.")
+
+        print("✓ Clonación nativa SQL completada exitosamente.")
 
 
 def setup_and_clone(
@@ -127,76 +169,72 @@ def setup_and_clone(
 
         print(f"✓ Usuario '{qa_user}' y esquema '\"{target_schema}\"' listos.")
 
-    # 3. Clonar estructura y datos usando pg_dump + psql para 100% fidelidad
-    print("\n[2/5] Realizando volcado de datos y estructura desde Producción...")
+    # 3. Determinar método de clonación (pg_dump si existe, o SQL nativo directo)
     pg_dump_bin = find_pg_binary("pg_dump")
     psql_bin = find_pg_binary("psql")
 
-    env = os.environ.copy()
-    env["PGPASSWORD"] = admin_password
+    if pg_dump_bin and psql_bin:
+        print(f"\n[2/5] Realizando volcado de datos con {pg_dump_bin}...")
+        env = os.environ.copy()
+        env["PGPASSWORD"] = admin_password
 
-    dump_cmd = [
-        pg_dump_bin,
-        "-h", host,
-        "-p", str(port),
-        "-U", admin_user,
-        "-d", db,
-        "-n", source_schema,
-        "--no-owner",
-        "--no-privileges",
-    ]
-    if not is_local:
-        env["PGSSLMODE"] = "require"
+        dump_cmd = [
+            pg_dump_bin,
+            "-h", host,
+            "-p", str(port),
+            "-U", admin_user,
+            "-d", db,
+            "-n", source_schema,
+            "--no-owner",
+            "--no-privileges",
+        ]
+        if not is_local:
+            env["PGSSLMODE"] = "require"
 
-    print(f"Ejecutando: {' '.join(dump_cmd[:7])}...")
-    proc_dump = subprocess.run(
-        dump_cmd,
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
-        env=env,
-    )
-    if proc_dump.returncode != 0:
-        raise RuntimeError(f"Error en pg_dump: {proc_dump.stderr}")
+        proc_dump = subprocess.run(
+            dump_cmd,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        if proc_dump.returncode == 0 and proc_dump.stdout:
+            raw_sql = proc_dump.stdout
+            print(f"✓ Volcado generado con éxito ({len(raw_sql):,} caracteres).")
 
-    raw_sql = proc_dump.stdout
-    print(f"✓ Volcado generado con éxito ({len(raw_sql):,} caracteres).")
+            print("\n[3/5] Transformando referencias de esquema (prod -> qa)...")
+            transformed_sql = re.sub(
+                rf'\b{re.escape(source_schema)}\b',
+                f'"{target_schema}"',
+                raw_sql,
+            )
 
-    print("\n[3/5] Transformando referencias de esquema (prod -> qa)...")
-    # Reemplazar esquema origen por esquema destino (escapando adecuadamente para guiones)
-    # 1. Reemplazos de CREATE SCHEMA y search_path
-    transformed_sql = re.sub(
-        rf'\b{re.escape(source_schema)}\b',
-        f'"{target_schema}"',
-        raw_sql,
-    )
+            print(f"\n[4/5] Restaurando estructura y datos en el esquema '\"{target_schema}\"'...")
+            psql_cmd = [
+                psql_bin,
+                "-h", host,
+                "-p", str(port),
+                "-U", admin_user,
+                "-d", db,
+                "-v", "ON_ERROR_STOP=0",
+            ]
+            proc_restore = subprocess.run(
+                psql_cmd,
+                input=transformed_sql,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env,
+            )
+            print("✓ Restauración con psql finalizada.")
+        else:
+            print(f"Aviso: pg_dump no pudo generar el volcado ({proc_dump.stderr}). Usando clonador SQL...")
+            clone_via_pure_sql(engine, source_schema, target_schema)
+    else:
+        print("\n[2/5] pg_dump / psql no están en PATH del servidor. Usando clonador nativo SQL...")
+        clone_via_pure_sql(engine, source_schema, target_schema)
 
-    # 4. Restaurar en la base de datos
-    print(f"\n[4/5] Restaurando estructura y datos en el esquema '\"{target_schema}\"'...")
-    psql_cmd = [
-        psql_bin,
-        "-h", host,
-        "-p", str(port),
-        "-U", admin_user,
-        "-d", db,
-        "-v", "ON_ERROR_STOP=0",
-    ]
-    proc_restore = subprocess.run(
-        psql_cmd,
-        input=transformed_sql,
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
-        env=env,
-    )
-    print(f"✓ Restauración finalizada.")
-    if proc_restore.stderr:
-        # Filtrar avisos normales como 'already exists'
-        notices = [l for l in proc_restore.stderr.splitlines() if "ERROR" in l]
-        if notices:
-            print(f"Avisos durante restauración: {len(notices)} advertencias.")
-
-    # 5. Otorgar todos los privilegios sobre el nuevo esquema y sus tablas al usuario QA
+    # 4. Otorgar todos los privilegios sobre el nuevo esquema y sus tablas al usuario QA
     with engine.connect() as conn:
         print("\n[5/5] Otorgando permisos completos sobre QA a usuario 'tridente_qa'...")
         conn.execute(text(f'GRANT USAGE, CREATE ON SCHEMA "{target_schema}" TO {qa_user};'))

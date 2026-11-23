@@ -63,6 +63,11 @@ jobs:
               PYTHON_EXEC="python3"
             fi
 
+            if ! command -v pg_dump &> /dev/null; then
+              echo "Instalando postgresql-client si es necesario..."
+              sudo apt-get update -y && sudo apt-get install -y postgresql-client || true
+            fi
+
             echo "Ejecutando setup_and_clone_qa_db.py..."
             sudo env DATABASE_HOST="${AWS_HOST_BD:-localhost}" \
                      DATABASE_USER="${AWS_USER_BD:-postgres}" \
