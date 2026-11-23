@@ -100,6 +100,10 @@ case "$PROJECT_NAME" in
         SERVICE_NAME="pedidos-tridente"
         ;;
 
+    pedidos-qa.distribuidoratridente.cl)
+        SERVICE_NAME="pedidos-tridente-qa"
+        ;;
+
 esac
 
 ############################################
@@ -115,9 +119,12 @@ NGINX_ROOT="/var/www/html/$PROJECT_NAME"
 echo ""
 echo -e "${YELLOW}>> Actualizando repositorio...${NC}"
 
-git checkout main 2>/dev/null || true
-git fetch origin main || true
-git reset --hard origin/main || true
+TARGET_BRANCH="${TARGET_BRANCH:-${DEPLOY_BRANCH:-${CURRENT_BRANCH:-main}}}"
+echo "Rama objetivo para despliegue: $TARGET_BRANCH"
+
+git checkout "$TARGET_BRANCH" 2>/dev/null || git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH" 2>/dev/null || true
+git fetch origin "$TARGET_BRANCH" 2>/dev/null || git fetch origin 2>/dev/null || true
+git reset --hard "origin/$TARGET_BRANCH" 2>/dev/null || git reset --hard HEAD || true
 git clean -fd deploy/ || true
 
 NEW_COMMIT=$(git rev-parse --short HEAD)
@@ -254,7 +261,7 @@ if [ "$IS_BACKEND" = true ]; then
     # Detectar archivos de servicio en /etc/systemd/system relacionados
     DETECTED_SERVICES=()
     if [ -d "/etc/systemd/system" ]; then
-        for svc_file in $(grep -slE "distribuidoratridente|pedidos-tridente|pedidos\.distribuidoratridente" /etc/systemd/system/*.service 2>/dev/null || true); do
+        for svc_file in $(grep -slE "distribuidoratridente|pedidos-tridente|pedidos-qa|pedidos\.distribuidoratridente" /etc/systemd/system/*.service 2>/dev/null || true); do
             svc_name=$(basename "$svc_file" .service)
             DETECTED_SERVICES+=("$svc_name")
             echo "Servicio encontrado en systemd: $svc_name ($svc_file)"

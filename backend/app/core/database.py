@@ -7,8 +7,9 @@ from app.core.config import get_settings
 
 settings = get_settings()
 is_local = settings.database_host in ("localhost", "127.0.0.1", "::1")
+clean_schema = settings.database_schema.strip('\"\'')
 connect_args = {
-    "options": f"-csearch_path={settings.database_schema}",
+    "options": f'-csearch_path="{clean_schema}"',
     "sslmode": "prefer" if is_local else "require",
 }
 engine = create_engine(
