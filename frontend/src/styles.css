@@ -5265,43 +5265,11 @@ table.table tbody tr:hover {
   font-variant-numeric: tabular-nums !important;
 }
 
-/* Botón complementario en el Header del cliente */
-.customer-header-cart-btn {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 0.5rem !important;
-  background: #eff6ff !important;
-  border: 1px solid #bfdbfe !important;
-  border-radius: 8px !important;
-  color: var(--blue) !important;
-  font-size: 0.84rem !important;
-  font-weight: 700 !important;
-  height: 38px !important;
-  padding: 0 0.85rem !important;
-  cursor: pointer !important;
-  transition: all 180ms ease !important;
-}
-
-.customer-header-cart-btn:hover {
-  background: var(--blue) !important;
-  border-color: var(--blue) !important;
-  color: #ffffff !important;
-  transform: translateY(-1px) !important;
-}
-
-.customer-header-cart-badge {
-  background: #f59e0b !important;
-  color: #ffffff !important;
-  font-size: 0.7rem !important;
-  font-weight: 850 !important;
-  border-radius: 99px !important;
-  min-width: 18px !important;
-  height: 18px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0 4px !important;
-  font-variant-numeric: tabular-nums !important;
+/* Espaciado en Header desktop para evitar colision con el boton flotante de carrito */
+@media (min-width: 992px) {
+  .customer-header-right {
+    padding-right: 175px !important;
+  }
 }
 
 /* 2. Slide-Over Drawer Lateral */

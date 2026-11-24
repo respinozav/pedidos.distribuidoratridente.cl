@@ -326,8 +326,8 @@ def fetch_products(
         qa_api_url = "https://pedidos-qa.distribuidoratridente.cl/api/productos"
         logger.info("Intentando consultar catálogo vía API pública de QA (%s)...", qa_api_url)
         try:
-            with httpx.Client(timeout=15.0, verify=False) as client:
-                page_size = limit or 50
+            with httpx.Client(timeout=30.0, verify=False) as client:
+                page_size = limit or 1000
                 page = (offset // page_size + 1) if (offset and limit) else 1
                 res = client.get(qa_api_url, params={"page": page, "page_size": page_size})
                 if res.status_code == 200:
@@ -401,7 +401,7 @@ def main() -> None:
     env_vars = load_env_variables(env_file_path)
 
     postgrest_url = args.postgrest_url or env_vars.get("POSTGREST_URL") or "http://localhost:3000"
-    schema = args.schema or env_vars.get("POSTGREST_SCHEMA") or "bdtridente-qa"
+    schema = args.schema or env_vars.get("POSTGREST_SCHEMA") or env_vars.get("DATABASE_SCHEMA") or "bdtridente"
     token = args.token or env_vars.get("POSTGREST_TOKEN") or None
     api_keys = get_api_keys(args.gemini_key, env_vars)
 
