@@ -24,6 +24,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 import numpy as np
+from scipy import ndimage
 from PIL import Image, ImageFilter, ImageEnhance, ImageDraw
 
 logging.basicConfig(
@@ -99,49 +100,101 @@ def process_product_image(
 ) -> tuple[bytes, int]:
     """
     Toma la imagen original del producto, elimina su fondo blanco/neutro o sucio,
-    mantiene el producto y sus letras/gráficos blancos 100% intactos (sobre envolvente 2D),
+    mantiene el producto y sus letras/gráficos blancos 100% intactos,
     elimina sombras de piso sucias previas, genera sombra de contacto difusa de estudio
     y monta centrado 1:1 sobre el fondo celeste exacto.
     """
     with Image.open(io.BytesIO(raw_bytes)) as im:
         prod_rgb = im.convert("RGB")
 
-    arr = np.array(prod_rgb, dtype=np.float32)
+    arr = np.array(prod_rgb, dtype=np.uint8)
     h, w, _ = arr.shape
-    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    r = arr[:, :, 0].astype(np.float32)
+    g = arr[:, :, 1].astype(np.float32)
+    b = arr[:, :, 2].astype(np.float32)
     brightness = (r + g + b) / 3.0
     color_diff = np.maximum(np.abs(r - g), np.abs(g - b))
 
-    # Píxeles de producto genuino:
-    # 1. Color saturado fuerte (color_diff >= 22)
-    # 2. Color moderado pero con densidad (color_diff >= 12 y brillo < 210)
-    # 3. O producto oscuro/denso (brillo < 195)
-    # Esto excluye rigurosamente sombras de piso difusas (brillo > 215, color_diff < 22)
-    is_product_seed = (color_diff >= 22) | ((color_diff >= 12) & (brightness < 210)) | (brightness < 195)
+    # 1. Muestreo perimetral exterior
+    border_mask = np.zeros((h, w), dtype=bool)
+    pad_h = max(2, int(h * 0.04))
+    pad_w = max(2, int(w * 0.04))
+    border_mask[:pad_h, :] = True
+    border_mask[-pad_h:, :] = True
+    border_mask[:, :pad_w] = True
+    border_mask[:, -pad_w:] = True
 
-    # Si hay muy pocos píxeles seed (ej: producto predominantemente blanco o claro), relajar umbrales
-    if np.sum(is_product_seed) < (w * h * 0.04):
-        is_product_seed = (color_diff >= 14) | ((color_diff >= 8) & (brightness < 220)) | (brightness < 205)
+    border_brightness = brightness[border_mask]
+    border_cd = color_diff[border_mask]
+    neutral_border = border_cd < 16
+    if np.sum(neutral_border) > 20:
+        bg_brightness = float(np.median(border_brightness[neutral_border]))
+    else:
+        bg_brightness = float(np.median(border_brightness))
 
-    # Envolvente horizontal y vertical: protege 100% textos y gráficos blancos interiores (ej: galleta 558)
-    row_filled = np.zeros((h, w), dtype=bool)
-    min_pixels_row = max(4, int(w * 0.025))
-    for y in range(h):
-        xs = np.where(is_product_seed[y, :])[0]
-        if len(xs) >= min_pixels_row:
-            row_filled[y, xs[0]:xs[-1] + 1] = True
+    # 2. Umbral adaptativo inteligente:
+    if bg_brightness >= 246.0:
+        # Fondo blanco estándar / puro (el 95% de los productos):
+        # El fondo es blanco casi puro (> 247)
+        # Esto protege radicalmente productos blancos (plumavit, vasos blancos, letras) con brillo 200-244
+        is_bg_candidate = (brightness >= 247.0) & (color_diff < 16)
+        
+        # Sombra difusa de piso en la parte baja:
+        bottom_third = np.zeros((h, w), dtype=bool)
+        bottom_third[int(h * 0.65):, :] = True
+        is_floor_shadow = (brightness >= 210.0) & (color_diff < 10) & bottom_third
+        is_bg_candidate = is_bg_candidate | is_floor_shadow
+    else:
+        # Fondo grisáceo / blanco roto (ej: cigarrillos Kent o tabaco Roadhouse con fondo ~218-235):
+        bg_low = bg_brightness - 12.0
+        bg_high = min(255.0, bg_brightness + 15.0)
+        is_bg_candidate = (brightness >= bg_low) & (brightness <= bg_high) & (color_diff < 18)
 
-    col_filled = np.zeros((h, w), dtype=bool)
-    min_pixels_col = max(4, int(h * 0.025))
-    for x in range(w):
-        ys = np.where(is_product_seed[:, x])[0]
-        if len(ys) >= min_pixels_col:
-            col_filled[ys[0]:ys[-1] + 1, x] = True
+    # 3. Conectividad exterior con los 4 bordes
+    structure = ndimage.generate_binary_structure(2, 2)
+    labeled, num_features = ndimage.label(is_bg_candidate, structure=structure)
 
-    envelope = row_filled & col_filled
-    mask_im = Image.fromarray((envelope.astype(np.uint8) * 255), mode="L").filter(ImageFilter.GaussianBlur(radius=0.8))
+    edge_labels = set()
+    edge_labels.update(labeled[0, :])
+    edge_labels.update(labeled[-1, :])
+    edge_labels.update(labeled[:, 0])
+    edge_labels.update(labeled[:, -1])
+    edge_labels.discard(0)
 
-    bbox = mask_im.getbbox()
+    outer_bg = np.isin(labeled, list(edge_labels))
+    prod_mask = ~outer_bg
+
+    # 4. Rellenar huecos interiores (garantiza productos y textos blancos sólidos)
+    prod_mask = ndimage.binary_fill_holes(prod_mask)
+
+    # 5. Filtrar componentes parásitos pequeños
+    prod_labeled, num_prod = ndimage.label(prod_mask, structure=structure)
+    if num_prod > 0:
+        sizes = ndimage.sum(prod_mask, prod_labeled, range(1, num_prod + 1))
+        max_size = np.max(sizes)
+        keep = [i + 1 for i, s in enumerate(sizes) if s >= max_size * 0.03]
+        prod_mask = np.isin(prod_labeled, keep)
+        prod_mask = ndimage.binary_fill_holes(prod_mask)
+
+    # 6. Recorte suave de sombra residual en la base
+    ys, xs = np.where(prod_mask)
+    if len(ys) > 0:
+        bot_y = ys.max()
+        top_y = ys.min()
+        for y_check in range(bot_y, max(top_y, bot_y - 12), -1):
+            row_in_prod = prod_mask[y_check, :]
+            if np.sum(row_in_prod) > 0:
+                row_br = brightness[y_check, row_in_prod]
+                row_cd = color_diff[y_check, row_in_prod]
+                if np.mean(row_br > 218) > 0.85 and np.mean(row_cd < 14) > 0.85:
+                    prod_mask[y_check, :] = False
+                else:
+                    break
+
+    mask_uint8 = (prod_mask.astype(np.uint8) * 255)
+    mask_im = Image.fromarray(mask_uint8, mode="L").filter(ImageFilter.GaussianBlur(radius=0.85))
+
+    bbox = Image.fromarray(mask_uint8).getbbox()
     if not bbox:
         bbox = (0, 0, w, h)
 
