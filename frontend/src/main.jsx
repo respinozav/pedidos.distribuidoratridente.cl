@@ -5543,7 +5543,11 @@ class ErrorBoundary extends Component {
   }
 }
 
-createRoot(document.getElementById("root")).render(
+const rootContainer = document.getElementById("root");
+if (!window.__tridenteRoot) {
+  window.__tridenteRoot = createRoot(rootContainer);
+}
+window.__tridenteRoot.render(
   <StrictMode>
     <ErrorBoundary>
       <App />
