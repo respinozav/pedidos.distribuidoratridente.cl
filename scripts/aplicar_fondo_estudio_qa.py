@@ -98,39 +98,64 @@ def process_product_image(
     target_dim: int = TARGET_DIM
 ) -> tuple[bytes, int]:
     """
-    Toma la imagen original del producto, elimina su fondo blanco/neutro,
-    mantiene el producto intacto, agrega sombra natural y monta sobre el fondo de estudio.
+    Toma la imagen original del producto, elimina su fondo blanco/neutro o sucio,
+    mantiene el producto y sus letras/gráficos blancos 100% intactos (sobre envolvente 2D),
+    elimina sombras de piso sucias previas, genera sombra de contacto difusa de estudio
+    y monta centrado 1:1 sobre el fondo celeste exacto.
     """
     with Image.open(io.BytesIO(raw_bytes)) as im:
         prod_rgb = im.convert("RGB")
 
     arr = np.array(prod_rgb, dtype=np.float32)
+    h, w, _ = arr.shape
     r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
     brightness = (r + g + b) / 3.0
     color_diff = np.maximum(np.abs(r - g), np.abs(g - b))
 
-    # Detectar fondo blanco/claro neutro
-    is_bg = (brightness > 240) & (color_diff < 16)
-    mask = (~is_bg).astype(np.uint8) * 255
-    mask_im = Image.fromarray(mask, mode="L")
-    mask_im = mask_im.filter(ImageFilter.GaussianBlur(radius=1.2))
+    # Píxeles de producto genuino:
+    # 1. Color saturado fuerte (color_diff >= 22)
+    # 2. Color moderado pero con densidad (color_diff >= 12 y brillo < 210)
+    # 3. O producto oscuro/denso (brillo < 195)
+    # Esto excluye rigurosamente sombras de piso difusas (brillo > 215, color_diff < 22)
+    is_product_seed = (color_diff >= 22) | ((color_diff >= 12) & (brightness < 210)) | (brightness < 195)
 
-    # Bounding box del producto
-    bbox = Image.fromarray((~is_bg).astype(np.uint8) * 255).getbbox()
-    if bbox:
-        w_box, h_box = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        pad = int(max(w_box, h_box) * 0.02)
-        crop_box = (
-            max(0, bbox[0] - pad),
-            max(0, bbox[1] - pad),
-            min(prod_rgb.width, bbox[2] + pad),
-            min(prod_rgb.height, bbox[3] + pad)
-        )
-        prod_cropped = prod_rgb.crop(crop_box)
-        mask_cropped = mask_im.crop(crop_box)
-    else:
-        prod_cropped = prod_rgb
-        mask_cropped = mask_im
+    # Si hay muy pocos píxeles seed (ej: producto predominantemente blanco o claro), relajar umbrales
+    if np.sum(is_product_seed) < (w * h * 0.04):
+        is_product_seed = (color_diff >= 14) | ((color_diff >= 8) & (brightness < 220)) | (brightness < 205)
+
+    # Envolvente horizontal y vertical: protege 100% textos y gráficos blancos interiores (ej: galleta 558)
+    row_filled = np.zeros((h, w), dtype=bool)
+    min_pixels_row = max(4, int(w * 0.025))
+    for y in range(h):
+        xs = np.where(is_product_seed[y, :])[0]
+        if len(xs) >= min_pixels_row:
+            row_filled[y, xs[0]:xs[-1] + 1] = True
+
+    col_filled = np.zeros((h, w), dtype=bool)
+    min_pixels_col = max(4, int(h * 0.025))
+    for x in range(w):
+        ys = np.where(is_product_seed[:, x])[0]
+        if len(ys) >= min_pixels_col:
+            col_filled[ys[0]:ys[-1] + 1, x] = True
+
+    envelope = row_filled & col_filled
+    mask_im = Image.fromarray((envelope.astype(np.uint8) * 255), mode="L").filter(ImageFilter.GaussianBlur(radius=0.8))
+
+    bbox = mask_im.getbbox()
+    if not bbox:
+        bbox = (0, 0, w, h)
+
+    w_box, h_box = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    pad = int(max(w_box, h_box) * 0.01)
+    crop_box = (
+        max(0, bbox[0] - pad),
+        max(0, bbox[1] - pad),
+        min(w, bbox[2] + pad),
+        min(h, bbox[3] + pad)
+    )
+
+    prod_cropped = prod_rgb.crop(crop_box)
+    mask_cropped = mask_im.crop(crop_box)
 
     # Escalar producto para que ocupe ~78% del canvas
     max_dim = int(target_dim * 0.78)
@@ -147,10 +172,10 @@ def process_product_image(
 
     # Realce sutil
     enh_c = ImageEnhance.Contrast(prod_resized)
-    prod_enhanced = enh_c.enhance(1.05)
+    prod_enhanced = enh_c.enhance(1.04)
     enh_b = ImageEnhance.Brightness(prod_enhanced)
     prod_enhanced = enh_b.enhance(1.02)
-    prod_enhanced = prod_enhanced.filter(ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=3))
+    prod_enhanced = prod_enhanced.filter(ImageFilter.UnsharpMask(radius=1.2, percent=110, threshold=2))
 
     # Canvas de fondo exacto
     canvas = create_studio_bg(bg_profile, target_dim, target_dim)
@@ -159,15 +184,15 @@ def process_product_image(
     pos_x = (target_dim - new_w) // 2
     pos_y = (target_dim - new_h) // 2
 
-    # Sombra difusa de contacto
+    # Sombra difusa de contacto limpia de estudio
     shadow_w = int(new_w * 0.85)
-    shadow_h = max(10, int(new_h * 0.10))
+    shadow_h = max(8, int(new_h * 0.10))
     shadow_mask = Image.new("L", (shadow_w, shadow_h), 0)
     draw = ImageDraw.Draw(shadow_mask)
     draw.ellipse((0, 0, shadow_w, shadow_h), fill=110)
     shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(radius=max(2, shadow_h // 2)))
 
-    shadow_img = Image.new("RGBA", (shadow_w, shadow_h), (50, 90, 115, 0))
+    shadow_img = Image.new("RGBA", (shadow_w, shadow_h), (45, 90, 115, 0))
     shadow_img.putalpha(shadow_mask)
     shadow_pos = (pos_x + (new_w - shadow_w) // 2, pos_y + new_h - shadow_h // 2)
 
@@ -231,6 +256,25 @@ def main():
     items = catalog.get("items", [])
     logger.info("Total productos encontrados en QA: %d", len(items))
 
+    # Pre-cargar imágenes originales desde producción para asegurar máxima fidelidad
+    logger.info("Cargando imágenes originales limpias desde producción...")
+    prod_originals = {}
+    try:
+        req_prod = urllib.request.Request(
+            "https://pedidos.distribuidoratridente.cl/api/productos?page=1&page_size=1000",
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req_prod, timeout=25) as resp_p:
+            p_cat = json.loads(resp_p.read().decode("utf-8"))
+            p_items = p_cat.get("items", []) if isinstance(p_cat, dict) else p_cat
+            for p in p_items:
+                c = str(p.get("codigo", "")).strip()
+                if c and p.get("imagen_url"):
+                    prod_originals[c] = p["imagen_url"]
+        logger.info("✓ %d imágenes originales limpias cargadas desde producción.", len(prod_originals))
+    except Exception as e:
+        logger.warning("No se pudo conectar con producción (%s). Se usarán las imágenes de QA.", e)
+
     # Filtrar productos con imagen
     target_codes = set([c.strip() for c in args.codes.split(",")]) if args.codes else None
     
@@ -241,7 +285,7 @@ def main():
         # Si es de los códigos de bolsas (760-763), procesar siempre
         if cod in BAG_CODES:
             to_process.append(p)
-        elif img_url and img_url.strip():
+        elif (img_url and img_url.strip()) or (cod in prod_originals):
             if target_codes is None or cod in target_codes:
                 to_process.append(p)
 
@@ -271,7 +315,8 @@ def main():
                 tipo = "REFERENCIA ADJUNTA"
             else:
                 # Caso B: Todas las demás reciben su propio producto con el fondo de estudio
-                clean_b64 = old_img.strip()
+                source_img = prod_originals.get(cod) or old_img
+                clean_b64 = source_img.strip()
                 if "," in clean_b64 and "base64" in clean_b64.split(",")[0]:
                     clean_b64 = clean_b64.split(",", 1)[1]
                 orig_raw = base64.b64decode(clean_b64)

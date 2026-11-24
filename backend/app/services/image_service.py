@@ -242,6 +242,25 @@ def clean_and_square_image(
     skip_strip = cfg.get("skip_strip", False)
     protect_whites = cfg.get("protect_whites", False)
 
+    # 0. Si la imagen ya es cuadrada (1:1) y tiene fondo de estudio (celeste o no-blanco),
+    # preservarla intacta sin forzar canvas blanco
+    w_orig, h_orig = img.size
+    if abs(w_orig - h_orig) <= 4:
+        rgb_check = img.convert("RGB")
+        w_c, h_c = rgb_check.size
+        corners = [
+            rgb_check.getpixel((0, 0)),
+            rgb_check.getpixel((w_c - 1, 0)),
+            rgb_check.getpixel((0, h_c - 1)),
+            rgb_check.getpixel((w_c - 1, h_c - 1))
+        ]
+        is_studio_bg = any(
+            (c[2] > c[0] + 15) or ((c[0] + c[1] + c[2]) / 3 < 240)
+            for c in corners if len(c) >= 3
+        )
+        if is_studio_bg:
+            return rgb_check
+
     if not skip_strip:
         # 1. Quitar franja lateral izquierda si existe
         crop_x_left = detect_lateral_strip_divider(img)
@@ -367,10 +386,41 @@ def optimize_product_image_base64(
     try:
         raw_bytes = base64.b64decode(clean_b64)
         with Image.open(BytesIO(raw_bytes)) as img:
+            # Si ya es una imagen cuadrada con fondo de estudio y pesa <= 72.000 bytes,
+            # conservarla directamente sin alteraciones
+            w_img, h_img = img.size
+            if abs(w_img - h_img) <= 4 and len(raw_bytes) <= 72_000:
+                rgb_check = img.convert("RGB")
+                w_c, h_c = rgb_check.size
+                corners = [
+                    rgb_check.getpixel((0, 0)),
+                    rgb_check.getpixel((w_c - 1, 0)),
+                    rgb_check.getpixel((0, h_c - 1)),
+                    rgb_check.getpixel((w_c - 1, h_c - 1))
+                ]
+                is_studio_bg = any(
+                    (c[2] > c[0] + 15) or ((c[0] + c[1] + c[2]) / 3 < 240)
+                    for c in corners if len(c) >= 3
+                )
+                if is_studio_bg:
+                    return f"{prefix}{clean_b64}" if prefix else clean_b64
+
             processed = clean_and_square_image(img, category_name=category_name, cartoon_mode=cartoon_mode)
             buffer = BytesIO()
-            processed.save(buffer, format="JPEG", quality=quality, optimize=True)
-            result_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            # Compresión adaptativa <= 72.000 bytes
+            final_bytes = None
+            for q in range(quality, 35, -5):
+                buf = BytesIO()
+                processed.save(buf, format="JPEG", quality=q, optimize=True)
+                val = buf.getvalue()
+                if len(val) <= 72_000:
+                    final_bytes = val
+                    break
+            if not final_bytes:
+                buf = BytesIO()
+                processed.save(buf, format="JPEG", quality=quality, optimize=True)
+                final_bytes = buf.getvalue()
+            result_b64 = base64.b64encode(final_bytes).decode("utf-8")
             return f"{prefix}{result_b64}" if prefix else result_b64
     except Exception:
         return raw_base64
