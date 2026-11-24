@@ -100,7 +100,8 @@ def process_product_image(
 ) -> tuple[bytes, int]:
     """
     Toma la imagen original del producto, elimina su fondo blanco/neutro o sucio,
-    mantiene el producto y sus letras/gráficos blancos 100% intactos,
+    resuelve dobles fondos (marcos exteriores con fotos de mesa embebidas),
+    mantiene el producto y sus letras/gráficos blancos 100% intactos mediante barrera de gradiente,
     elimina sombras de piso sucias previas, genera sombra de contacto difusa de estudio
     y monta centrado 1:1 sobre el fondo celeste exacto.
     """
@@ -115,6 +116,12 @@ def process_product_image(
     brightness = (r + g + b) / 3.0
     color_diff = np.maximum(np.abs(r - g), np.abs(g - b))
 
+    # Barrera de gradiente Sobel (evita que la inundación de fondo perfore letras blancas o bordes)
+    gx = ndimage.sobel(brightness, axis=1)
+    gy = ndimage.sobel(brightness, axis=0)
+    grad = np.hypot(gx, gy)
+    is_edge_barrier = grad > 22.0
+
     # 1. Muestreo perimetral exterior
     border_mask = np.zeros((h, w), dtype=bool)
     pad_h = max(2, int(h * 0.04))
@@ -126,29 +133,72 @@ def process_product_image(
 
     border_brightness = brightness[border_mask]
     border_cd = color_diff[border_mask]
-    neutral_border = border_cd < 16
-    if np.sum(neutral_border) > 20:
-        bg_brightness = float(np.median(border_brightness[neutral_border]))
-    else:
-        bg_brightness = float(np.median(border_brightness))
+    med_outer_br = float(np.median(border_brightness))
+    med_outer_cd = float(np.median(border_cd))
 
-    # 2. Umbral adaptativo inteligente:
-    if bg_brightness >= 246.0:
-        # Fondo blanco estándar / puro (el 95% de los productos):
-        # El fondo es blanco casi puro (> 247)
-        # Esto protege radicalmente productos blancos (plumavit, vasos blancos, letras) con brillo 200-244
-        is_bg_candidate = (brightness >= 247.0) & (color_diff < 16)
-        
-        # Sombra difusa de piso en la parte baja:
-        bottom_third = np.zeros((h, w), dtype=bool)
-        bottom_third[int(h * 0.65):, :] = True
-        is_floor_shadow = (brightness >= 210.0) & (color_diff < 10) & bottom_third
-        is_bg_candidate = is_bg_candidate | is_floor_shadow
-    else:
-        # Fondo grisáceo / blanco roto (ej: cigarrillos Kent o tabaco Roadhouse con fondo ~218-235):
-        bg_low = bg_brightness - 12.0
-        bg_high = min(255.0, bg_brightness + 15.0)
-        is_bg_candidate = (brightness >= bg_low) & (brightness <= bg_high) & (color_diff < 18)
+    # 2. Detección de recuadro de foto embebida (doble fondo, típico en Desechables)
+    is_pure_white = (brightness >= 252.0) & (color_diff < 10)
+    non_pure_white = ~is_pure_white
+    ys_npw, xs_npw = np.where(non_pure_white)
+
+    has_inner_box = False
+    if med_outer_br >= 250.0 and len(ys_npw) > 0:
+        x_min, x_max = int(xs_npw.min()), int(xs_npw.max())
+        y_min, y_max = int(ys_npw.min()), int(ys_npw.max())
+        s1 = bool(x_min >= int(w * 0.03))
+        s2 = bool(y_min >= int(h * 0.03))
+        s3 = bool(x_max <= w - 1 - int(w * 0.03))
+        s4 = bool(y_max <= h - 1 - int(h * 0.03))
+        inset_count = int(s1) + int(s2) + int(s3) + int(s4)
+
+        if inset_count >= 2 and (x_max - x_min >= int(w * 0.4)) and (y_max - y_min >= int(h * 0.4)):
+            inner_w = x_max - x_min + 1
+            inner_h = y_max - y_min + 1
+            pw = max(2, int(inner_w * 0.04))
+            ph = max(2, int(inner_h * 0.04))
+
+            top_s = brightness[y_min:y_min+ph, x_min:x_max+1]
+            bot_s = brightness[y_max-ph:y_max+1, x_min:x_max+1]
+            left_s = brightness[y_min:y_max+1, x_min:x_min+pw]
+            right_s = brightness[y_min:y_max+1, x_max-pw:x_max+1]
+
+            cd_top = color_diff[y_min:y_min+ph, x_min:x_max+1]
+            cd_bot = color_diff[y_max-ph:y_max+1, x_min:x_max+1]
+            cd_left = color_diff[y_min:y_max+1, x_min:x_min+pw]
+            cd_right = color_diff[y_min:y_max+1, x_max-pw:x_max+1]
+
+            inner_samples = np.concatenate([top_s.flatten(), bot_s.flatten(), left_s.flatten(), right_s.flatten()])
+            inner_cds = np.concatenate([cd_top.flatten(), cd_bot.flatten(), cd_left.flatten(), cd_right.flatten()])
+
+            neutral_inner = inner_cds < 16
+            if np.mean(neutral_inner) > 0.6:
+                has_inner_box = True
+                inner_bg_low = float(np.percentile(inner_samples[neutral_inner], 10))
+                # Fondo candidato: margen blanco externo + mesa/fondo neutro interior
+                is_bg_candidate = is_pure_white | ((brightness >= inner_bg_low - 5.0) & (color_diff < 16) & (~is_edge_barrier))
+
+    if not has_inner_box:
+        # Imagen estándar (un solo fondo)
+        if med_outer_cd > 30.0:
+            # Fondo saturado / colorido (ej: 757 con fondo rojo/naranja)
+            outer_r = r[border_mask]
+            outer_g = g[border_mask]
+            outer_b = b[border_mask]
+            ref_rgb = np.array([np.median(outer_r), np.median(outer_g), np.median(outer_b)])
+            dist = np.sqrt((r - ref_rgb[0])**2 + (g - ref_rgb[1])**2 + (b - ref_rgb[2])**2)
+            is_bg_candidate = (dist < 75.0) | ((r > 150) & (b < 90) & (g < 170))
+        elif med_outer_br >= 246.0:
+            # Fondo blanco estándar
+            is_bg_candidate = (brightness >= 247.0) & (color_diff < 15) & (~is_edge_barrier)
+            bottom_half = np.zeros((h, w), dtype=bool)
+            bottom_half[int(h * 0.58):, :] = True
+            is_floor_shadow = (brightness >= 210.0) & (color_diff < 12) & bottom_half & (~is_edge_barrier)
+            is_bg_candidate = is_bg_candidate | is_floor_shadow
+        else:
+            # Fondo grisáceo / blanco roto
+            bg_low = med_outer_br - 14.0
+            bg_high = min(255.0, med_outer_br + 16.0)
+            is_bg_candidate = (brightness >= bg_low) & (brightness <= bg_high) & (color_diff < 18) & (~is_edge_barrier)
 
     # 3. Conectividad exterior con los 4 bordes
     structure = ndimage.generate_binary_structure(2, 2)
@@ -172,21 +222,22 @@ def process_product_image(
     if num_prod > 0:
         sizes = ndimage.sum(prod_mask, prod_labeled, range(1, num_prod + 1))
         max_size = np.max(sizes)
-        keep = [i + 1 for i, s in enumerate(sizes) if s >= max_size * 0.03]
+        keep = [i + 1 for i, s in enumerate(sizes) if s >= max_size * 0.08]
         prod_mask = np.isin(prod_labeled, keep)
         prod_mask = ndimage.binary_fill_holes(prod_mask)
 
-    # 6. Recorte suave de sombra residual en la base
+    # 6. Recorte riguroso de sombra sucia de base
     ys, xs = np.where(prod_mask)
     if len(ys) > 0:
         bot_y = ys.max()
         top_y = ys.min()
-        for y_check in range(bot_y, max(top_y, bot_y - 12), -1):
+        max_trim = max(4, int((bot_y - top_y) * 0.18))
+        for y_check in range(bot_y, max(top_y, bot_y - max_trim), -1):
             row_in_prod = prod_mask[y_check, :]
             if np.sum(row_in_prod) > 0:
                 row_br = brightness[y_check, row_in_prod]
                 row_cd = color_diff[y_check, row_in_prod]
-                if np.mean(row_br > 218) > 0.85 and np.mean(row_cd < 14) > 0.85:
+                if np.mean(row_br > 190) > 0.75 and np.mean(row_cd < 18) > 0.75:
                     prod_mask[y_check, :] = False
                 else:
                     break
