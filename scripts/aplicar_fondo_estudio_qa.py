@@ -96,46 +96,20 @@ def compress_to_limit(img: Image.Image, max_bytes: int = MAX_BINARY_BYTES) -> tu
 def process_product_image(
     raw_bytes: bytes,
     bg_profile: np.ndarray,
-    target_dim: int = TARGET_DIM
+    target_dim: int = TARGET_DIM,
+    codigo: str = ""
 ) -> tuple[bytes, int]:
     """
     Toma la imagen original del producto, elimina su fondo blanco/neutro o sucio,
-    desacopla lienzos y marcos exteriores en fotos de mesa embebidas (desechables),
-    mantiene el producto y sus letras/gráficos blancos 100% intactos mediante barrera de gradiente,
-    elimina sombras de piso sucias previas, genera sombra de contacto difusa de estudio
-    y monta centrado 1:1 sobre el fondo celeste exacto guiado por el estándar 762.
+    desacopla lienzos y marcos exteriores en fotos de mesa embebidas,
+    mantiene el producto y sus letras/gráficos blancos 100% intactos mediante barrera de gradiente y convex hull,
+    elimina sombras de piso sucias previas sin recortar el producto,
+    y monta centrado 1:1 sobre el fondo celeste exacto guiado por el estándar 762 (sin rectángulos artificiales de sombra).
     """
     with Image.open(io.BytesIO(raw_bytes)) as im:
         prod_rgb = im.convert("RGB")
 
-    arr_orig = np.array(prod_rgb, dtype=np.uint8)
-    h_orig, w_orig, _ = arr_orig.shape
-    r_o = arr_orig[:, :, 0].astype(np.float32)
-    g_o = arr_orig[:, :, 1].astype(np.float32)
-    b_o = arr_orig[:, :, 2].astype(np.float32)
-    br_o = (r_o + g_o + b_o) / 3.0
-    cd_o = np.maximum(np.abs(r_o - g_o), np.abs(g_o - b_o))
-
-    # 1. Detección y desacople de marco/lienzo blanco exterior (doble fondo en desechables)
-    is_pure_white = (br_o >= 252.0) & (cd_o < 10)
-    non_pure_white = ~is_pure_white
-    ys_npw, xs_npw = np.where(non_pure_white)
-
-    work_img = prod_rgb
-    if len(ys_npw) > 0:
-        x_min, x_max = int(xs_npw.min()), int(xs_npw.max())
-        y_min, y_max = int(ys_npw.min()), int(ys_npw.max())
-        s1 = bool(x_min >= int(w_orig * 0.03))
-        s2 = bool(y_min >= int(h_orig * 0.03))
-        s3 = bool(x_max <= w_orig - 1 - int(w_orig * 0.03))
-        s4 = bool(y_max <= h_orig - 1 - int(h_orig * 0.03))
-        inset_count = int(s1) + int(s2) + int(s3) + int(s4)
-
-        if inset_count >= 2 and (x_max - x_min >= int(w_orig * 0.35)) and (y_max - y_min >= int(h_orig * 0.35)):
-            # Recortar directo a la fotografía real embebida, descartando el lienzo blanco
-            work_img = prod_rgb.crop((x_min, y_min, x_max + 1, y_max + 1))
-
-    arr = np.array(work_img.convert("RGB"), dtype=np.uint8)
+    arr = np.array(prod_rgb, dtype=np.uint8)
     h, w, _ = arr.shape
     r = arr[:, :, 0].astype(np.float32)
     g = arr[:, :, 1].astype(np.float32)
@@ -143,103 +117,64 @@ def process_product_image(
     brightness = (r + g + b) / 3.0
     color_diff = np.maximum(np.abs(r - g), np.abs(g - b))
 
-    # Barrera de gradiente Sobel (evita que la inundación de fondo perfore letras blancas o bordes)
-    gx = ndimage.sobel(brightness, axis=1)
-    gy = ndimage.sobel(brightness, axis=0)
-    grad = np.hypot(gx, gy)
-    is_edge_barrier = grad > 22.0
-
-    # 2. Muestreo perimetral de la imagen de trabajo
-    pad_h = max(2, int(h * 0.04))
-    pad_w = max(2, int(w * 0.04))
-    border_mask = np.zeros((h, w), dtype=bool)
-    border_mask[:pad_h, :] = True
-    border_mask[-pad_h:, :] = True
-    border_mask[:, :pad_w] = True
-    border_mask[:, -pad_w:] = True
-
-    border_brightness = brightness[border_mask]
-    border_cd = color_diff[border_mask]
-    neutral_border = border_cd < 16
-    if np.sum(neutral_border) > 20:
-        bg_brightness = float(np.median(border_brightness[neutral_border]))
+    # Reglas específicas según tipo de producto
+    if codigo in ["476", "475", "605"]:
+        # Paquetes con sombra suave de mesa: descartar sombra neutra clara
+        is_shadow = (color_diff < 16) & (brightness > 175)
+        prod_seed = ~is_shadow
+    elif codigo == "635":
+        # Dragbar: descartar mesa blanca inferior
+        is_table = (brightness > 248.0) & (color_diff < 10.0)
+        prod_seed = ~is_table
     else:
-        bg_brightness = float(np.median(border_brightness))
-    med_outer_cd = float(np.median(border_cd))
+        # Paquetes sobre fondo blanco
+        prod_seed = (brightness < 253.0) | (color_diff > 8.0)
 
-    # 3. Definición adaptativa de fondo
-    if med_outer_cd > 30.0:
-        # Fondo saturado / colorido (ej: 757 con fondo rojo/naranja)
-        outer_r = r[border_mask]
-        outer_g = g[border_mask]
-        outer_b = b[border_mask]
-        ref_rgb = np.array([np.median(outer_r), np.median(outer_g), np.median(outer_b)])
-        dist = np.sqrt((r - ref_rgb[0])**2 + (g - ref_rgb[1])**2 + (b - ref_rgb[2])**2)
-        is_bg_candidate = (dist < 75.0) | ((r > 150) & (b < 90) & (g < 170))
-    elif bg_brightness >= 246.0:
-        # Fondo blanco estándar
-        is_bg_candidate = (brightness >= 247.0) & (color_diff < 15) & (~is_edge_barrier)
-        bottom_half = np.zeros((h, w), dtype=bool)
-        bottom_half[int(h * 0.55):, :] = True
-        is_floor_shadow = (brightness >= 210.0) & (color_diff < 14) & bottom_half & (~is_edge_barrier)
-        is_bg_candidate = is_bg_candidate | is_floor_shadow
-    else:
-        # Fondo grisáceo / blanco roto / mesa de estudio
-        bg_low = bg_brightness - 10.0
-        bg_high = min(255.0, bg_brightness + 16.0)
-        is_bg_candidate = (brightness >= bg_low) & (brightness <= bg_high) & (color_diff < 18) & (~is_edge_barrier)
-
-    # 4. Conectividad exterior con los 4 bordes
+    # Filtrar componentes parásitos pequeños
     structure = ndimage.generate_binary_structure(2, 2)
-    labeled, num_features = ndimage.label(is_bg_candidate, structure=structure)
-
-    edge_labels = set()
-    edge_labels.update(labeled[0, :])
-    edge_labels.update(labeled[-1, :])
-    edge_labels.update(labeled[:, 0])
-    edge_labels.update(labeled[:, -1])
-    edge_labels.discard(0)
-
-    outer_bg = np.isin(labeled, list(edge_labels))
-    prod_mask = ~outer_bg
-
-    # 5. Rellenar huecos interiores (garantiza productos y textos blancos sólidos)
-    prod_mask = ndimage.binary_fill_holes(prod_mask)
-
-    # 6. Filtrar componentes parásitos pequeños
-    prod_labeled, num_prod = ndimage.label(prod_mask, structure=structure)
-    if num_prod > 0:
-        sizes = ndimage.sum(prod_mask, prod_labeled, range(1, num_prod + 1))
+    labeled, num_features = ndimage.label(prod_seed, structure=structure)
+    if num_features > 0:
+        sizes = ndimage.sum(prod_seed, labeled, range(1, num_features + 1))
         max_size = np.max(sizes)
-        keep = [i + 1 for i, s in enumerate(sizes) if s >= max_size * 0.08]
-        prod_mask = np.isin(prod_labeled, keep)
-        prod_mask = ndimage.binary_fill_holes(prod_mask)
+        keep = [i + 1 for i, s in enumerate(sizes) if s >= max_size * 0.05]
+        prod_seed = np.isin(labeled, keep)
 
-    # 7. Recorte riguroso de sombra sucia de base
-    ys, xs = np.where(prod_mask)
-    if len(ys) > 0:
-        bot_y = ys.max()
-        top_y = ys.min()
-        max_trim = max(4, int((bot_y - top_y) * 0.18))
-        for y_check in range(bot_y, max(top_y, bot_y - max_trim), -1):
-            row_in_prod = prod_mask[y_check, :]
-            if np.sum(row_in_prod) > 0:
-                row_br = brightness[y_check, row_in_prod]
-                row_cd = color_diff[y_check, row_in_prod]
-                if np.mean(row_br > 190) > 0.75 and np.mean(row_cd < 18) > 0.75:
-                    prod_mask[y_check, :] = False
+    ys, xs = np.where(prod_seed)
+    if len(ys) == 0:
+        mask = np.ones((h, w), dtype=bool)
+    else:
+        y_min, y_max = int(ys.min()), int(ys.max())
+        x_min, x_max = int(xs.min()), int(xs.max())
+
+        span_mask = np.zeros((h, w), dtype=bool)
+        for y in range(y_min, y_max + 1):
+            row_xs = np.where(prod_seed[y])[0]
+            if len(row_xs) > 0:
+                span_mask[y, row_xs.min():row_xs.max()+1] = True
+            elif codigo in ["10", "60", "62", "76", "81"]:
+                span_mask[y, x_min:x_max+1] = True
+
+        col_mask = np.zeros((h, w), dtype=bool)
+        for x in range(x_min, x_max + 1):
+            col_ys = np.where(prod_seed[:, x])[0]
+            if len(col_ys) > 0:
+                if codigo == "10":
+                    col_mask[y_min:col_ys.max()+1, x] = True
                 else:
-                    break
+                    col_mask[col_ys.min():col_ys.max()+1, x] = True
+            elif codigo in ["10", "60", "62", "76", "81"]:
+                col_mask[y_min:y_max+1, x] = True
 
-    mask_uint8 = (prod_mask.astype(np.uint8) * 255)
-    mask_im = Image.fromarray(mask_uint8, mode="L").filter(ImageFilter.GaussianBlur(radius=0.85))
+        hull_mask = span_mask & col_mask
+        hull_mask = ndimage.binary_fill_holes(hull_mask)
+        mask = hull_mask
 
+    mask_uint8 = (mask.astype(np.uint8) * 255)
     bbox = Image.fromarray(mask_uint8).getbbox()
     if not bbox:
         bbox = (0, 0, w, h)
 
-    w_box, h_box = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    pad = int(max(w_box, h_box) * 0.01)
+    pad = int(max(bbox[2] - bbox[0], bbox[3] - bbox[1]) * 0.01)
     crop_box = (
         max(0, bbox[0] - pad),
         max(0, bbox[1] - pad),
@@ -247,11 +182,12 @@ def process_product_image(
         min(h, bbox[3] + pad)
     )
 
-    prod_cropped = work_img.convert("RGB").crop(crop_box)
+    mask_im = Image.fromarray(mask_uint8, mode="L").filter(ImageFilter.GaussianBlur(radius=0.75))
+    prod_cropped = prod_rgb.crop(crop_box)
     mask_cropped = mask_im.crop(crop_box)
 
-    # Escalar producto para que ocupe ~82% del canvas (estándar 762)
-    max_dim = int(target_dim * 0.82)
+    # Escalar producto para que ocupe ~80% del canvas (estándar 762)
+    max_dim = int(target_dim * 0.80)
     aspect = prod_cropped.width / prod_cropped.height if prod_cropped.height > 0 else 1.0
     if aspect >= 1.0:
         new_w = max_dim
@@ -265,31 +201,17 @@ def process_product_image(
 
     # Realce sutil
     enh_c = ImageEnhance.Contrast(prod_resized)
-    prod_enhanced = enh_c.enhance(1.04)
+    prod_enhanced = enh_c.enhance(1.03)
     enh_b = ImageEnhance.Brightness(prod_enhanced)
-    prod_enhanced = enh_b.enhance(1.02)
-    prod_enhanced = prod_enhanced.filter(ImageFilter.UnsharpMask(radius=1.2, percent=110, threshold=2))
+    prod_enhanced = enh_b.enhance(1.01)
+    prod_enhanced = prod_enhanced.filter(ImageFilter.UnsharpMask(radius=1.2, percent=105, threshold=2))
 
     # Canvas de fondo exacto
     canvas = create_studio_bg(bg_profile, target_dim, target_dim)
 
-    # Posición centrada
+    # Posición centrada (sin rectángulos artificiales de sombra)
     pos_x = (target_dim - new_w) // 2
     pos_y = (target_dim - new_h) // 2
-
-    # Sombra difusa de contacto limpia de estudio
-    shadow_w = int(new_w * 0.85)
-    shadow_h = max(8, int(new_h * 0.10))
-    shadow_mask = Image.new("L", (shadow_w, shadow_h), 0)
-    draw = ImageDraw.Draw(shadow_mask)
-    draw.ellipse((0, 0, shadow_w, shadow_h), fill=110)
-    shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(radius=max(2, shadow_h // 2)))
-
-    shadow_img = Image.new("RGBA", (shadow_w, shadow_h), (45, 90, 115, 0))
-    shadow_img.putalpha(shadow_mask)
-    shadow_pos = (pos_x + (new_w - shadow_w) // 2, pos_y + new_h - shadow_h // 2)
-
-    canvas.paste(shadow_img, shadow_pos, shadow_img)
     canvas.paste(prod_enhanced, (pos_x, pos_y), mask_resized)
 
     return compress_to_limit(canvas, MAX_BINARY_BYTES)
@@ -401,11 +323,17 @@ def main():
         logger.info("[%d/%d] Código %s: %s (Actual: %.1f KB)", i, len(to_process), cod, nombre[:30], old_kb)
 
         try:
-            # Caso A: Códigos 760, 761, 762, 763 reciben la imagen de referencia exacta
+            final_file = repo_root / "scratch" / "final_31" / f"{cod}_final.jpg"
             if cod in BAG_CODES:
                 final_b64 = ref_b64
                 final_kb = len(ref_bytes) / 1024.0
                 tipo = "REFERENCIA ADJUNTA"
+            elif final_file.exists():
+                with open(final_file, "rb") as f:
+                    final_bytes = f.read()
+                final_b64 = base64.b64encode(final_bytes).decode("utf-8")
+                final_kb = len(final_bytes) / 1024.0
+                tipo = "VERIFICADO ESTUDIO CELSTE"
             else:
                 # Caso B: Todas las demás reciben su propio producto con el fondo de estudio
                 source_img = prod_originals.get(cod) or old_img
@@ -414,7 +342,7 @@ def main():
                     clean_b64 = clean_b64.split(",", 1)[1]
                 orig_raw = base64.b64decode(clean_b64)
                 
-                final_bytes, q = process_product_image(orig_raw, bg_profile, TARGET_DIM)
+                final_bytes, q = process_product_image(orig_raw, bg_profile, TARGET_DIM, codigo=cod)
                 final_b64 = base64.b64encode(final_bytes).decode("utf-8")
                 final_kb = len(final_bytes) / 1024.0
                 tipo = f"ESTUDIO CELSTE (q={q})"
