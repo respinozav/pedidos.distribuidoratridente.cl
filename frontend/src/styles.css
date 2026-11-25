@@ -1768,15 +1768,21 @@ table.table tbody tr:hover {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   margin-bottom: 0.85rem;
 }
-.customer-sidebar .customer-brand::before { 
-  background: url("/logo_tridente.png") center / contain no-repeat; 
-  content: ""; 
-  display: inline-block; 
+.customer-sidebar .customer-brand .brand-mark { 
+  align-items: center; 
+  background: transparent; 
+  display: inline-flex; 
   flex: 0 0 34px; 
   height: 34px; 
+  justify-content: center; 
   width: 34px; 
 }
-.customer-sidebar .customer-brand .brand-mark { display: none; }
+.customer-sidebar .customer-brand .brand-mark img { 
+  display: block; 
+  height: 100%; 
+  object-fit: contain; 
+  width: 100%; 
+}
 .customer-sidebar .sidebar-label { 
   color: #64748b; 
   flex-shrink: 0; 
@@ -2815,16 +2821,19 @@ table.table tbody tr:hover {
     gap: 0.4rem;
   }
   .customer-mobile-brand .brand-mark {
-    width: 28px;
-    height: 28px;
-    background: #102a43;
-    color: #fca311;
-    font-weight: 800;
-    font-size: 0.72rem;
-    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    background: transparent;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 30px;
+  }
+  .customer-mobile-brand .brand-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
   }
   .customer-mobile-brand strong {
     font-size: 0.92rem;

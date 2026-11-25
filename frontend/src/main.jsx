@@ -57,13 +57,11 @@ function productImageSource(imageBase64) {
   return imageBase64.startsWith("http") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
 }
 
-function BrandMark() {
-  const [imageFailed, setImageFailed] = useState(false);
-
-  return imageFailed ? (
-    <span className="brand-mark brand-mark-fallback" aria-label="Distribuidora Tridente">DT</span>
-  ) : (
-    <span className="brand-mark"><img src="/logo_tridente.png" alt="Distribuidora Tridente" onError={() => setImageFailed(true)} /></span>
+function BrandMark({ className = "" }) {
+  return (
+    <span className={`brand-mark ${className}`} aria-label="Distribuidora Tridente">
+      <img src="/logo_tridente.png" alt="Distribuidora Tridente" />
+    </span>
   );
 }
 
@@ -3125,7 +3123,7 @@ useEffect(() => {
   }
 
   const total = cart.reduce((sum, item) => sum + Number(item.precio_cliente ?? item.precio) * item.quantity, 0);
-  return <main className="customer-app"><header className="customer-topbar"><div className="container d-flex align-items-center justify-content-between"><div className="customer-brand"><span className="brand-mark">DT</span><strong>Distribuidora Tridente</strong></div><button className="btn btn-light btn-sm" onClick={loadOrders}><ClipboardList size={17} />Mis pedidos</button></div></header><div className="container py-4 py-lg-5"><header className="customer-heading"><p className="eyebrow">PORTAL DE PEDIDOS</p><h1>Hola, {customer.nombre}</h1><p>Selecciona los productos que necesitas para tu próximo despacho.</p></header>
+  return <main className="customer-app"><header className="customer-topbar"><div className="container d-flex align-items-center justify-content-between"><div className="customer-brand"><BrandMark /><strong>Distribuidora Tridente</strong></div><button className="btn btn-light btn-sm" onClick={loadOrders}><ClipboardList size={17} />Mis pedidos</button></div></header><div className="container py-4 py-lg-5"><header className="customer-heading"><p className="eyebrow">PORTAL DE PEDIDOS</p><h1>Hola, {customer.nombre}</h1><p>Selecciona los productos que necesitas para tu próximo despacho.</p></header>
     {view === "orders" ? <section className="content-panel"><button className="btn btn-link px-0 mb-3" onClick={() => setView("shop")}>Volver al catálogo</button><h2>Pedidos pendientes</h2>{orders.length ? orders.map((order) => <article className="order-row" key={order.id}><strong>{order.estado}</strong><span>{money.format(order.total)}</span><span>{order.detalles.length} productos</span></article>) : <p className="text-secondary mb-0">No hay pedidos pendientes.</p>}</section> : <div className="row g-4"><section className="col-lg-8"><div className="search-field"><Search size={20} /><label htmlFor="search" className="visually-hidden">Buscar producto</label><input id="search" className="form-control form-control-lg" placeholder="Busca por nombre de producto" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
       <div className="product-grid mt-4">{products.map((product) => <article className="product" key={product.id}><div className="product-image">{product.imagen_url ? <img src={product.imagen_url} alt="" /> : <Package size={30} />}</div><div className="product-meta"><small>{product.codigo}</small>{product.tiene_caja && product.cantidad_caja ? <small className="product-caja-badge">Caja x{product.cantidad_caja}</small> : null}</div><h2>{product.nombre}</h2><strong>{money.format(product.precio_cliente ?? product.precio)}</strong><button className="btn btn-outline-primary mt-3" onClick={() => add(product)}><Plus size={17} />Agregar</button></article>)}</div></section>
       <aside className="col-lg-4">
@@ -4710,7 +4708,9 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       <main className="customer-portal">
         <aside className="customer-sidebar">
           <div className="customer-brand">
-            <span className="brand-mark">DT</span>
+            <span className="brand-mark">
+              <img src="/logo_tridente.png" alt="Distribuidora Tridente" />
+            </span>
             <strong>Distribuidora Tridente</strong>
           </div>
           <p className="sidebar-label">MENU PRINCIPAL</p>
@@ -4772,7 +4772,9 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
         <header className="customer-portal-header">
           <div className="customer-header-left">
             <div className="customer-mobile-brand d-lg-none">
-              <span className="brand-mark">DT</span>
+              <span className="brand-mark">
+                <img src="/logo_tridente.png" alt="Tridente" />
+              </span>
               <strong>Tridente</strong>
             </div>
             <div>
@@ -4801,7 +4803,6 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                 Volver a pedidos
               </button>
             )}
-            <FocusGroupButton onClick={() => setSuggestionModalOpen(true)} />
             <span className="customer-welcome d-none d-md-inline">Hola, {customer.nombre || customer.rut || customer.celular}</span>
             <button
               type="button"
