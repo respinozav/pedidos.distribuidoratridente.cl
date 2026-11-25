@@ -220,8 +220,8 @@ export default function StockAlertBell({ initialProducts = null }) {
                                       <Package size={17} />
                                     )}
                                   </span>
-                                  <div className="stock-alert-prod-info">
-                                    <strong className="stock-alert-prod-name" title={prod.nombre}>
+                                  <div className="stock-alert-prod-info" style={{ minWidth: 0, overflow: "hidden" }}>
+                                    <strong className="stock-alert-prod-name text-truncate" title={prod.nombre}>
                                       {prod.nombre}
                                     </strong>
                                   </div>

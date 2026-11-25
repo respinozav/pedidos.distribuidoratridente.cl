@@ -56,7 +56,7 @@ export default function IAPredictionRenderer({ predictionData }) {
             {items.map((item, idx) => (
               <tr key={idx}>
                 <td>
-                  <div className="fw-bold text-dark">{item.nombre || item.producto}</div>
+                  <div className="fw-bold text-dark text-truncate" style={{ maxWidth: "280px" }} title={item.nombre || item.producto}>{item.nombre || item.producto}</div>
                   {item.codigo && <small className="text-muted">{item.codigo}</small>}
                 </td>
                 <td className="text-center">

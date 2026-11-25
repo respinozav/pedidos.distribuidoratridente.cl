@@ -1321,7 +1321,7 @@ export default function CotizadorManager() {
                   quoteItems.map((item, idx) => (
                     <tr key={item.producto_id || idx}>
                       <td>
-                        <strong className="d-block text-dark">{item.nombre_producto}</strong>
+                        <strong className="d-block text-dark text-truncate" style={{ maxWidth: "340px" }} title={item.nombre_producto}>{item.nombre_producto}</strong>
                         <small className="text-muted">
                           SKU: <code>{item.codigo_producto || "S/C"}</code>
                           {item.tipo_empaque === "caja" && (
@@ -1777,7 +1777,7 @@ export default function CotizadorManager() {
                                         <td className="ps-3 font-monospace text-muted small">
                                           {it.codigo_sku || "S/C"}
                                         </td>
-                                        <td className="fw-semibold text-dark">
+                                        <td className="fw-semibold text-dark text-truncate" style={{ maxWidth: "320px" }} title={it.nombre_producto}>
                                           {it.nombre_producto}
                                         </td>
                                         <td className="text-center">
