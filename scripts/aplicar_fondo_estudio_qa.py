@@ -100,15 +100,42 @@ def process_product_image(
 ) -> tuple[bytes, int]:
     """
     Toma la imagen original del producto, elimina su fondo blanco/neutro o sucio,
-    resuelve dobles fondos (marcos exteriores con fotos de mesa embebidas),
+    desacopla lienzos y marcos exteriores en fotos de mesa embebidas (desechables),
     mantiene el producto y sus letras/gráficos blancos 100% intactos mediante barrera de gradiente,
     elimina sombras de piso sucias previas, genera sombra de contacto difusa de estudio
-    y monta centrado 1:1 sobre el fondo celeste exacto.
+    y monta centrado 1:1 sobre el fondo celeste exacto guiado por el estándar 762.
     """
     with Image.open(io.BytesIO(raw_bytes)) as im:
         prod_rgb = im.convert("RGB")
 
-    arr = np.array(prod_rgb, dtype=np.uint8)
+    arr_orig = np.array(prod_rgb, dtype=np.uint8)
+    h_orig, w_orig, _ = arr_orig.shape
+    r_o = arr_orig[:, :, 0].astype(np.float32)
+    g_o = arr_orig[:, :, 1].astype(np.float32)
+    b_o = arr_orig[:, :, 2].astype(np.float32)
+    br_o = (r_o + g_o + b_o) / 3.0
+    cd_o = np.maximum(np.abs(r_o - g_o), np.abs(g_o - b_o))
+
+    # 1. Detección y desacople de marco/lienzo blanco exterior (doble fondo en desechables)
+    is_pure_white = (br_o >= 252.0) & (cd_o < 10)
+    non_pure_white = ~is_pure_white
+    ys_npw, xs_npw = np.where(non_pure_white)
+
+    work_img = prod_rgb
+    if len(ys_npw) > 0:
+        x_min, x_max = int(xs_npw.min()), int(xs_npw.max())
+        y_min, y_max = int(ys_npw.min()), int(ys_npw.max())
+        s1 = bool(x_min >= int(w_orig * 0.03))
+        s2 = bool(y_min >= int(h_orig * 0.03))
+        s3 = bool(x_max <= w_orig - 1 - int(w_orig * 0.03))
+        s4 = bool(y_max <= h_orig - 1 - int(h_orig * 0.03))
+        inset_count = int(s1) + int(s2) + int(s3) + int(s4)
+
+        if inset_count >= 2 and (x_max - x_min >= int(w_orig * 0.35)) and (y_max - y_min >= int(h_orig * 0.35)):
+            # Recortar directo a la fotografía real embebida, descartando el lienzo blanco
+            work_img = prod_rgb.crop((x_min, y_min, x_max + 1, y_max + 1))
+
+    arr = np.array(work_img.convert("RGB"), dtype=np.uint8)
     h, w, _ = arr.shape
     r = arr[:, :, 0].astype(np.float32)
     g = arr[:, :, 1].astype(np.float32)
@@ -122,10 +149,10 @@ def process_product_image(
     grad = np.hypot(gx, gy)
     is_edge_barrier = grad > 22.0
 
-    # 1. Muestreo perimetral exterior
-    border_mask = np.zeros((h, w), dtype=bool)
+    # 2. Muestreo perimetral de la imagen de trabajo
     pad_h = max(2, int(h * 0.04))
     pad_w = max(2, int(w * 0.04))
+    border_mask = np.zeros((h, w), dtype=bool)
     border_mask[:pad_h, :] = True
     border_mask[-pad_h:, :] = True
     border_mask[:, :pad_w] = True
@@ -133,74 +160,36 @@ def process_product_image(
 
     border_brightness = brightness[border_mask]
     border_cd = color_diff[border_mask]
-    med_outer_br = float(np.median(border_brightness))
+    neutral_border = border_cd < 16
+    if np.sum(neutral_border) > 20:
+        bg_brightness = float(np.median(border_brightness[neutral_border]))
+    else:
+        bg_brightness = float(np.median(border_brightness))
     med_outer_cd = float(np.median(border_cd))
 
-    # 2. Detección de recuadro de foto embebida (doble fondo, típico en Desechables)
-    is_pure_white = (brightness >= 252.0) & (color_diff < 10)
-    non_pure_white = ~is_pure_white
-    ys_npw, xs_npw = np.where(non_pure_white)
+    # 3. Definición adaptativa de fondo
+    if med_outer_cd > 30.0:
+        # Fondo saturado / colorido (ej: 757 con fondo rojo/naranja)
+        outer_r = r[border_mask]
+        outer_g = g[border_mask]
+        outer_b = b[border_mask]
+        ref_rgb = np.array([np.median(outer_r), np.median(outer_g), np.median(outer_b)])
+        dist = np.sqrt((r - ref_rgb[0])**2 + (g - ref_rgb[1])**2 + (b - ref_rgb[2])**2)
+        is_bg_candidate = (dist < 75.0) | ((r > 150) & (b < 90) & (g < 170))
+    elif bg_brightness >= 246.0:
+        # Fondo blanco estándar
+        is_bg_candidate = (brightness >= 247.0) & (color_diff < 15) & (~is_edge_barrier)
+        bottom_half = np.zeros((h, w), dtype=bool)
+        bottom_half[int(h * 0.55):, :] = True
+        is_floor_shadow = (brightness >= 210.0) & (color_diff < 14) & bottom_half & (~is_edge_barrier)
+        is_bg_candidate = is_bg_candidate | is_floor_shadow
+    else:
+        # Fondo grisáceo / blanco roto / mesa de estudio
+        bg_low = bg_brightness - 10.0
+        bg_high = min(255.0, bg_brightness + 16.0)
+        is_bg_candidate = (brightness >= bg_low) & (brightness <= bg_high) & (color_diff < 18) & (~is_edge_barrier)
 
-    has_inner_box = False
-    if med_outer_br >= 250.0 and len(ys_npw) > 0:
-        x_min, x_max = int(xs_npw.min()), int(xs_npw.max())
-        y_min, y_max = int(ys_npw.min()), int(ys_npw.max())
-        s1 = bool(x_min >= int(w * 0.03))
-        s2 = bool(y_min >= int(h * 0.03))
-        s3 = bool(x_max <= w - 1 - int(w * 0.03))
-        s4 = bool(y_max <= h - 1 - int(h * 0.03))
-        inset_count = int(s1) + int(s2) + int(s3) + int(s4)
-
-        if inset_count >= 2 and (x_max - x_min >= int(w * 0.4)) and (y_max - y_min >= int(h * 0.4)):
-            inner_w = x_max - x_min + 1
-            inner_h = y_max - y_min + 1
-            pw = max(2, int(inner_w * 0.04))
-            ph = max(2, int(inner_h * 0.04))
-
-            top_s = brightness[y_min:y_min+ph, x_min:x_max+1]
-            bot_s = brightness[y_max-ph:y_max+1, x_min:x_max+1]
-            left_s = brightness[y_min:y_max+1, x_min:x_min+pw]
-            right_s = brightness[y_min:y_max+1, x_max-pw:x_max+1]
-
-            cd_top = color_diff[y_min:y_min+ph, x_min:x_max+1]
-            cd_bot = color_diff[y_max-ph:y_max+1, x_min:x_max+1]
-            cd_left = color_diff[y_min:y_max+1, x_min:x_min+pw]
-            cd_right = color_diff[y_min:y_max+1, x_max-pw:x_max+1]
-
-            inner_samples = np.concatenate([top_s.flatten(), bot_s.flatten(), left_s.flatten(), right_s.flatten()])
-            inner_cds = np.concatenate([cd_top.flatten(), cd_bot.flatten(), cd_left.flatten(), cd_right.flatten()])
-
-            neutral_inner = inner_cds < 16
-            if np.mean(neutral_inner) > 0.6:
-                has_inner_box = True
-                inner_bg_low = float(np.percentile(inner_samples[neutral_inner], 10))
-                # Fondo candidato: margen blanco externo + mesa/fondo neutro interior
-                is_bg_candidate = is_pure_white | ((brightness >= inner_bg_low - 5.0) & (color_diff < 16) & (~is_edge_barrier))
-
-    if not has_inner_box:
-        # Imagen estándar (un solo fondo)
-        if med_outer_cd > 30.0:
-            # Fondo saturado / colorido (ej: 757 con fondo rojo/naranja)
-            outer_r = r[border_mask]
-            outer_g = g[border_mask]
-            outer_b = b[border_mask]
-            ref_rgb = np.array([np.median(outer_r), np.median(outer_g), np.median(outer_b)])
-            dist = np.sqrt((r - ref_rgb[0])**2 + (g - ref_rgb[1])**2 + (b - ref_rgb[2])**2)
-            is_bg_candidate = (dist < 75.0) | ((r > 150) & (b < 90) & (g < 170))
-        elif med_outer_br >= 246.0:
-            # Fondo blanco estándar
-            is_bg_candidate = (brightness >= 247.0) & (color_diff < 15) & (~is_edge_barrier)
-            bottom_half = np.zeros((h, w), dtype=bool)
-            bottom_half[int(h * 0.58):, :] = True
-            is_floor_shadow = (brightness >= 210.0) & (color_diff < 12) & bottom_half & (~is_edge_barrier)
-            is_bg_candidate = is_bg_candidate | is_floor_shadow
-        else:
-            # Fondo grisáceo / blanco roto
-            bg_low = med_outer_br - 14.0
-            bg_high = min(255.0, med_outer_br + 16.0)
-            is_bg_candidate = (brightness >= bg_low) & (brightness <= bg_high) & (color_diff < 18) & (~is_edge_barrier)
-
-    # 3. Conectividad exterior con los 4 bordes
+    # 4. Conectividad exterior con los 4 bordes
     structure = ndimage.generate_binary_structure(2, 2)
     labeled, num_features = ndimage.label(is_bg_candidate, structure=structure)
 
@@ -214,10 +203,10 @@ def process_product_image(
     outer_bg = np.isin(labeled, list(edge_labels))
     prod_mask = ~outer_bg
 
-    # 4. Rellenar huecos interiores (garantiza productos y textos blancos sólidos)
+    # 5. Rellenar huecos interiores (garantiza productos y textos blancos sólidos)
     prod_mask = ndimage.binary_fill_holes(prod_mask)
 
-    # 5. Filtrar componentes parásitos pequeños
+    # 6. Filtrar componentes parásitos pequeños
     prod_labeled, num_prod = ndimage.label(prod_mask, structure=structure)
     if num_prod > 0:
         sizes = ndimage.sum(prod_mask, prod_labeled, range(1, num_prod + 1))
@@ -226,7 +215,7 @@ def process_product_image(
         prod_mask = np.isin(prod_labeled, keep)
         prod_mask = ndimage.binary_fill_holes(prod_mask)
 
-    # 6. Recorte riguroso de sombra sucia de base
+    # 7. Recorte riguroso de sombra sucia de base
     ys, xs = np.where(prod_mask)
     if len(ys) > 0:
         bot_y = ys.max()
@@ -258,11 +247,11 @@ def process_product_image(
         min(h, bbox[3] + pad)
     )
 
-    prod_cropped = prod_rgb.crop(crop_box)
+    prod_cropped = work_img.convert("RGB").crop(crop_box)
     mask_cropped = mask_im.crop(crop_box)
 
-    # Escalar producto para que ocupe ~78% del canvas
-    max_dim = int(target_dim * 0.78)
+    # Escalar producto para que ocupe ~82% del canvas (estándar 762)
+    max_dim = int(target_dim * 0.82)
     aspect = prod_cropped.width / prod_cropped.height if prod_cropped.height > 0 else 1.0
     if aspect >= 1.0:
         new_w = max_dim
@@ -386,12 +375,12 @@ def main():
     for p in items:
         cod = str(p.get("codigo", "")).strip()
         img_url = p.get("imagen_url")
-        # Si es de los códigos de bolsas (760-763), procesar siempre
+        if target_codes is not None and cod not in target_codes:
+            continue
         if cod in BAG_CODES:
             to_process.append(p)
         elif (img_url and img_url.strip()) or (cod in prod_originals):
-            if target_codes is None or cod in target_codes:
-                to_process.append(p)
+            to_process.append(p)
 
     if args.limit:
         to_process = to_process[:args.limit]
