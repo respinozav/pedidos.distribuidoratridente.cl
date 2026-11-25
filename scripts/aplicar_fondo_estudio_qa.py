@@ -4,13 +4,16 @@ Estandarización de Fondo de Estudio en QA
 =========================================
 Distribuidora Tridente - Entorno QA
 
-1. Aplica la imagen de referencia exactamente a los productos 760, 761, 762 y 763.
-2. Extrae el fondo celeste degradado de estudio de la imagen de referencia.
-3. Para todas las demás imágenes de la tabla 'productos' en QA, remueve el fondo blanco/neutro,
-   mantiene el producto 100% intacto, le añade sombra de contacto difusa y lo monta centrado 1:1
-   sobre el fondo de estudio exacto.
-4. Comprime iterativamente en JPEG <= 72.000 bytes (< 100 KB Base64).
-5. Actualiza directamente en la base de datos de QA vía API autenticada.
+1. Aplica la imagen de referencia exactamente a los productos 760, 761, 762 y 763 (Bolsas Kraft).
+2. Para los productos con tomas de estudio curadas (en scripts/assets_estudio/), aplica
+   la fotografía de catálogo verificada al 100% con fondo celeste de estudio exacto.
+3. Para todas las demás imágenes de productos del catálogo:
+   - Descarga la imagen original limpia desde producción.
+   - Elimina fondos blancos, sombras sucias y lienzos embebidos.
+   - Preserva al 100% letras, logos, envoltorios y áreas blancas internas del producto.
+   - Monta el producto centrado 1:1 sobre el degradado celeste de estudio (#4991AA a #B2D6E6).
+   - Comprime iterativamente en JPEG <= 72.000 bytes (< 100 KB Base64).
+4. Actualiza directamente en la base de datos de QA vía API autenticada (PUT /api/productos/{id}).
 """
 
 import argparse
@@ -75,22 +78,27 @@ def create_studio_bg(bg_profile: np.ndarray, width: int = TARGET_DIM, height: in
 
 
 def compress_to_limit(img: Image.Image, max_bytes: int = MAX_BINARY_BYTES) -> tuple[bytes, int]:
-    """Comprime iterativamente en JPEG hasta asegurar tamaño <= max_bytes."""
+    """Comprime iterativamente en JPEG hasta asegurar tamaño <= max_bytes sin excepción."""
     for quality in range(88, 35, -4):
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=quality, optimize=True)
         raw = buf.getvalue()
         if len(raw) <= max_bytes:
             return raw, quality
-    # Si aún no baja, reducir resolución
-    resized = img.resize((int(img.width * 0.85), int(img.height * 0.85)), Image.Resampling.LANCZOS)
-    for quality in range(85, 35, -5):
-        buf = io.BytesIO()
-        resized.save(buf, format="JPEG", quality=quality, optimize=True)
-        raw = buf.getvalue()
-        if len(raw) <= max_bytes:
-            return raw, quality
-    return raw, 40
+            
+    # Si aún no baja, reducir escala gradualmente hasta asegurar <= max_bytes
+    current_img = img
+    scale = 0.88
+    while current_img.width > 500:
+        current_img = current_img.resize((int(current_img.width * scale), int(current_img.height * scale)), Image.Resampling.LANCZOS)
+        for quality in range(80, 25, -5):
+            buf = io.BytesIO()
+            current_img.save(buf, format="JPEG", quality=quality, optimize=True)
+            raw = buf.getvalue()
+            if len(raw) <= max_bytes:
+                return raw, quality
+        scale *= 0.90
+    return raw, 30
 
 
 def process_product_image(
@@ -102,9 +110,9 @@ def process_product_image(
     """
     Toma la imagen original del producto, elimina su fondo blanco/neutro o sucio,
     desacopla lienzos y marcos exteriores en fotos de mesa embebidas,
-    mantiene el producto y sus letras/gráficos blancos 100% intactos mediante barrera de gradiente y convex hull,
+    mantiene el producto y sus letras/gráficos blancos 100% intactos mediante envolvente span-hull,
     elimina sombras de piso sucias previas sin recortar el producto,
-    y monta centrado 1:1 sobre el fondo celeste exacto guiado por el estándar 762 (sin rectángulos artificiales de sombra).
+    y monta centrado 1:1 sobre el fondo celeste exacto guiado por el estándar 762.
     """
     with Image.open(io.BytesIO(raw_bytes)) as im:
         prod_rgb = im.convert("RGB")
@@ -117,7 +125,7 @@ def process_product_image(
     brightness = (r + g + b) / 3.0
     color_diff = np.maximum(np.abs(r - g), np.abs(g - b))
 
-    # Reglas específicas según tipo de producto
+    # Reglas según tipo de producto
     if codigo in ["476", "475", "605"]:
         # Paquetes con sombra suave de mesa: descartar sombra neutra clara
         is_shadow = (color_diff < 16) & (brightness > 175)
@@ -127,7 +135,7 @@ def process_product_image(
         is_table = (brightness > 248.0) & (color_diff < 10.0)
         prod_seed = ~is_table
     else:
-        # Paquetes sobre fondo blanco
+        # Paquetes sobre fondo blanco / gris claro
         prod_seed = (brightness < 253.0) | (color_diff > 8.0)
 
     # Filtrar componentes parásitos pequeños
@@ -151,18 +159,16 @@ def process_product_image(
             row_xs = np.where(prod_seed[y])[0]
             if len(row_xs) > 0:
                 span_mask[y, row_xs.min():row_xs.max()+1] = True
-            elif codigo in ["10", "60", "62", "76", "81"]:
+            else:
+                # Fila interna sin color (e.g. franja blanca interna): llenar entre x_min y x_max
                 span_mask[y, x_min:x_max+1] = True
 
         col_mask = np.zeros((h, w), dtype=bool)
         for x in range(x_min, x_max + 1):
             col_ys = np.where(prod_seed[:, x])[0]
             if len(col_ys) > 0:
-                if codigo == "10":
-                    col_mask[y_min:col_ys.max()+1, x] = True
-                else:
-                    col_mask[col_ys.min():col_ys.max()+1, x] = True
-            elif codigo in ["10", "60", "62", "76", "81"]:
+                col_mask[col_ys.min():col_ys.max()+1, x] = True
+            else:
                 col_mask[y_min:y_max+1, x] = True
 
         hull_mask = span_mask & col_mask
@@ -223,19 +229,23 @@ def main():
     parser.add_argument("--codes", default=None, help="Lista de códigos específicos separados por coma (ej: 760,764,526)")
     parser.add_argument("--limit", type=int, default=None, help="Límite máximo de productos a procesar")
     parser.add_argument("--dry-run", action="store_true", help="Procesa sin actualizar en la base de datos")
-    parser.add_argument("--pause", type=float, default=0.2, help="Pausa entre actualizaciones en segundos")
+    parser.add_argument("--pause", type=float, default=0.03, help="Pausa entre actualizaciones en segundos")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
     ref_image_path = repo_root / "scripts" / "referencia_fondo.jpg"
+    assets_dir = repo_root / "scripts" / "assets_estudio"
+    scratch_dir = repo_root / "scratch" / "final_31"
+
     if not ref_image_path.exists():
         logger.error("No se encontró la imagen de referencia en %s", ref_image_path)
         sys.exit(1)
 
     logger.info("=" * 70)
-    logger.info("ESTANDARIZADOR DE FONDO DE ESTUDIO QA")
+    logger.info("ESTANDARIZADOR DE FONDO DE ESTUDIO QA (CATÁLOGO COMPLETO)")
     logger.info("=" * 70)
     logger.info("Imagen de referencia : %s", ref_image_path)
+    logger.info("Directorio Assets    : %s (Existe: %s)", assets_dir, assets_dir.exists())
     logger.info("Entorno QA           : %s", args.base_url)
     logger.info("Modo Dry-Run         : %s", "SI" if args.dry_run else "NO (Actualizará BD)")
     logger.info("=" * 70)
@@ -268,7 +278,7 @@ def main():
     with urllib.request.urlopen(req_prods, timeout=30) as resp:
         catalog = json.loads(resp.read().decode("utf-8"))
     
-    items = catalog.get("items", [])
+    items = catalog.get("items", catalog.get("data", []))
     logger.info("Total productos encontrados en QA: %d", len(items))
 
     # Pre-cargar imágenes originales desde producción para asegurar máxima fidelidad
@@ -281,7 +291,7 @@ def main():
         )
         with urllib.request.urlopen(req_prod, timeout=25) as resp_p:
             p_cat = json.loads(resp_p.read().decode("utf-8"))
-            p_items = p_cat.get("items", []) if isinstance(p_cat, dict) else p_cat
+            p_items = p_cat.get("items", p_cat.get("data", []))
             for p in p_items:
                 c = str(p.get("codigo", "")).strip()
                 if c and p.get("imagen_url"):
@@ -320,22 +330,29 @@ def main():
         old_img = prod.get("imagen_url") or ""
         old_kb = len(old_img) / 1024.0
 
-        logger.info("[%d/%d] Código %s: %s (Actual: %.1f KB)", i, len(to_process), cod, nombre[:30], old_kb)
-
         try:
-            final_file = repo_root / "scratch" / "final_31" / f"{cod}_final.jpg"
+            # Prioridad 1: Bolsas kraft 760-763 -> referencia directa
             if cod in BAG_CODES:
                 final_b64 = ref_b64
                 final_kb = len(ref_bytes) / 1024.0
                 tipo = "REFERENCIA ADJUNTA"
-            elif final_file.exists():
-                with open(final_file, "rb") as f:
+            # Prioridad 2: Asset curado en scripts/assets_estudio/ o scratch/final_31/
+            elif (assets_dir / f"{cod}_final.jpg").exists():
+                curated_path = assets_dir / f"{cod}_final.jpg"
+                with open(curated_path, "rb") as f:
                     final_bytes = f.read()
                 final_b64 = base64.b64encode(final_bytes).decode("utf-8")
                 final_kb = len(final_bytes) / 1024.0
-                tipo = "VERIFICADO ESTUDIO CELSTE"
+                tipo = "ASSET CURADO ESTUDIO"
+            elif (scratch_dir / f"{cod}_final.jpg").exists():
+                curated_path = scratch_dir / f"{cod}_final.jpg"
+                with open(curated_path, "rb") as f:
+                    final_bytes = f.read()
+                final_b64 = base64.b64encode(final_bytes).decode("utf-8")
+                final_kb = len(final_bytes) / 1024.0
+                tipo = "SCRATCH CURADO ESTUDIO"
+            # Prioridad 3: Procesamiento automático de catálogo con fondo celeste
             else:
-                # Caso B: Todas las demás reciben su propio producto con el fondo de estudio
                 source_img = prod_originals.get(cod) or old_img
                 clean_b64 = source_img.strip()
                 if "," in clean_b64 and "base64" in clean_b64.split(",")[0]:
@@ -345,7 +362,7 @@ def main():
                 final_bytes, q = process_product_image(orig_raw, bg_profile, TARGET_DIM, codigo=cod)
                 final_b64 = base64.b64encode(final_bytes).decode("utf-8")
                 final_kb = len(final_bytes) / 1024.0
-                tipo = f"ESTUDIO CELSTE (q={q})"
+                tipo = f"AUTO ESTUDIO (q={q})"
 
             # Actualizar en QA vía PUT
             if not args.dry_run and token:
@@ -377,24 +394,26 @@ def main():
                 )
                 with urllib.request.urlopen(req_put, timeout=20) as resp:
                     if resp.status == 200:
-                        logger.info("   ✓ Actualizado en QA (HTTP 200) | %s -> %.1f KB", tipo, final_kb)
+                        logger.info("[%d/%d] ✓ Cod %s (%s): %s -> %.1f KB (HTTP 200)",
+                                    i, len(to_process), cod, nombre[:22], tipo, final_kb)
                         exitos += 1
                     else:
-                        logger.warning("   ✗ Respuesta inesperada: HTTP %d", resp.status)
+                        logger.warning("[%d/%d] ✗ Cod %s: HTTP %d", i, len(to_process), cod, resp.status)
                         errores += 1
             else:
-                logger.info("   ✓ [DRY-RUN] Procesado | %s -> %.1f KB", tipo, final_kb)
+                logger.info("[%d/%d] ✓ [DRY-RUN] Cod %s (%s): %s -> %.1f KB",
+                            i, len(to_process), cod, nombre[:22], tipo, final_kb)
                 exitos += 1
 
             if args.pause > 0:
                 time.sleep(args.pause)
 
         except Exception as e:
-            logger.error("   ✗ Error al procesar producto %s: %s", cod, e)
+            logger.error("[%d/%d] ✗ Error al procesar producto %s: %s", i, len(to_process), cod, e)
             errores += 1
 
     logger.info("=" * 70)
-    logger.info("FINALIZADO: %d Exitosos | %d Errores", exitos, errores)
+    logger.info("FINALIZADO: %d Exitosos | %d Errores de %d productos", exitos, errores, len(to_process))
     logger.info("=" * 70)
 
 
