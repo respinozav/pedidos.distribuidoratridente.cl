@@ -1,5 +1,46 @@
 import axios from "axios";
 import Swal from "sweetalert2";
+import { loadingService } from "./loadingService";
+
+function shouldTriggerGlobalLoading(config) {
+  if (config.silent || config.hideLoading) return false;
+
+  const url = config.url || "";
+
+  // Excluir tareas silenciosas de polling o logs en background
+  if (
+    url.includes("/alertas-stock") ||
+    url.includes("/notification-logs") ||
+    url.includes("/camila-logs") ||
+    url.includes("/session-logs") ||
+    url.includes("/avisos-stock")
+  ) {
+    return false;
+  }
+
+  // Búsqueda instantánea mientras se tipea
+  if (config.params?.search && !config.params?.page_size) {
+    return false;
+  }
+
+  // Endpoints principales donde el usuario espera respuesta de carga
+  if (
+    url.includes("/productos") ||
+    url.includes("/categorias") ||
+    url.includes("/catalogo") ||
+    url.includes("/cliente/perfil") ||
+    url.includes("/admin/perfil") ||
+    url.includes("/pedidos") ||
+    url.includes("/creditos") ||
+    url.includes("/cliente/carrito") ||
+    url.includes("/login") ||
+    url.includes("/clientes/login")
+  ) {
+    return true;
+  }
+
+  return Boolean(config.showLoading);
+}
 
 const apiBaseUrl =
   import.meta.env.VITE_API_URL ??
@@ -170,10 +211,14 @@ export function setCustomerToken(token) {
   setAdminToken(token);
 }
 
-// Interceptor para asegurar que el token actual viaje en todas las peticiones
+// Interceptor para asegurar que el token actual viaje y gestionar el loading según la petición
 api.interceptors.request.use((config) => {
   if (currentToken && !config.headers["Authorization"]) {
     config.headers["Authorization"] = `Bearer ${currentToken}`;
+  }
+  if (shouldTriggerGlobalLoading(config)) {
+    config.__trackedLoading = true;
+    loadingService.show(config.loadingText || "Cargando....");
   }
   return config;
 });
@@ -184,10 +229,18 @@ if (initialSession?.token) {
   setAdminToken(initialSession.token);
 }
 
-// Interceptor global para capturar respuestas 401 (token expirado)
+// Interceptor global para capturar respuestas y ocultar loading
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config?.__trackedLoading) {
+      loadingService.hide();
+    }
+    return response;
+  },
   (error) => {
+    if (error?.config?.__trackedLoading) {
+      loadingService.hide();
+    }
     const status = error?.response?.status;
     const url = error?.config?.url || "";
 
