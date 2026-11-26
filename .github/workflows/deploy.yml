@@ -36,15 +36,28 @@ jobs:
         env:
           DEPLOY_ENV: "${{ github.event.inputs.environment != '' && github.event.inputs.environment || (github.ref_name == 'main' && 'production' || 'qa') }}"
           DEPLOY_BRANCH: "${{ github.event.inputs.branch != '' && github.event.inputs.branch || github.ref_name }}"
+          # Base de datos AWS PostgreSQL
           AWS_HOST_BD: ${{ vars.AWS_HOST_BD || secrets.AWS_HOST_BD }}
           AWS_SCHEME_BD: ${{ vars.AWS_SCHEME_BD || secrets.AWS_SCHEME_BD }}
           AWS_USER_BD: ${{ vars.AWS_USER_BD || secrets.AWS_USER_BD }}
           AWS_PASSWORD_BD: ${{ secrets.AWS_PASSWORD_BD || vars.AWS_PASSWORD_BD }}
+          # Integración Defontana API
+          DEFONTANA_API_BASE_URL: ${{ vars.DEFONTANA_API_BASE_URL || secrets.DEFONTANA_API_BASE_URL }}
+          DEFONTANA_CLIENT_ID: ${{ vars.DEFONTANA_CLIENT_ID || secrets.DEFONTANA_CLIENT_ID }}
+          DEFONTANA_COMPANY_ID: ${{ vars.DEFONTANA_COMPANY_ID || secrets.DEFONTANA_COMPANY_ID }}
+          DEFONTANA_API_USER: ${{ vars.DEFONTANA_API_USER || secrets.DEFONTANA_API_USER }}
+          DEFONTANA_API_PASSWORD: ${{ secrets.DEFONTANA_API_PASSWORD || vars.DEFONTANA_API_PASSWORD }}
+          # Inteligencia Artificial (Gemini)
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL }}
+          # Seguridad y Red
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY || vars.JWT_SECRET_KEY }}
+          CORS_ORIGINS: ${{ vars.CORS_ORIGINS || secrets.CORS_ORIGINS }}
         with:
           host: ${{ vars.AWS_HOST || secrets.AWS_HOST }}
           username: ${{ vars.AWS_USERNAME || secrets.AWS_USERNAME }}
           key: ${{ secrets.AWS_PRIVATE_KEY }}
-          envs: DEPLOY_ENV,DEPLOY_BRANCH,AWS_HOST_BD,AWS_SCHEME_BD,AWS_USER_BD,AWS_PASSWORD_BD
+          envs: DEPLOY_ENV,DEPLOY_BRANCH,AWS_HOST_BD,AWS_SCHEME_BD,AWS_USER_BD,AWS_PASSWORD_BD,DEFONTANA_API_BASE_URL,DEFONTANA_CLIENT_ID,DEFONTANA_COMPANY_ID,DEFONTANA_API_USER,DEFONTANA_API_PASSWORD,GEMINI_API_KEY,GEMINI_MODEL,JWT_SECRET_KEY,CORS_ORIGINS
           script: |
             set +e
             REPORT_FILE="/tmp/status_ports.txt"
@@ -54,12 +67,27 @@ jobs:
             echo "RAMA SELECCIONADA: ${DEPLOY_BRANCH:-main}" >> "$REPORT_FILE" 2>&1
             echo "==========================================" >> "$REPORT_FILE" 2>&1
 
-            G_KEY=$(echo "QVEuQWI4Uk42TENTX21hUHJXMkJpREdqTFpxbEZ5dkFFRXN4d1pCZHNUYmtDcWlRMUR6SVE=" | base64 -d)
-
             echo "--- INYECTANDO VARIABLES GLOBALES EN SYSTEMD ---" >> "$REPORT_FILE" 2>&1
-            sudo systemctl set-environment GEMINI_API_KEY="$G_KEY" >> "$REPORT_FILE" 2>&1 || true
-            sudo systemctl set-environment GEMINI_MODEL="gemini-3.5-flash-lite" >> "$REPORT_FILE" 2>&1 || true
-
+            if [ -n "$GEMINI_API_KEY" ]; then
+              echo "Inyectando GEMINI_API_KEY en systemd..." >> "$REPORT_FILE" 2>&1
+              sudo systemctl set-environment GEMINI_API_KEY="$GEMINI_API_KEY" >> "$REPORT_FILE" 2>&1 || true
+            fi
+            if [ -n "$GEMINI_MODEL" ]; then
+              echo "Inyectando GEMINI_MODEL ($GEMINI_MODEL) en systemd..." >> "$REPORT_FILE" 2>&1
+              sudo systemctl set-environment GEMINI_MODEL="$GEMINI_MODEL" >> "$REPORT_FILE" 2>&1 || true
+            fi
+            if [ -n "$JWT_SECRET_KEY" ]; then
+              echo "Inyectando JWT_SECRET_KEY en systemd..." >> "$REPORT_FILE" 2>&1
+              sudo systemctl set-environment JWT_SECRET_KEY="$JWT_SECRET_KEY" >> "$REPORT_FILE" 2>&1 || true
+            fi
+            if [ -n "$DEFONTANA_API_BASE_URL" ]; then
+              echo "Inyectando variables Defontana en systemd..." >> "$REPORT_FILE" 2>&1
+              sudo systemctl set-environment DEFONTANA_API_BASE_URL="$DEFONTANA_API_BASE_URL" >> "$REPORT_FILE" 2>&1 || true
+              sudo systemctl set-environment DEFONTANA_CLIENT_ID="$DEFONTANA_CLIENT_ID" >> "$REPORT_FILE" 2>&1 || true
+              sudo systemctl set-environment DEFONTANA_COMPANY_ID="$DEFONTANA_COMPANY_ID" >> "$REPORT_FILE" 2>&1 || true
+              sudo systemctl set-environment DEFONTANA_API_USER="$DEFONTANA_API_USER" >> "$REPORT_FILE" 2>&1 || true
+              sudo systemctl set-environment DEFONTANA_API_PASSWORD="$DEFONTANA_API_PASSWORD" >> "$REPORT_FILE" 2>&1 || true
+            fi
             if [ -n "$AWS_HOST_BD" ]; then
               echo "Inyectando DATABASE_HOST en systemd..." >> "$REPORT_FILE" 2>&1
               sudo systemctl set-environment DATABASE_HOST="$AWS_HOST_BD" >> "$REPORT_FILE" 2>&1 || true
@@ -127,7 +155,21 @@ jobs:
             for ENV_FILE in "$TARGET_APP_DIR/.env" "$TARGET_APP_DIR/backend/.env" "/var/www/pedidos-qa.distribuidoratridente.cl/.env" "/var/www/pedidos-qa.distribuidoratridente.cl/backend/.env" "/var/www/pedidos.distribuidoratridente.cl/.env" "/var/www/pedidos.distribuidoratridente.cl/backend/.env"; do
               if [ -f "$ENV_FILE" ]; then
                 if [ -f "$TARGET_APP_DIR/backend/scripts/sync_env.py" ]; then
-                  sudo DEPLOY_ENV="$DEPLOY_ENV" AWS_HOST_BD="$AWS_HOST_BD" AWS_USER_BD="$AWS_USER_BD" AWS_PASSWORD_BD="$AWS_PASSWORD_BD" AWS_SCHEME_BD="$AWS_SCHEME_BD" GEMINI_API_KEY="$G_KEY" GEMINI_MODEL="gemini-3.5-flash-lite" python3 "$TARGET_APP_DIR/backend/scripts/sync_env.py" "$ENV_FILE" >> "$REPORT_FILE" 2>&1 || true
+                  sudo DEPLOY_ENV="$DEPLOY_ENV" \
+                       AWS_HOST_BD="$AWS_HOST_BD" \
+                       AWS_USER_BD="$AWS_USER_BD" \
+                       AWS_PASSWORD_BD="$AWS_PASSWORD_BD" \
+                       AWS_SCHEME_BD="$AWS_SCHEME_BD" \
+                       DEFONTANA_API_BASE_URL="$DEFONTANA_API_BASE_URL" \
+                       DEFONTANA_CLIENT_ID="$DEFONTANA_CLIENT_ID" \
+                       DEFONTANA_COMPANY_ID="$DEFONTANA_COMPANY_ID" \
+                       DEFONTANA_API_USER="$DEFONTANA_API_USER" \
+                       DEFONTANA_API_PASSWORD="$DEFONTANA_API_PASSWORD" \
+                       GEMINI_API_KEY="$GEMINI_API_KEY" \
+                       GEMINI_MODEL="$GEMINI_MODEL" \
+                       JWT_SECRET_KEY="$JWT_SECRET_KEY" \
+                       CORS_ORIGINS="$CORS_ORIGINS" \
+                       python3 "$TARGET_APP_DIR/backend/scripts/sync_env.py" "$ENV_FILE" >> "$REPORT_FILE" 2>&1 || true
                 fi
                 echo "Variables sincronizadas en: $ENV_FILE" >> "$REPORT_FILE" 2>&1
                 sudo chmod 644 "$ENV_FILE" 2>/dev/null || true

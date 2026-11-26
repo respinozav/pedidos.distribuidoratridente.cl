@@ -1705,7 +1705,7 @@ export default function ModalCrearPedidoVoz({ isOpen, onClose, onOrderCreated })
                       <tr key={`${item.id}-${item.tipo_empaque}-${idx}`}>
                         <td className="small text-muted">{item.codigo}</td>
                         <td>
-                          <strong>{item.nombre}</strong>
+                          <strong className="d-inline-block text-truncate align-middle" style={{ maxWidth: "260px" }} title={item.nombre}>{item.nombre}</strong>
                           {item.afecto ? (
                             <span className="badge bg-primary ms-1" style={{ fontSize: "0.65rem" }}>
                               Afecto

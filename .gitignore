@@ -13,7 +13,12 @@ node_modules/
 frontend/dist/
 backend/.coverage
 backup/
+backups/
 backend/backup/
+backend/backups/
+.env.qa
+output_images_qa/
+scratch/
 *.sql
 backend/assets/samples_*
 backend/assets/lab_*

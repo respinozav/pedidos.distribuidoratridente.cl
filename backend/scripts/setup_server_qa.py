@@ -73,6 +73,14 @@ server {{
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }}
+
+    location /postgrest/ {{
+        proxy_pass http://127.0.0.1:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
 }}
 """
     else:
@@ -90,6 +98,14 @@ server {{
 
     location /api {{
         proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+
+    location /postgrest/ {{
+        proxy_pass http://127.0.0.1:3000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -250,6 +266,9 @@ def setup_qa_system():
     else:
         print("✓ Servicio Nginx reiniciado y activo.")
 
+    # 13. Estandarización de imágenes en QA (PostgREST local)
+    run_estandarizar_imagenes_qa()
+
     print("=" * 60)
     print("SERVIDOR QA CONFIGURADO EXITOSAMENTE")
     print("=" * 60)
@@ -299,6 +318,48 @@ def setup_ssl_certbot():
     subprocess.run(["nginx", "-t"], check=False)
     subprocess.run(["systemctl", "reload", "nginx"], check=False)
     print("✓ Virtualhost Nginx actualizado con directivas SSL 443.")
+
+
+def run_estandarizar_imagenes_qa():
+    """Ejecuta la estandarización de imágenes en QA sobre todas las imágenes vía PostgREST local."""
+    script_candidates = [
+        Path(QA_DIR) / "scripts" / "estandarizar_imagenes_qa.py",
+        Path(QA_DIR) / "backend" / "scripts" / "estandarizar_imagenes_qa.py",
+    ]
+    script_path = next((p for p in script_candidates if p.exists()), None)
+    if not script_path:
+        print("Aviso: No se encontró script de estandarización de imágenes.")
+        return
+
+    print("\n--- EJECUTANDO ESTANDARIZACION DE IMAGENES EN QA ---")
+    try:
+        backend_path = Path(QA_DIR) / "backend"
+        python_bin = backend_path / "venv" / "bin" / "python3"
+        if not python_bin.exists():
+            python_bin = Path(sys.executable)
+
+        cmd = [
+            str(python_bin),
+            str(script_path),
+            "--postgrest-url", "http://127.0.0.1:3000",
+            "--schema", "bdtridente",
+            "--allow-pillow-fallback",
+            "--pause", "0.02",
+        ]
+        res = subprocess.run(cmd, cwd=QA_DIR, capture_output=True, text=True, timeout=900)
+        if res.stdout:
+            lines = res.stdout.strip().splitlines()
+            print("\n".join(lines[-25:]))
+        if res.stderr:
+            err_lines = res.stderr.strip().splitlines()
+            if err_lines:
+                print("StdErr resumen:", "\n".join(err_lines[-10:]))
+        if res.returncode == 0:
+            print("✓ Estandarización de imágenes completada exitosamente en QA.")
+        else:
+            print(f"Aviso: Script de imágenes finalizó con código {res.returncode}.")
+    except Exception as e:
+        print("Aviso en ejecución de estandarizar_imagenes_qa:", e)
 
 
 if __name__ == "__main__":
