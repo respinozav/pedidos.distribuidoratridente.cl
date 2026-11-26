@@ -20,7 +20,7 @@
   user-select: none;
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.32s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.32s ease;
+  transition: opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.18s ease;
   pointer-events: all;
 }
 
@@ -97,10 +97,10 @@
   overflow: visible;
 }
 
-/* Animación de la estrella fugaz girando alrededor del logo */
+/* Animación de la estrella fugaz girando veloz alrededor del logo */
 .tridente-shooting-star-group {
   transform-origin: 100px 100px;
-  animation: tridenteOrbitShootingStar 1.35s cubic-bezier(0.42, 0.08, 0.25, 1) infinite;
+  animation: tridenteOrbitShootingStar 0.8s cubic-bezier(0.42, 0.08, 0.25, 1) infinite;
 }
 
 @keyframes tridenteOrbitShootingStar {
@@ -112,7 +112,7 @@
   }
 }
 
-/* Animación sutil de respiración en el medallón */
+/* Animación sutil y fluida de respiración en el medallón */
 @keyframes tridenteMedallionBreath {
   0%, 100% {
     transform: scale(1);
@@ -130,9 +130,9 @@
   }
 }
 
-/* Centelleo en la cabeza de la estrella fugaz */
+/* Centelleo dinámico en la cabeza de la estrella fugaz */
 .tridente-star-flare {
-  animation: tridenteStarFlareTwinkle 0.9s ease-in-out infinite alternate;
+  animation: tridenteStarFlareTwinkle 0.45s ease-in-out infinite alternate;
   transform-origin: 100px 16px;
 }
 
@@ -177,7 +177,7 @@
   font-weight: 800;
   color: #0284c7;
   display: inline-block;
-  animation: tridenteDotJump 1.5s infinite ease-in-out both;
+  animation: tridenteDotJump 0.85s infinite ease-in-out both;
 }
 
 .tridente-loading-dot:nth-child(1) {
@@ -185,15 +185,15 @@
 }
 
 .tridente-loading-dot:nth-child(2) {
-  animation-delay: 0.18s;
+  animation-delay: 0.1s;
 }
 
 .tridente-loading-dot:nth-child(3) {
-  animation-delay: 0.36s;
+  animation-delay: 0.2s;
 }
 
 .tridente-loading-dot:nth-child(4) {
-  animation-delay: 0.54s;
+  animation-delay: 0.3s;
 }
 
 @keyframes tridenteDotJump {

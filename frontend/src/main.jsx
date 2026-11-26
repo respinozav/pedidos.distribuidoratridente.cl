@@ -4134,8 +4134,12 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   useEffect(() => { setPage(1); }, [query, selectedCategory]);
 
   useEffect(() => {
-    const timer = setTimeout(loadProducts, 200);
-    return () => clearTimeout(timer);
+    if (isInitialShopLoad.current) {
+      loadProducts();
+    } else {
+      const timer = setTimeout(loadProducts, 200);
+      return () => clearTimeout(timer);
+    }
   }, [query, selectedCategory, customer.id, page]);
 
   useEffect(() => {
@@ -5443,7 +5447,7 @@ function App() {
     }
 
     if (pending === 0) {
-      const timer = setTimeout(() => loadingService.hide(), 850);
+      const timer = setTimeout(() => loadingService.hide(), 200);
       return () => clearTimeout(timer);
     }
   }, []);

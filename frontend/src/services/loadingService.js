@@ -5,7 +5,7 @@ let loadingCount = 0;
 let loadingText = "Cargando....";
 let minDisplayTimer = null;
 let shownAt = 0;
-const MIN_DISPLAY_MS = 850; // Tiempo para apreciar el loading y asegurar transiciones suaves sin parpadeos
+const MIN_DISPLAY_MS = 200; // Rápido y reactivo: evita micro-parpadeos de 10ms pero no retarda cargas reales
 const listeners = new Set();
 
 function notify() {
@@ -39,7 +39,10 @@ export const loadingService = {
   hide(force = false) {
     if (force) {
       loadingCount = 0;
-      if (minDisplayTimer) clearTimeout(minDisplayTimer);
+      if (minDisplayTimer) {
+        clearTimeout(minDisplayTimer);
+        minDisplayTimer = null;
+      }
       notify();
       return;
     }

@@ -20,7 +20,7 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
       const timer = setTimeout(() => {
         setShouldRender(false);
         setIsClosing(false);
-      }, 280);
+      }, 180);
       return () => clearTimeout(timer);
     }
   }, [isVisible, shouldRender]);
