@@ -382,24 +382,36 @@ def main():
                     "notificar_stock": prod.get("notificar_stock", False),
                     "stock_notificacion": prod.get("stock_notificacion"),
                 }
-                req_put = urllib.request.Request(
-                    put_url,
-                    data=json.dumps(put_payload).encode("utf-8"),
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {token}",
-                        "User-Agent": "Mozilla/5.0"
-                    },
-                    method="PUT"
-                )
-                with urllib.request.urlopen(req_put, timeout=20) as resp:
-                    if resp.status == 200:
-                        logger.info("[%d/%d] ✓ Cod %s (%s): %s -> %.1f KB (HTTP 200)",
-                                    i, len(to_process), cod, nombre[:22], tipo, final_kb)
-                        exitos += 1
-                    else:
-                        logger.warning("[%d/%d] ✗ Cod %s: HTTP %d", i, len(to_process), cod, resp.status)
-                        errores += 1
+                success = False
+                for attempt in range(1, 4):
+                    try:
+                        req_put = urllib.request.Request(
+                            put_url,
+                            data=json.dumps(put_payload).encode("utf-8"),
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {token}",
+                                "User-Agent": "Mozilla/5.0"
+                            },
+                            method="PUT"
+                        )
+                        with urllib.request.urlopen(req_put, timeout=25) as resp:
+                            if resp.status == 200:
+                                logger.info("[%d/%d] ✓ Cod %s (%s): %s -> %.1f KB (HTTP 200)",
+                                            i, len(to_process), cod, nombre[:22], tipo, final_kb)
+                                exitos += 1
+                                success = True
+                                break
+                            else:
+                                logger.warning("[%d/%d] ✗ Cod %s: HTTP %d (intento %d)", i, len(to_process), cod, resp.status, attempt)
+                    except Exception as req_err:
+                        if attempt < 3:
+                            logger.warning("[%d/%d] Reintentando cod %s por error transitorio: %s", i, len(to_process), cod, req_err)
+                            time.sleep(2.0)
+                        else:
+                            raise req_err
+                if not success:
+                    errores += 1
             else:
                 logger.info("[%d/%d] ✓ [DRY-RUN] Cod %s (%s): %s -> %.1f KB",
                             i, len(to_process), cod, nombre[:22], tipo, final_kb)
