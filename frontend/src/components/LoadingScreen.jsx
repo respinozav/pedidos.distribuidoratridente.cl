@@ -5,7 +5,7 @@ import { useLoading } from "../services/loadingService";
 export default function LoadingScreen({ show: manualShow, text: manualText }) {
   const { isLoading: globalLoading, loadingText: globalText } = useLoading();
   const isVisible = manualShow !== undefined ? manualShow : globalLoading;
-  const rawText = manualText || globalText || "Cargando...";
+  const rawText = manualText || globalText || "Cargando....";
 
   // Manejo de animación suave de salida
   const [shouldRender, setShouldRender] = useState(isVisible);
@@ -27,7 +27,7 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
 
   if (!shouldRender) return null;
 
-  // Si el texto incluye puntos suspensivos ("Cargando..."), separamos la raíz para animar los puntos
+  // Si el texto incluye puntos suspensivos ("Cargando...."), separamos la raíz para animar los 4 puntos
   const cleanLabel = rawText.replace(/\.+$/, "");
 
   return (
@@ -38,9 +38,9 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
       aria-label={rawText}
     >
       <div className="tridente-loading-stage">
-        {/* Caja de la órbita con el logo central y la estrella fugaz */}
+        {/* Caja de la órbita compacta con el logo agrandado y la estrella fugaz */}
         <div className="tridente-loading-orbit-box">
-          {/* Medallón central redondo con el logo oficial de Distribuidora Tridente */}
+          {/* Medallón central redondo relleno en azul con el logo oficial de Distribuidora Tridente resaltado */}
           <div className="tridente-loading-medallion">
             <img
               src="/logo_tridente.png"
@@ -91,22 +91,22 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
               </filter>
             </defs>
 
-            {/* Pista de órbita circular sutil alrededor del logo */}
+            {/* Pista de órbita circular sutil alrededor del medallón azul */}
             <circle
               cx="100"
               cy="100"
-              r="82"
+              r="84"
               fill="none"
-              stroke="rgba(56, 189, 248, 0.22)"
+              stroke="rgba(56, 189, 248, 0.25)"
               strokeWidth="1.5"
               strokeDasharray="4 6"
             />
 
             {/* Grupo de la estrella fugaz que rota 360 grados */}
             <g className="tridente-shooting-star-group">
-              {/* Estela curvada en arco de la estrella fugaz */}
+              {/* Estela curvada en arco de la estrella fugaz ajustada a r=84 */}
               <path
-                d="M 22.9 72 A 82 82 0 0 1 100 18"
+                d="M 21.1 71.3 A 84 84 0 0 1 100 16"
                 fill="none"
                 stroke="url(#tridenteCometTailGrad)"
                 strokeWidth="3.6"
@@ -115,55 +115,56 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
 
               {/* Chispas flotantes y polvo estelar en la estela */}
               <circle
-                cx="78.78"
-                cy="20.79"
+                cx="78.26"
+                cy="18.86"
                 r="2.4"
                 fill="#e0f2fe"
                 opacity="0.9"
                 filter="url(#tridenteSoftGlow)"
               />
               <circle
-                cx="52.97"
-                cy="32.83"
+                cx="51.82"
+                cy="31.19"
                 r="1.8"
                 fill="#7dd3fc"
                 opacity="0.75"
               />
               <circle
-                cx="28.99"
-                cy="59.00"
+                cx="27.25"
+                cy="58.00"
                 r="1.3"
                 fill="#38bdf8"
                 opacity="0.5"
               />
 
-              {/* Cabeza de la estrella fugaz (en la posición líder 100, 18) */}
+              {/* Cabeza de la estrella fugaz (en la posición líder 100, 16) */}
               <g className="tridente-star-flare">
                 {/* Halo difuso alrededor de la cabeza */}
                 <circle
                   cx="100"
-                  cy="18"
+                  cy="16"
                   r="9"
-                  fill="rgba(56, 189, 248, 0.4)"
+                  fill="rgba(56, 189, 248, 0.45)"
                   filter="url(#tridenteStarGlow)"
                 />
                 {/* Estrella de 4 puntas centelleante (destello de estrella) */}
                 <path
-                  d="M 100 7 Q 100 18 111 18 Q 100 18 100 29 Q 100 18 89 18 Q 100 18 100 7 Z"
+                  d="M 100 5 Q 100 16 111 16 Q 100 16 100 27 Q 100 16 89 16 Q 100 16 100 5 Z"
                   fill="#ffffff"
                   filter="url(#tridenteStarGlow)"
                 />
                 {/* Núcleo blanco brillante */}
-                <circle cx="100" cy="18" r="3.6" fill="#ffffff" />
+                <circle cx="100" cy="16" r="3.6" fill="#ffffff" />
               </g>
             </g>
           </svg>
         </div>
 
-        {/* Texto: 'Cargando...' */}
+        {/* Texto: 'Cargando....' con 4 puntos animados */}
         <div className="tridente-loading-text-container">
           <h3 className="tridente-loading-label">{cleanLabel}</h3>
           <span className="tridente-loading-dots" aria-hidden="true">
+            <span className="tridente-loading-dot">.</span>
             <span className="tridente-loading-dot">.</span>
             <span className="tridente-loading-dot">.</span>
             <span className="tridente-loading-dot">.</span>

@@ -2,10 +2,10 @@
 // Permite activar/desactivar el loading modal desde cualquier lugar (API, componentes, hooks)
 
 let loadingCount = 0;
-let loadingText = "Cargando...";
+let loadingText = "Cargando....";
 let minDisplayTimer = null;
 let shownAt = 0;
-const MIN_DISPLAY_MS = 380; // Tiempo mínimo para evitar parpadeos molestos de micro-cargas
+const MIN_DISPLAY_MS = 850; // Tiempo para apreciar el loading y asegurar transiciones suaves sin parpadeos
 const listeners = new Set();
 
 function notify() {
@@ -23,7 +23,7 @@ function notify() {
 }
 
 export const loadingService = {
-  show(text = "Cargando...") {
+  show(text = "Cargando....") {
     if (minDisplayTimer) {
       clearTimeout(minDisplayTimer);
       minDisplayTimer = null;
@@ -32,7 +32,7 @@ export const loadingService = {
       shownAt = Date.now();
     }
     loadingCount++;
-    loadingText = text || "Cargando...";
+    loadingText = text || "Cargando....";
     notify();
   },
 

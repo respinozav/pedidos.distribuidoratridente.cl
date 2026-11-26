@@ -641,7 +641,7 @@ const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function loadProducts() {
-    loadingService.show("Cargando productos...");
+    loadingService.show("Cargando....");
     try {
       const { data } = await api.get("/admin/productos");
       setProducts(data);
@@ -778,7 +778,7 @@ const [error, setError] = useState("");
   const categoryName = (id) => categories.find((category) => category.id === id)?.nombre ?? "Sin categoría";
 
   async function loadProducts() {
-    loadingService.show("Cargando productos...");
+    loadingService.show("Cargando....");
     try {
       const { data } = await api.get("/admin/productos", { params: { category_id: selectedCategory || undefined, search: productSearch.trim() || undefined, stock_lt: stockThreshold === "" ? undefined : Number(stockThreshold), page, page_size: 10 } });
       setProducts(data.items);
@@ -4113,7 +4113,7 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
       prevPage.current !== page;
 
     if (shouldShowGlobalModal) {
-      loadingService.show("Cargando productos...");
+      loadingService.show("Cargando....");
     }
     try {
       const { data } = await api.get("/productos", { params: { category_id: selectedCategory || undefined, search: query || undefined, customer_id: customer.id, page, page_size: PAGE_SIZE } });
@@ -5413,7 +5413,7 @@ function App() {
   const [adminInitialSection, setAdminInitialSection] = useState(null);
 
   useEffect(() => {
-    loadingService.show("Cargando...");
+    loadingService.show("Cargando....");
     let pending = 0;
     if (initialSession?.role === "customer" && initialSession.token) {
       pending++;
@@ -5443,7 +5443,7 @@ function App() {
     }
 
     if (pending === 0) {
-      const timer = setTimeout(() => loadingService.hide(), 280);
+      const timer = setTimeout(() => loadingService.hide(), 850);
       return () => clearTimeout(timer);
     }
   }, []);
