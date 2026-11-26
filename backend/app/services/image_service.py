@@ -386,8 +386,8 @@ def optimize_product_image_base64(
     try:
         raw_bytes = base64.b64decode(clean_b64)
         with Image.open(BytesIO(raw_bytes)) as img:
-            # Si ya es una imagen cuadrada con fondo de estudio (celeste o neutro cálido #F6F7F1)
-            # y pesa <= 72.000 bytes, conservarla directamente sin alteraciones
+            # Si ya es una imagen cuadrada con fondo de estudio y pesa <= 72.000 bytes,
+            # conservarla directamente sin alteraciones
             w_img, h_img = img.size
             if abs(w_img - h_img) <= 4 and len(raw_bytes) <= 72_000:
                 rgb_check = img.convert("RGB")
@@ -398,14 +398,8 @@ def optimize_product_image_base64(
                     rgb_check.getpixel((0, h_c - 1)),
                     rgb_check.getpixel((w_c - 1, h_c - 1))
                 ]
-                # Reconocer fondo de estudio:
-                # 1. Celeste: c[2] > c[0] + 15
-                # 2. Neutro cálido (#F6F7F1): R~246, G~247, B~241
-                # 3. Oscuro o gradiente de estudio: brillo promedio < 252 (no blanco puro 255)
                 is_studio_bg = any(
-                    (c[2] > c[0] + 15) or 
-                    ((c[0] + c[1] + c[2]) / 3 < 252 and not all(val >= 254 for val in c[:3])) or
-                    (abs(c[0] - 246) <= 8 and abs(c[1] - 247) <= 8 and abs(c[2] - 241) <= 8)
+                    (c[2] > c[0] + 15) or ((c[0] + c[1] + c[2]) / 3 < 240)
                     for c in corners if len(c) >= 3
                 )
                 if is_studio_bg:
