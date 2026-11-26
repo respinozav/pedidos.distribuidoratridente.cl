@@ -24,6 +24,8 @@ import AgenteTridenteIA from "./pages/admin/AgenteTridenteIA";
 import FaqTutorials from "./components/FaqTutorials";
 import ModalCrearPedidoVoz from "./components/admin/ModalCrearPedidoVoz";
 import { useSessionInactivity } from "./hooks/useSessionInactivity";
+import LoadingScreen from "./components/LoadingScreen";
+import { loadingService } from "./services/loadingService";
 
 
 const money = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP" });
@@ -242,6 +244,7 @@ function Access({ onCustomerLogin, onAdminLogin }) {
   async function submit(event) {
     event.preventDefault();
     setLoading(true);
+    loadingService.show("Iniciando sesión...");
     setError("");
     try {
       if (customerAccess) {
@@ -274,6 +277,7 @@ function Access({ onCustomerLogin, onAdminLogin }) {
       }
     } finally {
       setLoading(false);
+      loadingService.hide();
     }
   }
 
@@ -510,6 +514,7 @@ function AdminAccess({ onLogin, onCustomerAccess }) {
   async function submit(event) {
     event.preventDefault();
     setLoading(true);
+    loadingService.show("Iniciando sesión...");
     setError("");
     try {
       const { data } = await api.post("/login", { correo: email, password });
@@ -526,6 +531,7 @@ function AdminAccess({ onLogin, onCustomerAccess }) {
       setError("Correo o contraseña incorrectos.");
     } finally {
       setLoading(false);
+      loadingService.hide();
     }
   }
 
@@ -635,6 +641,7 @@ const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function loadProducts() {
+    loadingService.show("Cargando productos...");
     try {
       const { data } = await api.get("/admin/productos");
       setProducts(data);
@@ -642,6 +649,7 @@ const [error, setError] = useState("");
       setError("No fue posible cargar los productos.");
     } finally {
       setLoading(false);
+      loadingService.hide();
     }
   }
 
@@ -770,6 +778,7 @@ const [error, setError] = useState("");
   const categoryName = (id) => categories.find((category) => category.id === id)?.nombre ?? "Sin categoría";
 
   async function loadProducts() {
+    loadingService.show("Cargando productos...");
     try {
       const { data } = await api.get("/admin/productos", { params: { category_id: selectedCategory || undefined, search: productSearch.trim() || undefined, stock_lt: stockThreshold === "" ? undefined : Number(stockThreshold), page, page_size: 10 } });
       setProducts(data.items);
@@ -778,6 +787,7 @@ const [error, setError] = useState("");
       setError("No fue posible cargar los productos.");
     } finally {
       setLoading(false);
+      loadingService.hide();
     }
   }
 
@@ -4092,14 +4102,32 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
   }
 
   const PAGE_SIZE = 15;
+  const isInitialShopLoad = useRef(true);
+  const prevCategory = useRef(selectedCategory);
+  const prevPage = useRef(page);
 
   async function loadProducts() {
+    const shouldShowGlobalModal =
+      isInitialShopLoad.current ||
+      prevCategory.current !== selectedCategory ||
+      prevPage.current !== page;
+
+    if (shouldShowGlobalModal) {
+      loadingService.show("Cargando productos...");
+    }
     try {
       const { data } = await api.get("/productos", { params: { category_id: selectedCategory || undefined, search: query || undefined, customer_id: customer.id, page, page_size: PAGE_SIZE } });
       setProducts(data.items);
       setTotalProducts(data.total);
     } catch {
       setError("No fue posible cargar los productos.");
+    } finally {
+      if (shouldShowGlobalModal) {
+        loadingService.hide();
+      }
+      isInitialShopLoad.current = false;
+      prevCategory.current = selectedCategory;
+      prevPage.current = page;
     }
   }
 
@@ -5385,7 +5413,10 @@ function App() {
   const [adminInitialSection, setAdminInitialSection] = useState(null);
 
   useEffect(() => {
+    loadingService.show("Cargando...");
+    let pending = 0;
     if (initialSession?.role === "customer" && initialSession.token) {
+      pending++;
       api.get("/cliente/perfil")
         .then(({ data }) => {
           setCustomer(data);
@@ -5393,13 +5424,27 @@ function App() {
         })
         .catch(() => {
           // Si el token es inválido, el interceptor 401 limpiará la sesión
+        })
+        .finally(() => {
+          pending--;
+          if (pending <= 0) loadingService.hide();
         });
     } else if (initialSession?.role === "admin" && initialSession.token) {
+      pending++;
       api.get("/admin/perfil")
         .catch(() => {
           // Si el token administrativo es inválido, pertenece a un cliente purgado o no existe en usuarios,
           // el interceptor 401/403 limpiará automáticamente el localStorage y redirigirá al login
+        })
+        .finally(() => {
+          pending--;
+          if (pending <= 0) loadingService.hide();
         });
+    }
+
+    if (pending === 0) {
+      const timer = setTimeout(() => loadingService.hide(), 280);
+      return () => clearTimeout(timer);
     }
   }, []);
 
@@ -5443,10 +5488,13 @@ function App() {
     cleanPath === "/public/publicidades" ||
     cleanPath === "/public/publicidad";
 
-  if (isPublicCatalogRoute) return <PublicCatalog />;
-  if (isPublicPublicidadesRoute) return <PublicPublicidades />;
-  if (vendorSaleSession) {
-    return (
+  let content = null;
+  if (isPublicCatalogRoute) {
+    content = <PublicCatalog />;
+  } else if (isPublicPublicidadesRoute) {
+    content = <PublicPublicidades />;
+  } else if (vendorSaleSession) {
+    content = (
       <Shop
         customer={vendorSaleSession.customer}
         vendorSession={vendorSaleSession}
@@ -5457,10 +5505,20 @@ function App() {
         onExitVendorMode={handleExitVendorMode}
       />
     );
-  }
-  if (customer) return <Shop customer={customer} onProfileUpdated={setCustomer} onLogout={() => { clearSessionStorage(); setCustomerToken(null); setCustomer(null); }} />;
-  if (view === "admin-dashboard") {
-    return (
+  } else if (customer) {
+    content = (
+      <Shop
+        customer={customer}
+        onProfileUpdated={setCustomer}
+        onLogout={() => {
+          clearSessionStorage();
+          setCustomerToken(null);
+          setCustomer(null);
+        }}
+      />
+    );
+  } else if (view === "admin-dashboard") {
+    content = (
       <AdminDashboard
         initialSection={adminInitialSection}
         onLogout={() => {
@@ -5474,24 +5532,16 @@ function App() {
         onStartVendorSale={handleStartVendorSale}
       />
     );
-  }
-  const handleClearResetToken = () => {
-    window.history.replaceState({}, document.title, window.location.pathname);
-    setResetToken(null);
-  };
-
-  if (resetToken) {
-    return (
+  } else if (resetToken) {
+    content = (
       <ResetPasswordView
         token={resetToken}
         onCompleted={handleClearResetToken}
         onCancel={handleClearResetToken}
       />
     );
-  }
-
-  if (view === "admin-access") {
-    return (
+  } else if (view === "admin-access") {
+    content = (
       <AdminAccess
         onLogin={() => {
           setAdminInitialSection(null);
@@ -5500,15 +5550,23 @@ function App() {
         onCustomerAccess={() => setView("customer-access")}
       />
     );
+  } else {
+    content = (
+      <Access
+        onCustomerLogin={setCustomer}
+        onAdminLogin={() => {
+          setAdminInitialSection(null);
+          setView("admin-dashboard");
+        }}
+      />
+    );
   }
+
   return (
-    <Access
-      onCustomerLogin={setCustomer}
-      onAdminLogin={() => {
-        setAdminInitialSection(null);
-        setView("admin-dashboard");
-      }}
-    />
+    <>
+      <LoadingScreen />
+      {content}
+    </>
   );
 }
 
