@@ -1,4 +1,4 @@
-/* Estilos para el Loading Modal Responsive con Efecto Estrella Fugaz */
+/* Estilos para el Loading Modal Responsive con Logo Agrandado en Fondo Azul y 4 Puntos */
 
 .tridente-loading-backdrop {
   position: fixed;
@@ -6,7 +6,7 @@
   width: 100vw;
   height: 100vh;
   height: 100dvh;
-  /* Celeste pálido con efecto modal translúcido */
+  /* Celeste pálido con efecto modal translúcido y desenfoque */
   background: rgba(224, 242, 254, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -20,7 +20,7 @@
   user-select: none;
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.28s ease;
+  transition: opacity 0.32s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.32s ease;
   pointer-events: all;
 }
 
@@ -30,7 +30,7 @@
   pointer-events: none;
 }
 
-/* Contenedor central del logo y la órbita de la estrella */
+/* Contenedor central de la animación */
 .tridente-loading-stage {
   display: flex;
   flex-direction: column;
@@ -40,43 +40,51 @@
   max-width: 90vw;
 }
 
+/* Redondela más compacta (achicada de 184px a ~142px máximo) */
 .tridente-loading-orbit-box {
   position: relative;
-  width: clamp(140px, 32vw, 184px);
-  height: clamp(140px, 32vw, 184px);
+  width: clamp(105px, 25vw, 142px);
+  height: clamp(105px, 25vw, 142px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* Medallón circular del logo de Tridente */
+/* Medallón central redondo relleno con azul corporativo profundo */
 .tridente-loading-medallion {
   position: relative;
   z-index: 2;
-  width: 66%;
-  height: 66%;
+  width: 73%;
+  height: 73%;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #f0f9ff 85%, #e0f2fe 100%);
-  border: 2px solid rgba(186, 230, 253, 0.9);
+  /* Relleno con azul profundo degradado de alta gama */
+  background: radial-gradient(circle at 40% 35%, #0f3d73 0%, #0a2952 55%, #061933 100%);
+  border: 2px solid rgba(56, 189, 248, 0.85);
   box-shadow: 
-    0 10px 25px -4px rgba(2, 132, 199, 0.22),
-    0 4px 10px rgba(0, 0, 0, 0.05),
-    inset 0 1px 3px rgba(255, 255, 255, 0.9);
+    0 8px 25px -2px rgba(2, 44, 84, 0.5),
+    0 0 16px 2px rgba(14, 165, 233, 0.35),
+    inset 0 2px 8px rgba(56, 189, 248, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  padding: 12%;
+  padding: 6%;
   box-sizing: border-box;
   animation: tridenteMedallionBreath 2.6s ease-in-out infinite;
 }
 
+/* Logo de Tridente agrandado y resaltado con iluminación posterior */
 .tridente-loading-logo-img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 2px 4px rgba(2, 132, 199, 0.15));
+  transform: scale(1.15);
+  /* Resalta el logo con aura de luz blanca y cian sobre el fondo azul */
+  filter: 
+    drop-shadow(0 2px 6px rgba(0, 0, 0, 0.65))
+    drop-shadow(0 0 10px rgba(255, 255, 255, 0.65))
+    drop-shadow(0 0 18px rgba(56, 189, 248, 0.6));
 }
 
 /* SVG con la órbita y la estrella fugaz */
@@ -110,23 +118,23 @@
   0%, 100% {
     transform: scale(1);
     box-shadow: 
-      0 10px 25px -4px rgba(2, 132, 199, 0.22),
-      0 4px 10px rgba(0, 0, 0, 0.05),
-      inset 0 1px 3px rgba(255, 255, 255, 0.9);
+      0 8px 25px -2px rgba(2, 44, 84, 0.5),
+      0 0 16px 2px rgba(14, 165, 233, 0.35),
+      inset 0 2px 8px rgba(56, 189, 248, 0.35);
   }
   50% {
-    transform: scale(1.025);
+    transform: scale(1.03);
     box-shadow: 
-      0 14px 30px -3px rgba(2, 132, 199, 0.32),
-      0 6px 14px rgba(0, 0, 0, 0.07),
-      inset 0 1px 4px rgba(255, 255, 255, 1);
+      0 12px 30px -2px rgba(2, 44, 84, 0.65),
+      0 0 22px 4px rgba(14, 165, 233, 0.45),
+      inset 0 2px 10px rgba(56, 189, 248, 0.5);
   }
 }
 
-/* Brillo y centelleo en la cabeza de la estrella */
+/* Centelleo en la cabeza de la estrella fugaz */
 .tridente-star-flare {
   animation: tridenteStarFlareTwinkle 0.9s ease-in-out infinite alternate;
-  transform-origin: 100px 18px;
+  transform-origin: 100px 16px;
 }
 
 @keyframes tridenteStarFlareTwinkle {
@@ -140,9 +148,9 @@
   }
 }
 
-/* Texto 'Cargando...' */
+/* Texto 'Cargando....' */
 .tridente-loading-text-container {
-  margin-top: 1.4rem;
+  margin-top: 1.15rem;
   display: flex;
   align-items: baseline;
   justify-content: center;
@@ -151,7 +159,7 @@
 
 .tridente-loading-label {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: clamp(1.05rem, 2.6vw, 1.25rem);
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
   font-weight: 750;
   letter-spacing: 0.06em;
   color: #0369a1; /* Azul celeste institucional */
@@ -170,7 +178,7 @@
   font-weight: 800;
   color: #0284c7;
   display: inline-block;
-  animation: tridenteDotJump 1.4s infinite ease-in-out both;
+  animation: tridenteDotJump 1.5s infinite ease-in-out both;
 }
 
 .tridente-loading-dot:nth-child(1) {
@@ -178,11 +186,15 @@
 }
 
 .tridente-loading-dot:nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: 0.18s;
 }
 
 .tridente-loading-dot:nth-child(3) {
-  animation-delay: 0.4s;
+  animation-delay: 0.36s;
+}
+
+.tridente-loading-dot:nth-child(4) {
+  animation-delay: 0.54s;
 }
 
 @keyframes tridenteDotJump {
@@ -192,23 +204,23 @@
   }
   40% {
     opacity: 1;
-    transform: translateY(-3px);
+    transform: translateY(-3.5px);
   }
 }
 
 /* Ajustes Responsive Adicionales para Pantallas Pequeñas / Landscape */
 @media (max-width: 480px) {
   .tridente-loading-text-container {
-    margin-top: 1.15rem;
+    margin-top: 0.95rem;
   }
 }
 
 @media (max-height: 500px) and (orientation: landscape) {
   .tridente-loading-orbit-box {
-    width: 110px;
-    height: 110px;
+    width: 95px;
+    height: 95px;
   }
   .tridente-loading-text-container {
-    margin-top: 0.6rem;
+    margin-top: 0.5rem;
   }
 }
