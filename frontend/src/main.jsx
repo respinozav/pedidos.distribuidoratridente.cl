@@ -5417,10 +5417,7 @@ function App() {
   const [adminInitialSection, setAdminInitialSection] = useState(null);
 
   useEffect(() => {
-    loadingService.show("Cargando....");
-    let pending = 0;
     if (initialSession?.role === "customer" && initialSession.token) {
-      pending++;
       api.get("/cliente/perfil")
         .then(({ data }) => {
           setCustomer(data);
@@ -5428,27 +5425,13 @@ function App() {
         })
         .catch(() => {
           // Si el token es inválido, el interceptor 401 limpiará la sesión
-        })
-        .finally(() => {
-          pending--;
-          if (pending <= 0) loadingService.hide();
         });
     } else if (initialSession?.role === "admin" && initialSession.token) {
-      pending++;
       api.get("/admin/perfil")
         .catch(() => {
           // Si el token administrativo es inválido, pertenece a un cliente purgado o no existe en usuarios,
           // el interceptor 401/403 limpiará automáticamente el localStorage y redirigirá al login
-        })
-        .finally(() => {
-          pending--;
-          if (pending <= 0) loadingService.hide();
         });
-    }
-
-    if (pending === 0) {
-      const timer = setTimeout(() => loadingService.hide(), 200);
-      return () => clearTimeout(timer);
     }
   }, []);
 
