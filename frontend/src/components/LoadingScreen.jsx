@@ -43,7 +43,7 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
           {/* Medallón central redondo relleno en azul con el logo oficial de Distribuidora Tridente resaltado */}
           <div className="tridente-loading-medallion">
             <img
-              src="/logo_tridente.png"
+              src="/logo_tridente_clean.png"
               alt="Distribuidora Tridente"
               className="tridente-loading-logo-img"
             />
