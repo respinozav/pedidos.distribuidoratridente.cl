@@ -65,7 +65,7 @@ class ProductInput(BaseModel):
     @field_validator("nombre")
     @classmethod
     def normalize_name(cls, value: str) -> str:
-        return value.strip().upper()
+        return value.strip()
 
     @field_validator("codigo")
     @classmethod
