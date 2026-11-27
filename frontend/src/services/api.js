@@ -3,43 +3,8 @@ import Swal from "sweetalert2";
 import { loadingService } from "./loadingService";
 
 function shouldTriggerGlobalLoading(config) {
-  if (config.silent || config.hideLoading) return false;
-
-  const url = config.url || "";
-
-  // Excluir tareas silenciosas de polling o logs en background
-  if (
-    url.includes("/alertas-stock") ||
-    url.includes("/notification-logs") ||
-    url.includes("/camila-logs") ||
-    url.includes("/session-logs") ||
-    url.includes("/avisos-stock")
-  ) {
-    return false;
-  }
-
-  // Búsqueda instantánea mientras se tipea
-  if (config.params?.search && !config.params?.page_size) {
-    return false;
-  }
-
-  // Endpoints principales donde el usuario espera respuesta de carga
-  if (
-    url.includes("/productos") ||
-    url.includes("/categorias") ||
-    url.includes("/catalogo") ||
-    url.includes("/cliente/perfil") ||
-    url.includes("/admin/perfil") ||
-    url.includes("/pedidos") ||
-    url.includes("/creditos") ||
-    url.includes("/cliente/carrito") ||
-    url.includes("/login") ||
-    url.includes("/clientes/login")
-  ) {
-    return true;
-  }
-
-  return Boolean(config.showLoading);
+  // Loading global desactivado por solicitud: máxima rapidez e inmediatez
+  return false;
 }
 
 const apiBaseUrl =
