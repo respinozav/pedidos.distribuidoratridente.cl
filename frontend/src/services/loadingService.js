@@ -1,5 +1,5 @@
 // Servicio de gestión de estado de carga global con debounce inteligente
-// Solo muestra el modal visual si la operación tarda más de SHOW_DELAY_MS (550ms)
+// Solo muestra el modal visual si la operación tarda más de SHOW_DELAY_MS (800ms)
 // evitando parpadeos en operaciones instantáneas y mostrándose solo cuando "se pegue el app".
 
 let loadingCount = 0;
@@ -9,8 +9,8 @@ let showTimer = null;
 let minDisplayTimer = null;
 let shownAt = 0;
 
-const SHOW_DELAY_MS = 550; // Umbral de espera: si la petición responde antes de 550ms, no se muestra nada
-const MIN_DISPLAY_MS = 250; // Si llegó a mostrarse, mantener al menos 250ms para salida suave sin flicker
+const SHOW_DELAY_MS = 850; // Delay extendido: solo se activa si la petición toma más de 850ms (cuando se pegue el app)
+const MIN_DISPLAY_MS = 550; // Si llegó a mostrarse, mantener al menos 550ms para apreciar el logo y la estrella fugaz con fluidez
 
 const listeners = new Set();
 
@@ -83,7 +83,7 @@ export const loadingService = {
     loadingCount = Math.max(0, loadingCount - 1);
 
     if (loadingCount === 0) {
-      // Si terminó rápido antes de mostrarse, cancelar el timer para que nunca aparezca
+      // Si terminó rápido antes de mostrarse (< 800ms), cancelar el timer para que nunca aparezca
       if (showTimer) {
         clearTimeout(showTimer);
         showTimer = null;
