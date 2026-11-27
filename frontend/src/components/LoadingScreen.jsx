@@ -38,18 +38,21 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
       aria-label={rawText}
     >
       <div className="tridente-loading-stage">
-        {/* Caja de la órbita compacta con el logo agrandado y la estrella fugaz */}
+        {/* Caja de la órbita compacta con el nuevo logo 3D dorado y la estrella fugaz */}
         <div className="tridente-loading-orbit-box">
-          {/* Medallón central redondo relleno en azul con el logo oficial de Distribuidora Tridente resaltado */}
+          {/* Medallón central redondo con el logo oficial de Distribuidora Tridente */}
           <div className="tridente-loading-medallion">
-            <img
-              src="/logo_tridente_clean.png"
-              alt="Distribuidora Tridente"
-              className="tridente-loading-logo-img"
-            />
+            <picture>
+              <source srcSet="/logo_loading_tridente.webp" type="image/webp" />
+              <img
+                src="/logo_loading_tridente_512.png"
+                alt="Distribuidora Tridente"
+                className="tridente-loading-logo-img"
+              />
+            </picture>
           </div>
 
-          {/* SVG de alta definición con la órbita y la estrella fugaz */}
+          {/* SVG de alta definición con la órbita dorada y la estrella fugaz */}
           <svg
             className="tridente-loading-svg"
             viewBox="0 0 200 200"
@@ -57,7 +60,7 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
             xmlns="http://www.w3.org/2000/svg"
           >
             <defs>
-              {/* Degradado luminoso de la estela de la estrella fugaz */}
+              {/* Degradado luminoso dorado de la estela de la estrella fugaz */}
               <linearGradient
                 id="tridenteCometTailGrad"
                 x1="0%"
@@ -65,10 +68,10 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
                 x2="100%"
                 y2="0%"
               >
-                <stop offset="0%" stopColor="#0284c7" stopOpacity="0" />
-                <stop offset="35%" stopColor="#0284c7" stopOpacity="0.25" />
-                <stop offset="70%" stopColor="#38bdf8" stopOpacity="0.85" />
-                <stop offset="92%" stopColor="#bae6fd" stopOpacity="0.95" />
+                <stop offset="0%" stopColor="#d97706" stopOpacity="0" />
+                <stop offset="35%" stopColor="#d97706" stopOpacity="0.25" />
+                <stop offset="70%" stopColor="#f59e0b" stopOpacity="0.85" />
+                <stop offset="92%" stopColor="#fef08a" stopOpacity="0.95" />
                 <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
               </linearGradient>
 
@@ -91,13 +94,13 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
               </filter>
             </defs>
 
-            {/* Pista de órbita circular sutil alrededor del medallón azul */}
+            {/* Pista de órbita circular sutil alrededor del medallón */}
             <circle
               cx="100"
               cy="100"
               r="84"
               fill="none"
-              stroke="rgba(56, 189, 248, 0.25)"
+              stroke="rgba(245, 158, 11, 0.25)"
               strokeWidth="1.5"
               strokeDasharray="4 6"
             />
@@ -118,7 +121,7 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
                 cx="78.26"
                 cy="18.86"
                 r="2.4"
-                fill="#e0f2fe"
+                fill="#fef9c3"
                 opacity="0.9"
                 filter="url(#tridenteSoftGlow)"
               />
@@ -126,14 +129,14 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
                 cx="51.82"
                 cy="31.19"
                 r="1.8"
-                fill="#7dd3fc"
+                fill="#fde047"
                 opacity="0.75"
               />
               <circle
                 cx="27.25"
                 cy="58.00"
                 r="1.3"
-                fill="#38bdf8"
+                fill="#f59e0b"
                 opacity="0.5"
               />
 
@@ -144,7 +147,7 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
                   cx="100"
                   cy="16"
                   r="9"
-                  fill="rgba(56, 189, 248, 0.45)"
+                  fill="rgba(245, 158, 11, 0.45)"
                   filter="url(#tridenteStarGlow)"
                 />
                 {/* Estrella de 4 puntas centelleante (destello de estrella) */}
