@@ -107,6 +107,16 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
 
             {/* Grupo de la estrella fugaz que rota 360 grados */}
             <g className="tridente-shooting-star-group">
+              {/* Resplandor exterior difuso de la estela */}
+              <path
+                d="M 21.1 71.3 A 84 84 0 0 1 100 16"
+                fill="none"
+                stroke="rgba(245, 158, 11, 0.4)"
+                strokeWidth="6"
+                strokeLinecap="round"
+                filter="url(#tridenteStarGlow)"
+              />
+
               {/* Estela curvada en arco de la estrella fugaz ajustada a r=84 */}
               <path
                 d="M 21.1 71.3 A 84 84 0 0 1 100 16"
@@ -146,13 +156,13 @@ export default function LoadingScreen({ show: manualShow, text: manualText }) {
                 <circle
                   cx="100"
                   cy="16"
-                  r="9"
-                  fill="rgba(245, 158, 11, 0.45)"
+                  r="10"
+                  fill="rgba(245, 158, 11, 0.5)"
                   filter="url(#tridenteStarGlow)"
                 />
                 {/* Estrella de 4 puntas centelleante (destello de estrella) */}
                 <path
-                  d="M 100 5 Q 100 16 111 16 Q 100 16 100 27 Q 100 16 89 16 Q 100 16 100 5 Z"
+                  d="M 100 4 Q 100 16 112 16 Q 100 16 100 28 Q 100 16 88 16 Q 100 16 100 4 Z"
                   fill="#ffffff"
                   filter="url(#tridenteStarGlow)"
                 />

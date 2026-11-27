@@ -1,4 +1,4 @@
-/* Estilos para el Loading Modal Responsive con Logo 3D Dorado en Medallón y 4 Puntos */
+/* Estilos para el Loading Modal 100% REDONDO con Logo Oficial y Efecto de Estrella Fugaz Orbitante */
 
 .tridente-loading-backdrop {
   position: fixed;
@@ -6,10 +6,10 @@
   width: 100vw;
   height: 100vh;
   height: 100dvh;
-  /* Fondo oscuro translúcido suave y elegante, mucho menos invasivo */
-  background: rgba(15, 23, 42, 0.42);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* Fondo oscuro translúcido suave y elegante con desenfoque de cristal */
+  background: rgba(10, 25, 47, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   z-index: 9999999;
   display: flex;
   align-items: center;
@@ -30,48 +30,43 @@
   pointer-events: none;
 }
 
-/* Tarjeta / Escenario central flotante con micro-sombra y bordes sutiles */
+/* Escenario central: 100% flotante y redondo, sin cajas rectangulares */
 .tridente-loading-stage {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
-  max-width: 90vw;
-  background: rgba(10, 25, 47, 0.88);
-  padding: 1.4rem 2.2rem;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 
-    0 20px 45px -10px rgba(0, 0, 0, 0.55),
-    0 0 24px 2px rgba(245, 158, 11, 0.15);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  border: none;
+  box-shadow: none;
 }
 
-/* Contenedor de la órbita */
+/* Caja de la órbita circular (dimensiones proporcionales y compactas) */
 .tridente-loading-orbit-box {
   position: relative;
-  width: clamp(110px, 26vw, 140px);
-  height: clamp(110px, 26vw, 140px);
+  width: clamp(140px, 32vw, 172px);
+  height: clamp(140px, 32vw, 172px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* Medallón central redondo con el nuevo logo oficial */
+/* Medallón central 100% REDONDO relleno con el isotipo oficial */
 .tridente-loading-medallion {
   position: relative;
   z-index: 2;
-  width: 78%;
-  height: 78%;
+  width: 76%;
+  height: 76%;
   border-radius: 50%;
   background: radial-gradient(circle at 45% 35%, #0f3d73 0%, #0a2952 55%, #061933 100%);
-  border: 1.5px solid rgba(245, 158, 11, 0.45);
+  border: 2px solid rgba(245, 158, 11, 0.65);
   box-shadow: 
-    0 8px 24px -2px rgba(2, 44, 84, 0.55),
-    0 0 16px 2px rgba(245, 158, 11, 0.25),
-    inset 0 1px 4px rgba(254, 240, 138, 0.35);
+    0 10px 30px -4px rgba(0, 0, 0, 0.7),
+    0 0 24px 3px rgba(245, 158, 11, 0.35),
+    inset 0 1px 5px rgba(254, 240, 138, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -81,7 +76,7 @@
   animation: tridenteMedallionBreath 2.6s ease-in-out infinite;
 }
 
-/* Logo de Tridente 3D dorado */
+/* Isotipo oficial Tridente 3D dorado */
 .tridente-loading-logo-img {
   width: 100%;
   height: 100%;
@@ -92,7 +87,7 @@
   image-rendering: crisp-edges;
 }
 
-/* SVG con la órbita y la estrella fugaz */
+/* SVG con la órbita circular y la estrella fugaz orbitando a su alrededor */
 .tridente-loading-svg {
   position: absolute;
   inset: 0;
@@ -103,10 +98,11 @@
   overflow: visible;
 }
 
-/* Animación de la estrella fugaz girando veloz alrededor del logo */
+/* Animación de la estrella fugaz girando 360° en órbita alrededor del medallón redondo */
 .tridente-shooting-star-group {
+  transform-box: view-box;
   transform-origin: 100px 100px;
-  animation: tridenteOrbitShootingStar 0.85s cubic-bezier(0.42, 0.08, 0.25, 1) infinite;
+  animation: tridenteOrbitShootingStar 1.2s linear infinite;
 }
 
 @keyframes tridenteOrbitShootingStar {
@@ -118,25 +114,25 @@
   }
 }
 
-/* Animación sutil y fluida de respiración en el medallón */
+/* Respiración sutil y armónica del medallón redondo */
 @keyframes tridenteMedallionBreath {
   0%, 100% {
     transform: scale(1);
     box-shadow: 
-      0 8px 24px -2px rgba(2, 44, 84, 0.55),
-      0 0 16px 2px rgba(245, 158, 11, 0.25),
-      inset 0 1px 4px rgba(254, 240, 138, 0.35);
+      0 10px 30px -4px rgba(0, 0, 0, 0.7),
+      0 0 24px 3px rgba(245, 158, 11, 0.35),
+      inset 0 1px 5px rgba(254, 240, 138, 0.5);
   }
   50% {
-    transform: scale(1.02);
+    transform: scale(1.025);
     box-shadow: 
-      0 10px 28px -2px rgba(2, 44, 84, 0.65),
-      0 0 20px 3px rgba(245, 158, 11, 0.35),
-      inset 0 1px 6px rgba(254, 240, 138, 0.45);
+      0 14px 38px -4px rgba(0, 0, 0, 0.8),
+      0 0 32px 5px rgba(245, 158, 11, 0.5),
+      inset 0 1px 8px rgba(254, 240, 138, 0.65);
   }
 }
 
-/* Centelleo dinámico en la cabeza de la estrella fugaz */
+/* Centelleo dinámico de la cabeza de la estrella fugaz */
 .tridente-star-flare {
   animation: tridenteStarFlareTwinkle 0.45s ease-in-out infinite alternate;
   transform-origin: 100px 16px;
@@ -148,14 +144,14 @@
     opacity: 0.85;
   }
   100% {
-    transform: scale(1.15);
+    transform: scale(1.2);
     opacity: 1;
   }
 }
 
-/* Texto 'Cargando....' */
+/* Texto 'Cargando....' ubicado armoniosamente bajo el medallón redondo */
 .tridente-loading-text-container {
-  margin-top: 1rem;
+  margin-top: 1.25rem;
   display: flex;
   align-items: baseline;
   justify-content: center;
@@ -164,24 +160,25 @@
 
 .tridente-loading-label {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: clamp(0.95rem, 2.2vw, 1.1rem);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #f8fafc;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75), 0 0 12px rgba(245, 158, 11, 0.4);
   margin: 0;
   line-height: 1;
 }
 
 .tridente-loading-dots {
   display: inline-flex;
-  margin-left: 2px;
+  margin-left: 3px;
 }
 
 .tridente-loading-dot {
   font-family: inherit;
   font-weight: 800;
-  color: #f59e0b;
+  color: #fbbf24;
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.7);
   display: inline-block;
   animation: tridenteDotJump 0.85s infinite ease-in-out both;
 }
@@ -209,30 +206,27 @@
   }
   40% {
     opacity: 1;
-    transform: translateY(-3.5px);
+    transform: translateY(-4px);
   }
 }
 
-/* Ajustes Responsive Adicionales para Pantallas Pequeñas / Landscape */
+/* Ajustes Responsive */
 @media (max-width: 480px) {
-  .tridente-loading-stage {
-    padding: 1.25rem 1.6rem;
-    border-radius: 20px;
+  .tridente-loading-orbit-box {
+    width: 140px;
+    height: 140px;
   }
   .tridente-loading-text-container {
-    margin-top: 0.85rem;
+    margin-top: 1rem;
   }
 }
 
 @media (max-height: 500px) and (orientation: landscape) {
-  .tridente-loading-stage {
-    padding: 0.8rem 1.4rem;
-  }
   .tridente-loading-orbit-box {
-    width: 90px;
-    height: 90px;
+    width: 110px;
+    height: 110px;
   }
   .tridente-loading-text-container {
-    margin-top: 0.4rem;
+    margin-top: 0.5rem;
   }
 }
