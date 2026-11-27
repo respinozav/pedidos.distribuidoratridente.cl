@@ -1363,6 +1363,8 @@ function AdminOrderManager({ initialOpenCrearPedidoVoz = false, onResetInitialOp
   const [orderLogs, setOrderLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [retryingLogs, setRetryingLogs] = useState(false);
+  const [retryingDefontana, setRetryingDefontana] = useState({});
+  const [batchSyncingDefontana, setBatchSyncingDefontana] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1586,6 +1588,112 @@ function AdminOrderManager({ initialOpenCrearPedidoVoz = false, onResetInitialOp
     }
   }
 
+  async function retryOrderDefontana(orderId) {
+    if (!orderId || retryingDefontana[orderId]) return;
+    const confirmResult = await Swal.fire({
+      title: "¿Sincronizar con Defontana?",
+      text: "Se enviará este pedido a Defontana ERP para registrarlo y obtener sus folios de factura.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Sí, sincronizar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#0d6efd",
+    });
+    if (!confirmResult.isConfirmed) return;
+
+    setRetryingDefontana((prev) => ({ ...prev, [orderId]: true }));
+    try {
+      const response = await api.post(`/admin/pedidos/${orderId}/sync-defontana`);
+      const data = response.data;
+      if (data.success) {
+        Swal.fire({
+          icon: "success",
+          title: "Sincronizado con éxito",
+          text: data.message || "Pedido registrado correctamente en Defontana ERP.",
+        });
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  folio_defontana_afecto: data.folio_afecto ?? o.folio_defontana_afecto,
+                  folio_defontana: data.folio_exento ?? o.folio_defontana,
+                  defontana_sincronizado: true,
+                  defontana_error: null,
+                }
+              : o
+          )
+        );
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder((prev) => ({
+            ...prev,
+            folio_defontana_afecto: data.folio_afecto ?? prev.folio_defontana_afecto,
+            folio_defontana: data.folio_exento ?? prev.folio_defontana,
+            defontana_sincronizado: true,
+            defontana_error: null,
+          }));
+        }
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Fallo en Defontana",
+          text: data.message || "Defontana rechazó la creación del pedido.",
+        });
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, defontana_sincronizado: false, defontana_error: data.defontana_error || data.message }
+              : o
+          )
+        );
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || "Error al conectar con Defontana";
+      Swal.fire({
+        icon: "error",
+        title: "Error al sincronizar",
+        text: msg,
+      });
+    } finally {
+      setRetryingDefontana((prev) => ({ ...prev, [orderId]: false }));
+    }
+  }
+
+  async function syncAllDefontanaPending() {
+    if (batchSyncingDefontana) return;
+    const confirmResult = await Swal.fire({
+      title: "¿Sincronizar pedidos pendientes?",
+      text: "Se intentará registrar en Defontana todos los pedidos que no tengan folio o que hayan presentado error.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Sí, sincronizar lote",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#0d6efd",
+    });
+    if (!confirmResult.isConfirmed) return;
+
+    setBatchSyncingDefontana(true);
+    try {
+      const response = await api.post("/admin/pedidos/sync-defontana-batch");
+      const data = response.data;
+      Swal.fire({
+        icon: data.failed_count === 0 && data.success_count > 0 ? "success" : "info",
+        title: "Proceso completado",
+        text: data.message || `Exitosos: ${data.success_count}, Fallidos: ${data.failed_count}`,
+      });
+      loadOrders();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || "Error al procesar lote en Defontana";
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: msg,
+      });
+    } finally {
+      setBatchSyncingDefontana(false);
+    }
+  }
+
   useEffect(() => { loadOrders(); }, []);
 
   useEffect(() => {
@@ -1751,7 +1859,7 @@ function AdminOrderManager({ initialOpenCrearPedidoVoz = false, onResetInitialOp
     }));
   }
 
-  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><button type="button" className="btn btn-primary d-flex align-items-center gap-2 shadow-sm" onClick={() => setIsCreateVoiceModalOpen(true)}><Plus size={17} /><span>Realizar pedido</span></button><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, cliente, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="admin-order-filters"><label className="filter-estado">Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Alias, nombre, RUT o celular..." value={filters.cliente} onChange={(event) => setFilters((current) => ({ ...current, cliente: event.target.value }))} /></label><label className="filter-pedido">Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label className="filter-desde">Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label className="filter-hasta">Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
+  return <><header className="admin-topbar"><div className="topbar-title"><p className="eyebrow mb-1">OPERACION</p><h1>Pedidos</h1></div><div className="topbar-actions"><button type="button" className="btn btn-outline-secondary d-flex align-items-center gap-2 shadow-sm" onClick={syncAllDefontanaPending} disabled={batchSyncingDefontana} title="Sincronizar pedidos pendientes con Defontana ERP"><RotateCcw size={16} className={batchSyncingDefontana ? "animate-spin" : ""} /><span>{batchSyncingDefontana ? "Sincronizando..." : "Sincronizar Defontana"}</span></button><button type="button" className="btn btn-primary d-flex align-items-center gap-2 shadow-sm" onClick={() => setIsCreateVoiceModalOpen(true)}><Plus size={17} /><span>Realizar pedido</span></button><span className="topbar-date d-none d-sm-inline">Seguimiento de pedidos</span><StockAlertBell /></div></header><div className="admin-content"><section className="admin-summary"><div><p className="eyebrow">PEDIDOS</p><h2>Controla todos los pedidos</h2><p>Consulta solicitudes de todos tus clientes y revisa su detalle.</p></div><div className="summary-metric"><span>{visibleOrders.length}</span><small>Pedidos visibles</small></div></section><section className="content-panel"><div className="panel-heading"><div><h2>Listado de pedidos</h2><p>Filtra por estado, cliente, código de pedido o rango de fechas.</p></div><span className="panel-count">{visibleOrders.length} pedidos</span></div><div className="admin-order-filters"><label className="filter-estado">Estado<select className="form-select" value={filters.estado} onChange={(event) => setFilters((current) => ({ ...current, estado: event.target.value }))}><option>Pedido</option><option>Despachado</option><option>Entregado</option><option>Cancelado</option></select></label><label className="filter-cliente">Cliente<input className="form-control" type="search" placeholder="Alias, nombre, RUT o celular..." value={filters.cliente} onChange={(event) => setFilters((current) => ({ ...current, cliente: event.target.value }))} /></label><label className="filter-pedido">Pedido<input className="form-control" type="search" placeholder="Ej. 4CB969B1" value={filters.codigo} onChange={(event) => setFilters((current) => ({ ...current, codigo: event.target.value }))} /></label><label className="filter-desde">Desde<input className="form-control" type="date" value={filters.desde} onChange={(event) => setFilters((current) => ({ ...current, desde: event.target.value }))} /></label><label className="filter-hasta">Hasta<input className="form-control" type="date" value={filters.hasta} onChange={(event) => setFilters((current) => ({ ...current, hasta: event.target.value }))} /></label></div>{error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}{loading ? <p className="mt-4 text-secondary">Cargando pedidos...</p> : <><div className="admin-order-table mt-4"><div className="admin-order-head"><span>Pedido</span><span>Cliente</span><span>Fecha</span><span>Estado</span><span>Total</span><span>Acciones</span></div>{paginatedOrders.map((order) => {
     const stateName = getOrderStateName(order);
     const customerName = order.cliente?.alias || order.cliente?.nombre || order.cliente?.rut || order.cliente?.celular || "Cliente";
     const customerSub = order.cliente?.alias
@@ -1817,6 +1925,17 @@ function AdminOrderManager({ initialOpenCrearPedidoVoz = false, onResetInitialOp
                   <p className="defontana-error-text mb-0">
                     {order.defontana_error}
                   </p>
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1"
+                      disabled={retryingDefontana[order.id]}
+                      onClick={() => retryOrderDefontana(order.id)}
+                    >
+                      <RotateCcw size={13} className={retryingDefontana[order.id] ? "animate-spin" : ""} />
+                      <span>{retryingDefontana[order.id] ? "Reintentando..." : "Reintentar en Defontana"}</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="defontana-status-box defontana-status-success">
@@ -1845,6 +1964,45 @@ function AdminOrderManager({ initialOpenCrearPedidoVoz = false, onResetInitialOp
       </React.Fragment>
     );
   })}{!visibleOrders.length && <p className="history-filter-empty">No hay pedidos que coincidan con los filtros.</p>}</div>{visibleOrders.length > pageSize && <nav className="product-pagination mt-4" aria-label="Paginación de pedidos"><small>Página {orderPage} de {totalPages} · {visibleOrders.length} pedidos</small><button className="btn btn-outline-primary btn-sm" type="button" disabled={orderPage === 1} onClick={() => setOrderPage((current) => Math.max(1, current - 1))}>Anterior</button><button className="btn btn-primary btn-sm" type="button" disabled={orderPage === totalPages} onClick={() => setOrderPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button></nav>}</>}</section></div>{selectedOrder && <div className="modal-backdrop-custom"><section className="category-modal product-modal order-detail-modal" role="dialog" aria-modal="true"><header><div><p className="eyebrow">PEDIDO</p><h2>Detalle del pedido</h2></div><button className="icon-button" type="button" onClick={() => setSelectedOrder(null)} aria-label="Cerrar detalle"><X size={19} /></button></header><div className="modal-body-custom"><div className="order-detail-meta"><span>Pedido {selectedOrder.id?.slice(0, 8).toUpperCase()}</span><span>{selectedOrder.cliente?.nombre || selectedOrder.cliente?.rut || selectedOrder.cliente?.celular || "Cliente"}</span><span>{formatDateTime(selectedOrder.created_at)}</span>{selectedOrder.folio_defontana_afecto && <span className="badge bg-primary ms-1">Factura 33: #{selectedOrder.folio_defontana_afecto}</span>}{selectedOrder.folio_defontana && <span className="badge bg-secondary ms-1">Factura 34: #{selectedOrder.folio_defontana}</span>}</div><div className="order-detail-lines"><div><span>Producto</span><span>Cantidad</span><span>IVA</span><span>Precio</span><span>Subtotal</span></div>{(selectedOrder.detalles || []).map((line) => <div key={line.producto_id || line.id || Math.random()}><span>{line.nombre_producto}{line.tipo_empaque === "caja" ? <span className="badge bg-secondary ms-1" style={{ fontSize: "0.75rem" }}>Caja{line.cantidad_caja ? ` x${line.cantidad_caja}` : ""}</span> : null}</span><span>{line.cantidad} {line.tipo_empaque === "caja" ? (line.cantidad === 1 ? "cj." : "cjs.") : "un."}</span><span className={line.afecto ? "status-active" : "status-inactive"}>{line.afecto ? "Afecto" : "Exento"}</span><span>{money.format(line.precio_unitario ?? 0)}</span><strong>{money.format(line.subtotal ?? 0)}</strong></div>)}</div><div className="order-detail-total"><strong>Total</strong><strong>{money.format(selectedOrder.total ?? 0)}</strong></div>
+
+<div className="order-defontana-section mt-4 pt-3 border-top">
+  <div className="d-flex justify-content-between align-items-center mb-2">
+    <h6 className="mb-0 fw-bold d-flex align-items-center gap-2">
+      <CheckCircle2 size={16} className="text-primary" />
+      Defontana ERP
+    </h6>
+    <button
+      className="btn btn-outline-primary btn-sm d-flex align-items-center gap-1"
+      type="button"
+      disabled={retryingDefontana[selectedOrder.id]}
+      onClick={() => retryOrderDefontana(selectedOrder.id)}
+    >
+      <RotateCcw size={14} className={retryingDefontana[selectedOrder.id] ? "animate-spin" : ""} />
+      {retryingDefontana[selectedOrder.id] ? "Sincronizando..." : "Sincronizar en Defontana"}
+    </button>
+  </div>
+  {selectedOrder.defontana_error ? (
+    <div className="defontana-status-box defontana-status-error mb-2">
+      <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+        <AlertCircle size={15} className="text-danger flex-shrink-0" />
+        <span className="badge-defontana-error">ERROR DE REGISTRO</span>
+      </div>
+      <p className="defontana-error-text mb-0 small">{selectedOrder.defontana_error}</p>
+    </div>
+  ) : (selectedOrder.folio_defontana || selectedOrder.folio_defontana_afecto) ? (
+    <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
+      <span className="badge-defontana-ok">OK</span>
+      {selectedOrder.folio_defontana_afecto && (
+        <span className="badge bg-primary">Factura 33 (Afecta): #{selectedOrder.folio_defontana_afecto}</span>
+      )}
+      {selectedOrder.folio_defontana && (
+        <span className="badge bg-secondary">Factura 34 (Exenta): #{selectedOrder.folio_defontana}</span>
+      )}
+    </div>
+  ) : (
+    <p className="small text-secondary mb-2">Pedido pendiente de sincronización con Defontana.</p>
+  )}
+</div>
 
 <div className="order-notifications-section mt-4 pt-3 border-top">
   <div className="d-flex justify-content-between align-items-center mb-2">

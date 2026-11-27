@@ -1262,6 +1262,28 @@ def test_defontana_update_order_recreates_when_lines_ignored_by_erp():
     print("test_defontana_update_order_recreates_when_lines_ignored_by_erp: OK")
 
 
+def test_defontana_test_connection():
+    service = DefontanaService()
+
+    # Simular éxito
+    with patch.object(service, "is_configured", return_value=True), \
+         patch.object(service, "get_token", return_value="dummy-token-123"):
+        res = service.test_connection()
+        assert res["configured"] is True
+        assert res["connected"] is True
+        assert "exitosa" in res["message"]
+
+    # Simular fallo de login
+    with patch.object(service, "is_configured", return_value=True), \
+         patch.object(service, "get_token", side_effect=ValueError("Error de autenticación en Defontana ERP (Login failed)")):
+        res2 = service.test_connection()
+        assert res2["configured"] is True
+        assert res2["connected"] is False
+        assert "Login failed" in res2["message"]
+
+    print("test_defontana_test_connection: OK")
+
+
 if __name__ == "__main__":
     test_defontana_save_order_mocked()
     test_defontana_item_packaging_rules()
@@ -1280,5 +1302,6 @@ if __name__ == "__main__":
     test_defontana_update_order_syncs_new_quantity_and_total()
     test_defontana_update_order_rejection_handled_properly()
     test_defontana_update_order_recreates_when_lines_ignored_by_erp()
+    test_defontana_test_connection()
     print("TODOS LOS TESTS DE DEFONTANA PASARON EXITOSAMENTE!")
 

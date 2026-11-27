@@ -1546,6 +1546,97 @@ def retry_order_notifications(order_id: UUID, database: DatabaseSession, _: Admi
     return {"message": "Reintento de notificaciones iniciado en segundo plano"}
 
 
+@router.post("/admin/pedidos/{order_id}/sync-defontana", tags=["Defontana"])
+def retry_order_defontana_sync(order_id: UUID, database: DatabaseSession, _: AdminUser):
+    """Fuerza la sincronización o reintento de un pedido específico con Defontana ERP."""
+    order = database.get(Pedido, order_id)
+    if not order:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido no encontrado")
+
+    service = DefontanaService()
+    if not service.is_configured():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Defontana no está configurada en el servidor")
+
+    folio, err = service.sync_order(order_id, session=database, auto_commit=True)
+    if err:
+        return {
+            "success": False,
+            "message": f"Defontana rechazó la sincronización: {err}",
+            "folio_afecto": order.folio_defontana_afecto,
+            "folio_exento": order.folio_defontana,
+            "defontana_error": order.defontana_error,
+        }
+    return {
+        "success": True,
+        "message": f"Pedido sincronizado exitosamente con Defontana (Folio: {folio})",
+        "folio_afecto": order.folio_defontana_afecto,
+        "folio_exento": order.folio_defontana,
+        "defontana_error": None,
+    }
+
+
+@router.post("/admin/pedidos/sync-defontana-batch", tags=["Defontana"])
+def retry_all_pending_defontana_orders(database: DatabaseSession, _: AdminUser):
+    """Sincroniza en lote todos los pedidos pendientes con error en Defontana."""
+    service = DefontanaService()
+    if not service.is_configured():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Defontana no está configurada en el servidor")
+
+    pending_orders = list(
+        database.scalars(
+            select(Pedido)
+            .where(
+                or_(
+                    Pedido.defontana_sincronizado.is_(False),
+                    and_(
+                        Pedido.folio_defontana.is_(None),
+                        Pedido.folio_defontana_afecto.is_(None),
+                    ),
+                )
+            )
+            .order_by(Pedido.created_at.asc())
+            .limit(50)
+        )
+    )
+
+    if not pending_orders:
+        return {
+            "message": "No hay pedidos pendientes de sincronización con Defontana.",
+            "total": 0,
+            "success_count": 0,
+            "failed_count": 0,
+            "results": [],
+        }
+
+    success_count = 0
+    failed_count = 0
+    results = []
+
+    for p in pending_orders:
+        folio, err = service.sync_order(p.id, session=database, auto_commit=True)
+        if err:
+            failed_count += 1
+            results.append({"order_id": str(p.id), "codigo": p.codigo, "success": False, "error": err})
+        else:
+            success_count += 1
+            results.append({"order_id": str(p.id), "codigo": p.codigo, "success": True, "folio": folio})
+
+    return {
+        "message": f"Proceso finalizado: {success_count} exitosos, {failed_count} fallidos de un total de {len(pending_orders)} pedidos.",
+        "total": len(pending_orders),
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "results": results,
+    }
+
+
+@router.get("/admin/defontana/status", tags=["Defontana"])
+def get_defontana_connection_status(_: AdminUser):
+    """Consulta el estado en vivo de la conexión con Defontana ERP."""
+    service = DefontanaService()
+    return service.test_connection()
+
+
 def _serialize_publicidad(publicidad: Publicidad, customer: Cliente | None = None) -> PublicidadOutput:
     producto_dto = None
     if publicidad.producto and not publicidad.producto.eliminado_at:

@@ -83,6 +83,48 @@ class DefontanaService:
     def is_configured(self) -> bool:
         return bool(self.client_id and self.company_id and self.user and self.password)
 
+    def test_connection(self) -> dict[str, Any]:
+        """Verifica la conectividad y validez de las credenciales con Defontana ERP."""
+        if not self.is_configured():
+            return {
+                "configured": False,
+                "connected": False,
+                "message": "Defontana no está configurada en las variables de entorno.",
+                "details": {
+                    "base_url": self.base_url,
+                    "has_client_id": bool(self.client_id),
+                    "has_company_id": bool(self.company_id),
+                    "has_user": bool(self.user),
+                    "has_password": bool(self.password),
+                },
+            }
+        try:
+            token = self.get_token(force_refresh=True)
+            return {
+                "configured": True,
+                "connected": True,
+                "message": "Conexión a Defontana ERP exitosa.",
+                "details": {
+                    "base_url": self.base_url,
+                    "client_id": self.client_id,
+                    "company_id": self.company_id,
+                    "user": self.user,
+                    "token_prefix": (token[:10] + "...") if token else "",
+                },
+            }
+        except Exception as exc:
+            return {
+                "configured": True,
+                "connected": False,
+                "message": str(exc),
+                "details": {
+                    "base_url": self.base_url,
+                    "client_id": self.client_id,
+                    "company_id": self.company_id,
+                    "user": self.user,
+                },
+            }
+
     def get_token(self, force_refresh: bool = False) -> str:
         """Obtiene un token válido desde Defontana o del caché en memoria."""
         global _CACHED_TOKEN, _TOKEN_EXPIRES_AT
@@ -106,6 +148,12 @@ class DefontanaService:
 
             token = data.get("access_token")
             if not token:
+                msg = data.get("message") or ""
+                if "login failed" in str(msg).lower():
+                    raise ValueError(
+                        f"Error de autenticación en Defontana ERP (Login failed). "
+                        f"Verifique que el usuario '{self.user}' esté activo en Defontana ERP, que su contraseña esté vigente y que la URL '{self.base_url}' sea la correcta."
+                    )
                 raise ValueError(f"Defontana no retornó access_token: {data}")
 
             expires_in = data.get("expires_in", 31535999)
