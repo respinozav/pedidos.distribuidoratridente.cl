@@ -714,7 +714,7 @@ const [error, setError] = useState("");
       }
     }
     setSaving(true);
-    const payload = { ...form, nombre: form.nombre.trim().toUpperCase(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto), tiene_caja: Boolean(form.tiene_caja), cantidad_caja: form.tiene_caja && form.cantidad_caja ? Number(form.cantidad_caja) : null, precio_caja: form.tiene_caja && form.precio_caja ? Number(form.precio_caja) : null, notificar_stock: Boolean(form.notificar_stock), stock_notificacion: form.notificar_stock && form.stock_notificacion ? Number(form.stock_notificacion) : null };
+    const payload = { ...form, nombre: form.nombre.trim(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto), tiene_caja: Boolean(form.tiene_caja), cantidad_caja: form.tiene_caja && form.cantidad_caja ? Number(form.cantidad_caja) : null, precio_caja: form.tiene_caja && form.precio_caja ? Number(form.precio_caja) : null, notificar_stock: Boolean(form.notificar_stock), stock_notificacion: form.notificar_stock && form.stock_notificacion ? Number(form.stock_notificacion) : null };
     try {
       if (editingProduct) {
         await api.put(`/productos/${editingProduct.id}`, payload);
@@ -974,7 +974,7 @@ const [error, setError] = useState("");
         return;
       }
     }
-    const payload = { ...form, nombre: form.nombre.trim().toUpperCase(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto), tiene_caja: Boolean(form.tiene_caja), cantidad_caja: form.tiene_caja && form.cantidad_caja ? Number(form.cantidad_caja) : null, precio_caja: form.tiene_caja && form.precio_caja ? Number(form.precio_caja) : null, notificar_stock: Boolean(form.notificar_stock), stock_notificacion: form.notificar_stock && form.stock_notificacion ? Number(form.stock_notificacion) : null };
+    const payload = { ...form, nombre: form.nombre.trim(), precio: Number(form.precio), cantidad: Number(form.cantidad), imagen_url: form.imagen_url || null, afecto: Boolean(form.afecto), tiene_caja: Boolean(form.tiene_caja), cantidad_caja: form.tiene_caja && form.cantidad_caja ? Number(form.cantidad_caja) : null, precio_caja: form.tiene_caja && form.precio_caja ? Number(form.precio_caja) : null, notificar_stock: Boolean(form.notificar_stock), stock_notificacion: form.notificar_stock && form.stock_notificacion ? Number(form.stock_notificacion) : null };
     setSaving(true);
     try {
       if (product) {
