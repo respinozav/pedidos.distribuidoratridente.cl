@@ -242,10 +242,10 @@ def clean_and_square_image(
     skip_strip = cfg.get("skip_strip", False)
     protect_whites = cfg.get("protect_whites", False)
 
-    # 0. Si la imagen ya es cuadrada (1:1) y tiene fondo de estudio (celeste o no-blanco),
+    # 0. Si la categoría es DESECHABLES, ya es cuadrada (1:1) y tiene fondo de estudio (celeste o no-blanco),
     # preservarla intacta sin forzar canvas blanco
     w_orig, h_orig = img.size
-    if abs(w_orig - h_orig) <= 4:
+    if cat_key == "DESECHABLES" and abs(w_orig - h_orig) <= 4:
         rgb_check = img.convert("RGB")
         w_c, h_c = rgb_check.size
         corners = [
@@ -386,10 +386,11 @@ def optimize_product_image_base64(
     try:
         raw_bytes = base64.b64decode(clean_b64)
         with Image.open(BytesIO(raw_bytes)) as img:
-            # Si ya es una imagen cuadrada con fondo de estudio y pesa <= 72.000 bytes,
+            # Si la categoría es DESECHABLES, ya es una imagen cuadrada con fondo de estudio y pesa <= 72.000 bytes,
             # conservarla directamente sin alteraciones
+            cat_key = (category_name or "").upper().strip()
             w_img, h_img = img.size
-            if abs(w_img - h_img) <= 4 and len(raw_bytes) <= 72_000:
+            if cat_key == "DESECHABLES" and abs(w_img - h_img) <= 4 and len(raw_bytes) <= 72_000:
                 rgb_check = img.convert("RGB")
                 w_c, h_c = rgb_check.size
                 corners = [
