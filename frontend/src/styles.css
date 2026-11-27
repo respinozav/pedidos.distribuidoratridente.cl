@@ -2474,7 +2474,7 @@ table.table tbody tr:hover {
 }
 .product-image {
   align-items: center;
-  background: #eaf3f8;
+  background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 12px;
   color: var(--blue);
@@ -2487,6 +2487,10 @@ table.table tbody tr:hover {
   position: relative;
   box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.03);
   transition: border-color var(--duration) ease;
+}
+.product-image.product-image-desechables,
+.product-image-desechables {
+  background: #eaf3f8;
 }
 /* Capa de visualización estilo dibujo animado / ilustración clara y nítida */
 .product-image img {
