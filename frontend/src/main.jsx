@@ -3293,7 +3293,7 @@ useEffect(() => {
   const total = cart.reduce((sum, item) => sum + Number(item.precio_cliente ?? item.precio) * item.quantity, 0);
   return <main className="customer-app"><header className="customer-topbar"><div className="container d-flex align-items-center justify-content-between"><div className="customer-brand"><BrandMark /><strong>Distribuidora Tridente</strong></div><button className="btn btn-light btn-sm" onClick={loadOrders}><ClipboardList size={17} />Mis pedidos</button></div></header><div className="container py-4 py-lg-5"><header className="customer-heading"><p className="eyebrow">PORTAL DE PEDIDOS</p><h1>Hola, {customer.nombre}</h1><p>Selecciona los productos que necesitas para tu próximo despacho.</p></header>
     {view === "orders" ? <section className="content-panel"><button className="btn btn-link px-0 mb-3" onClick={() => setView("shop")}>Volver al catálogo</button><h2>Pedidos pendientes</h2>{orders.length ? orders.map((order) => <article className="order-row" key={order.id}><strong>{order.estado}</strong><span>{money.format(order.total)}</span><span>{order.detalles.length} productos</span></article>) : <p className="text-secondary mb-0">No hay pedidos pendientes.</p>}</section> : <div className="row g-4"><section className="col-lg-8"><div className="search-field"><Search size={20} /><label htmlFor="search" className="visually-hidden">Buscar producto</label><input id="search" className="form-control form-control-lg" placeholder="Busca por nombre de producto" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
-      <div className="product-grid mt-4">{products.map((product) => <article className="product" key={product.id}><div className="product-image">{product.imagen_url ? <img src={product.imagen_url} alt="" /> : <Package size={30} />}</div><div className="product-meta"><small>{product.codigo}</small>{product.tiene_caja && product.cantidad_caja ? <small className="product-caja-badge">Caja x{product.cantidad_caja}</small> : null}</div><h2>{product.nombre}</h2><strong>{money.format(product.precio_cliente ?? product.precio)}</strong><button className="btn btn-outline-primary mt-3" onClick={() => add(product)}><Plus size={17} />Agregar</button></article>)}</div></section>
+      <div className="product-grid mt-4">{products.map((product) => <article className="product" key={product.id}><div className={`product-image ${((product.categoria?.nombre || (typeof categoryName === 'function' ? categoryName(product.categoria_id) : '') || "").toUpperCase().trim() === "DESECHABLES") ? "product-image-desechables" : ""}`}>{product.imagen_url ? <img src={product.imagen_url} alt="" /> : <Package size={30} />}</div><div className="product-meta"><small>{product.codigo}</small>{product.tiene_caja && product.cantidad_caja ? <small className="product-caja-badge">Caja x{product.cantidad_caja}</small> : null}</div><h2>{product.nombre}</h2><strong>{money.format(product.precio_cliente ?? product.precio)}</strong><button className="btn btn-outline-primary mt-3" onClick={() => add(product)}><Plus size={17} />Agregar</button></article>)}</div></section>
       <aside className="col-lg-4">
         <div className="cart">
           <div className="cart-title">
@@ -5124,11 +5124,12 @@ function Shop({ customer, onLogout, onProfileUpdated, vendorSession, onExitVendo
                     {products.map((product) => {
                       const isOutOfStock = Number(product.cantidad) <= 0;
                       const isNoticePending = pendingStockNotices.includes(product.id);
+                      const isDesechable = ((product.categoria?.nombre || (typeof categoryName === 'function' ? categoryName(product.categoria_id) : '') || "").toUpperCase().trim() === "DESECHABLES");
 
                       return (
                         <article className={`product ${isOutOfStock ? "product-out-of-stock" : ""}`} key={product.id}>
                           <div
-                            className={`product-image position-relative ${productImageSource(product.imagen_url) ? "product-image-clickable" : ""}`}
+                            className={`product-image position-relative ${isDesechable ? "product-image-desechables" : ""} ${productImageSource(product.imagen_url) ? "product-image-clickable" : ""}`}
                             onClick={() => {
                               if (productImageSource(product.imagen_url)) {
                                 setLightboxProduct(product);

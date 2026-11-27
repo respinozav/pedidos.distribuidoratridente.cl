@@ -74,8 +74,10 @@ def main():
     parser.add_argument("--generate-sql", action="store_true", help="Genera script SQL atómico con las sentencias UPDATE")
     parser.add_argument("--sql-output", default="scripts/actualizar_imagenes_produccion.sql", help="Ruta del script SQL")
     parser.add_argument("--apply-api", action="store_true", help="Actualiza Producción vía peticiones PUT a la API")
+    parser.add_argument("--limit", type=int, default=None, help="Límite máximo de productos a procesar")
+    parser.add_argument("--codes", default=None, help="Lista de códigos específicos separados por coma (ej: 760,764,526)")
     parser.add_argument("--dry-run", action="store_true", help="Verifica correspondencia sin modificar datos")
-    parser.add_argument("--pause", type=float, default=0.03, help="Pausa entre peticiones en segundos")
+    parser.add_argument("--pause", type=float, default=0.05, help="Pausa entre peticiones en segundos")
     args = parser.parse_args()
 
     logger.info("=" * 70)
@@ -104,7 +106,16 @@ def main():
                 "bytes": len(img.strip())
             }
 
-    logger.info("✓ %d productos con imágenes estandarizadas encontrados en QA.", len(qa_images))
+    if args.codes:
+        target_set = set(c.strip() for c in args.codes.split(","))
+        qa_images = {k: v for k, v in qa_images.items() if k in target_set}
+        logger.info("Filtrado por códigos: %d productos seleccionados.", len(qa_images))
+
+    if args.limit:
+        qa_images = dict(list(qa_images.items())[:args.limit])
+        logger.info("Filtrado por límite: %d productos seleccionados.", len(qa_images))
+
+    logger.info("✓ %d productos con imágenes estandarizadas a procesar.", len(qa_images))
 
     # 2. Generación de Script SQL Atómico si fue solicitado
     if args.generate_sql or not args.apply_api:
@@ -198,28 +209,35 @@ def main():
                 "stock_notificacion": p.get("stock_notificacion"),
             }
 
-            req_put = urllib.request.Request(
-                put_url,
-                data=json.dumps(put_payload).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {prod_token}",
-                    "User-Agent": "Mozilla/5.0"
-                },
-                method="PUT"
-            )
-
-            try:
-                with urllib.request.urlopen(req_put, timeout=20) as resp:
-                    if resp.status == 200:
-                        logger.info("[%d/%d] ✓ Cod %s (%s): Migrado a Prod (HTTP 200)",
-                                    i, len(qa_images), cod, nombre[:22])
-                        exitos += 1
+            success = False
+            for attempt in range(1, 4):
+                try:
+                    req_put = urllib.request.Request(
+                        put_url,
+                        data=json.dumps(put_payload).encode("utf-8"),
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {prod_token}",
+                            "User-Agent": "Mozilla/5.0"
+                        },
+                        method="PUT"
+                    )
+                    with urllib.request.urlopen(req_put, timeout=25) as resp:
+                        if resp.status == 200:
+                            logger.info("[%d/%d] ✓ Cod %s (%s): Migrado a Prod (HTTP 200)",
+                                        i, len(qa_images), cod, nombre[:22])
+                            exitos += 1
+                            success = True
+                            break
+                        else:
+                            logger.warning("[%d/%d] ✗ Cod %s: HTTP %d (intento %d)", i, len(qa_images), cod, resp.status, attempt)
+                except Exception as e:
+                    if attempt < 3:
+                        logger.warning("[%d/%d] Reintentando cod %s por error transitorio: %s", i, len(qa_images), cod, e)
+                        time.sleep(2.0)
                     else:
-                        logger.warning("[%d/%d] ✗ Cod %s: HTTP %d", i, len(qa_images), cod, resp.status)
-                        errores += 1
-            except Exception as e:
-                logger.error("[%d/%d] ✗ Error al migrar producto %s: %s", i, len(qa_images), cod, e)
+                        logger.error("[%d/%d] ✗ Error al migrar producto %s tras 3 intentos: %s", i, len(qa_images), cod, e)
+            if not success:
                 errores += 1
 
             if args.pause > 0:
