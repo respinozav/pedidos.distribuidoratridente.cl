@@ -5551,7 +5551,6 @@ function App() {
 
   return (
     <>
-      <LoadingScreen />
       {content}
     </>
   );
