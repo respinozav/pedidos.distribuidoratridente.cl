@@ -386,42 +386,55 @@ def optimize_product_image_base64(
     try:
         raw_bytes = base64.b64decode(clean_b64)
         with Image.open(BytesIO(raw_bytes)) as img:
-            # Si la categoría es DESECHABLES, ya es una imagen cuadrada con fondo de estudio y pesa <= 72.000 bytes,
-            # conservarla directamente sin alteraciones
             cat_key = (category_name or "").upper().strip()
             w_img, h_img = img.size
-            if cat_key == "DESECHABLES" and abs(w_img - h_img) <= 4 and len(raw_bytes) <= 72_000:
-                rgb_check = img.convert("RGB")
-                w_c, h_c = rgb_check.size
-                corners = [
-                    rgb_check.getpixel((0, 0)),
-                    rgb_check.getpixel((w_c - 1, 0)),
-                    rgb_check.getpixel((0, h_c - 1)),
-                    rgb_check.getpixel((w_c - 1, h_c - 1))
-                ]
-                is_studio_bg = any(
-                    (c[2] > c[0] + 15) or ((c[0] + c[1] + c[2]) / 3 < 240)
-                    for c in corners if len(c) >= 3
-                )
-                if is_studio_bg:
-                    return f"{prefix}{clean_b64}" if prefix else clean_b64
+
+            # Si la categoría es DESECHABLES, conservar directamente sin alteraciones
+            if cat_key == "DESECHABLES":
+                return f"{prefix}{clean_b64}" if prefix else clean_b64
+
+            # Si la imagen ya es cuadrada (1:1) y pesa <= 102.400 bytes (100 KB), conservarla directamente
+            if abs(w_img - h_img) <= 4 and len(raw_bytes) <= 102_400:
+                return f"{prefix}{clean_b64}" if prefix else clean_b64
 
             processed = clean_and_square_image(img, category_name=category_name, cartoon_mode=cartoon_mode)
-            buffer = BytesIO()
-            # Compresión adaptativa <= 72.000 bytes
+            
+            # Compresión adaptativa estricta <= 102.400 bytes (100 KB)
             final_bytes = None
-            for q in range(quality, 35, -5):
+            best_bytes = None
+            min_size = float('inf')
+
+            # 1. Probar JPEG calidad 88 hasta 45 en resolución actual
+            for q in range(quality, 44, -3):
                 buf = BytesIO()
-                processed.save(buf, format="JPEG", quality=q, optimize=True)
+                processed.save(buf, format="JPEG", quality=q, optimize=True, progressive=True)
                 val = buf.getvalue()
-                if len(val) <= 72_000:
+                if len(val) < min_size:
+                    min_size = len(val)
+                    best_bytes = val
+                if len(val) <= 102_400:
                     final_bytes = val
                     break
-            if not final_bytes:
-                buf = BytesIO()
-                processed.save(buf, format="JPEG", quality=quality, optimize=True)
-                final_bytes = buf.getvalue()
-            result_b64 = base64.b64encode(final_bytes).decode("utf-8")
+
+            # 2. Si no cupo en 100 KB, escalar ligeramente dimensión (760, 720, 700x700)
+            if final_bytes is None:
+                for dim in [760, 720, 700]:
+                    scaled = processed.resize((dim, dim), Image.Resampling.LANCZOS)
+                    for q in range(80, 44, -4):
+                        buf = BytesIO()
+                        scaled.save(buf, format="JPEG", quality=q, optimize=True, progressive=True)
+                        val = buf.getvalue()
+                        if len(val) < min_size:
+                            min_size = len(val)
+                            best_bytes = val
+                        if len(val) <= 102_400:
+                            final_bytes = val
+                            break
+                    if final_bytes is not None:
+                        break
+
+            chosen = final_bytes if final_bytes is not None else best_bytes
+            result_b64 = base64.b64encode(chosen).decode("utf-8")
             return f"{prefix}{result_b64}" if prefix else result_b64
     except Exception:
         return raw_base64
